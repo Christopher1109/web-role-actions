@@ -1,10 +1,18 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, ArrowRight, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import TraspasoForm from '@/components/forms/TraspasoForm';
+import { toast } from 'sonner';
 
 const Traspasos = () => {
-  const mockTraspasos = [
+  const [showForm, setShowForm] = useState(false);
+  const [selectedTraspaso, setSelectedTraspaso] = useState<any>(null);
+  const [showDetail, setShowDetail] = useState(false);
+  
+  const initialTraspasos = [
     {
       id: '1',
       fecha: '2024-11-07',
@@ -42,6 +50,45 @@ const Traspasos = () => {
       motivoRechazo: 'Stock insuficiente en unidad origen',
     },
   ];
+
+  const [traspasos, setTraspasos] = useState(initialTraspasos);
+
+  const handleCreateTraspaso = (data: any) => {
+    const newTraspaso = {
+      id: String(traspasos.length + 1),
+      fecha: new Date().toISOString().split('T')[0],
+      ...data,
+      estado: 'pendiente',
+      solicitadoPor: 'Usuario Actual',
+    };
+    setTraspasos([newTraspaso, ...traspasos]);
+    setShowForm(false);
+  };
+
+  const handleAprobar = (traspasoId: string) => {
+    setTraspasos(traspasos.map(t => 
+      t.id === traspasoId ? { ...t, estado: 'completado' } : t
+    ));
+    toast.success('Traspaso aprobado exitosamente');
+  };
+
+  const handleRechazar = (traspasoId: string) => {
+    setTraspasos(traspasos.map(t => 
+      t.id === traspasoId ? { ...t, estado: 'rechazado', motivoRechazo: 'Rechazado por el gerente' } : t
+    ));
+    toast.success('Traspaso rechazado');
+  };
+
+  const handleVerDetalle = (traspaso: any) => {
+    setSelectedTraspaso(traspaso);
+    setShowDetail(true);
+  };
+
+  const handleVerInventario = (unidad: string) => {
+    toast.info('Ver Inventario', {
+      description: `Mostrando inventario completo de: ${unidad}`,
+    });
+  };
 
   const getEstadoConfig = (estado: string) => {
     switch (estado) {
@@ -83,7 +130,7 @@ const Traspasos = () => {
           <h1 className="text-3xl font-bold text-foreground">Traspasos entre Unidades</h1>
           <p className="text-muted-foreground">Gestión de movimientos de inventario</p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4" />
           Nuevo Traspaso
         </Button>
@@ -125,7 +172,7 @@ const Traspasos = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {mockTraspasos.map((traspaso) => {
+            {traspasos.map((traspaso) => {
               const estadoConfig = getEstadoConfig(traspaso.estado);
               const EstadoIcon = estadoConfig.icon;
               
@@ -175,18 +222,34 @@ const Traspasos = () => {
                         <div className="flex gap-2">
                           {traspaso.estado === 'pendiente' && (
                             <>
-                              <Button variant="outline" size="sm" className="gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="gap-2"
+                                onClick={() => handleAprobar(traspaso.id)}
+                              >
                                 <CheckCircle className="h-4 w-4" />
                                 Aprobar
                               </Button>
-                              <Button variant="destructive" size="sm" className="gap-2">
+                              <Button 
+                                variant="destructive" 
+                                size="sm" 
+                                className="gap-2"
+                                onClick={() => handleRechazar(traspaso.id)}
+                              >
                                 <XCircle className="h-4 w-4" />
                                 Rechazar
                               </Button>
                             </>
                           )}
                           {traspaso.estado !== 'pendiente' && (
-                            <Button variant="outline" size="sm">Ver Detalle</Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleVerDetalle(traspaso)}
+                            >
+                              Ver Detalle
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -209,7 +272,12 @@ const Traspasos = () => {
               <div key={unidad} className="rounded-lg border p-4">
                 <h4 className="font-semibold">{unidad}</h4>
                 <p className="text-sm text-muted-foreground">Stock disponible</p>
-                <Button variant="link" size="sm" className="h-auto p-0">
+                <Button 
+                  variant="link" 
+                  size="sm" 
+                  className="h-auto p-0"
+                  onClick={() => handleVerInventario(unidad)}
+                >
                   Ver inventario →
                 </Button>
               </div>
@@ -217,6 +285,35 @@ const Traspasos = () => {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <TraspasoForm 
+            onClose={() => setShowForm(false)} 
+            onSubmit={handleCreateTraspaso}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {selectedTraspaso && (
+        <Dialog open={showDetail} onOpenChange={setShowDetail}>
+          <DialogContent className="max-w-2xl">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Detalle del Traspaso</h3>
+              <div className="space-y-2 text-sm">
+                <p><span className="font-medium">Fecha:</span> {selectedTraspaso.fecha}</p>
+                <p><span className="font-medium">Origen:</span> {selectedTraspaso.unidadOrigen}</p>
+                <p><span className="font-medium">Destino:</span> {selectedTraspaso.unidadDestino}</p>
+                <p><span className="font-medium">Solicitado por:</span> {selectedTraspaso.solicitadoPor}</p>
+                <p><span className="font-medium">Estado:</span> {selectedTraspaso.estado}</p>
+                {selectedTraspaso.motivoRechazo && (
+                  <p><span className="font-medium">Motivo:</span> {selectedTraspaso.motivoRechazo}</p>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

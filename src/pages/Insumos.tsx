@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import InsumoForm from '@/components/forms/InsumoForm';
+import InsumoDetailDialog from '@/components/dialogs/InsumoDetailDialog';
 
 const mockInsumosData = [
     {
@@ -50,6 +51,8 @@ const Insumos = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [insumos, setInsumos] = useState(mockInsumosData);
+  const [selectedInsumo, setSelectedInsumo] = useState<any>(null);
+  const [showDetail, setShowDetail] = useState(false);
 
   const handleCreateInsumo = (data: any) => {
     const newInsumo = {
@@ -167,7 +170,16 @@ const Insumos = () => {
                           </div>
                         )}
                       </div>
-                      <Button variant="outline" size="sm">Ver Detalle</Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          setSelectedInsumo(insumo);
+                          setShowDetail(true);
+                        }}
+                      >
+                        Ver Detalle
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -182,6 +194,12 @@ const Insumos = () => {
           <InsumoForm onClose={() => setShowForm(false)} onSubmit={handleCreateInsumo} />
         </DialogContent>
       </Dialog>
+
+      <InsumoDetailDialog
+        open={showDetail}
+        onOpenChange={setShowDetail}
+        insumo={selectedInsumo}
+      />
     </div>
   );
 };

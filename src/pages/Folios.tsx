@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import FolioForm from '@/components/forms/FolioForm';
+import FolioDetailDialog from '@/components/dialogs/FolioDetailDialog';
 import { toast } from 'sonner';
 
 interface FoliosProps {
@@ -53,6 +54,8 @@ const Folios = ({ userRole }: FoliosProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [folios, setFolios] = useState(mockFoliosData);
+  const [selectedFolio, setSelectedFolio] = useState<any>(null);
+  const [showDetail, setShowDetail] = useState(false);
 
   const canCancel = userRole === 'supervisor' || userRole === 'gerente';
 
@@ -137,7 +140,16 @@ const Folios = ({ userRole }: FoliosProps) => {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm">Ver Detalle</Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          setSelectedFolio(folio);
+                          setShowDetail(true);
+                        }}
+                      >
+                        Ver Detalle
+                      </Button>
                       {canCancel && folio.estado === 'activo' && (
                         <Button 
                           variant="destructive" 
@@ -163,6 +175,13 @@ const Folios = ({ userRole }: FoliosProps) => {
           <FolioForm onClose={() => setShowForm(false)} onSubmit={handleCreateFolio} />
         </DialogContent>
       </Dialog>
+
+      <FolioDetailDialog
+        open={showDetail}
+        onOpenChange={setShowDetail}
+        folio={selectedFolio}
+        tiposAnestesiaLabels={tiposAnestesiaLabels}
+      />
     </div>
   );
 };

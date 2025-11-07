@@ -5,11 +5,16 @@ import { Plus, Search, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import MedicoForm from '@/components/forms/MedicoForm';
+import { toast } from 'sonner';
 
 const Medicos = () => {
   const [searchTerm, setSearchTerm] = useState('');
-
-  const mockMedicos = [
+  const [showForm, setShowForm] = useState(false);
+  const [editingMedico, setEditingMedico] = useState<any>(null);
+  
+  const initialMedicos = [
     {
       id: '1',
       nombre: 'Dr. Carlos Martínez López',
@@ -47,6 +52,30 @@ const Medicos = () => {
       procedimientosRealizados: 198,
     },
   ];
+  
+  const [medicos, setMedicos] = useState(initialMedicos);
+
+  const handleCreateOrUpdate = (data: any) => {
+    if (editingMedico) {
+      setMedicos(medicos.map(m => 
+        m.id === editingMedico.id ? { ...m, ...data } : m
+      ));
+      setEditingMedico(null);
+    } else {
+      const newMedico = {
+        id: String(medicos.length + 1),
+        ...data,
+        procedimientosRealizados: 0,
+      };
+      setMedicos([newMedico, ...medicos]);
+    }
+    setShowForm(false);
+  };
+
+  const handleEdit = (medico: any) => {
+    setEditingMedico(medico);
+    setShowForm(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -55,7 +84,10 @@ const Medicos = () => {
           <h1 className="text-3xl font-bold text-foreground">Médicos</h1>
           <p className="text-muted-foreground">Gestión de anestesiólogos y cirujanos</p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => {
+          setEditingMedico(null);
+          setShowForm(true);
+        }}>
           <Plus className="h-4 w-4" />
           Agregar Médico
         </Button>
@@ -83,7 +115,7 @@ const Medicos = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {mockMedicos.map((medico) => (
+                {medicos.map((medico) => (
                   <Card key={medico.id} className="border-l-4 border-l-primary">
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between">
@@ -106,7 +138,13 @@ const Medicos = () => {
                             </div>
                           </div>
                         </div>
-                        <Button variant="outline" size="sm">Editar</Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleEdit(medico)}
+                        >
+                          Editar
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -132,6 +170,22 @@ const Medicos = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={showForm} onOpenChange={(open) => {
+        setShowForm(open);
+        if (!open) setEditingMedico(null);
+      }}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <MedicoForm 
+            onClose={() => {
+              setShowForm(false);
+              setEditingMedico(null);
+            }} 
+            onSubmit={handleCreateOrUpdate}
+            medico={editingMedico}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

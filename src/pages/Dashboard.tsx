@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { UserRole } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, Package, Users, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
@@ -124,28 +125,28 @@ const Dashboard = ({ userRole }: DashboardProps) => {
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2">
             {(userRole === 'auxiliar' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente') && (
-              <div className="rounded-lg border bg-role-auxiliar/10 p-4">
+              <Link to="/folios" className="rounded-lg border bg-role-auxiliar/10 p-4 transition-colors hover:bg-role-auxiliar/20">
                 <h4 className="font-semibold">Nuevo Folio</h4>
                 <p className="text-sm text-muted-foreground">Registrar procedimiento</p>
-              </div>
+              </Link>
             )}
             {(userRole === 'almacenista' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente') && (
-              <div className="rounded-lg border bg-role-almacenista/10 p-4">
+              <Link to="/insumos" className="rounded-lg border bg-role-almacenista/10 p-4 transition-colors hover:bg-role-almacenista/20">
                 <h4 className="font-semibold">Registrar Insumos</h4>
                 <p className="text-sm text-muted-foreground">Entrada de material</p>
-              </div>
+              </Link>
             )}
             {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente') && (
-              <div className="rounded-lg border bg-role-lider/10 p-4">
+              <Link to="/reportes" className="rounded-lg border bg-role-lider/10 p-4 transition-colors hover:bg-role-lider/20">
                 <h4 className="font-semibold">Generar Reporte</h4>
                 <p className="text-sm text-muted-foreground">Anexos T29 y T30</p>
-              </div>
+              </Link>
             )}
             {userRole === 'gerente' && (
-              <div className="rounded-lg border bg-role-gerente/10 p-4">
+              <Link to="/traspasos" className="rounded-lg border bg-role-gerente/10 p-4 transition-colors hover:bg-role-gerente/20">
                 <h4 className="font-semibold">Gestionar Traspasos</h4>
                 <p className="text-sm text-muted-foreground">Entre unidades</p>
-              </div>
+              </Link>
             )}
           </div>
         </CardContent>

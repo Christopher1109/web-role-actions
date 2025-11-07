@@ -1,10 +1,17 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import PaqueteForm from '@/components/forms/PaqueteForm';
+import { toast } from 'sonner';
 
 const Paquetes = () => {
-  const paquetes = [
+  const [showForm, setShowForm] = useState(false);
+  const [editingPaquete, setEditingPaquete] = useState<any>(null);
+  
+  const initialPaquetes = [
     {
       id: '1',
       tipo: 'Anestesia General Balanceada Adulto',
@@ -71,6 +78,35 @@ const Paquetes = () => {
     },
   ];
 
+  const [paquetes, setPaquetes] = useState(initialPaquetes);
+
+  const handleCreateOrUpdate = (data: any) => {
+    if (editingPaquete) {
+      setPaquetes(paquetes.map(p => 
+        p.id === editingPaquete.id ? { ...p, ...data } : p
+      ));
+      setEditingPaquete(null);
+    } else {
+      const newPaquete = {
+        id: String(paquetes.length + 1),
+        ...data,
+      };
+      setPaquetes([newPaquete, ...paquetes]);
+    }
+    setShowForm(false);
+  };
+
+  const handleEdit = (paquete: any) => {
+    setEditingPaquete(paquete);
+    setShowForm(true);
+  };
+
+  const handleViewHistory = (paquete: any) => {
+    toast.info('Historial del paquete', {
+      description: `Mostrando historial de uso para: ${paquete.tipo}`,
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -78,7 +114,10 @@ const Paquetes = () => {
           <h1 className="text-3xl font-bold text-foreground">Paquetes de Anestesia</h1>
           <p className="text-muted-foreground">Configuración de insumos por tipo de procedimiento</p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => {
+          setEditingPaquete(null);
+          setShowForm(true);
+        }}>
           <Plus className="h-4 w-4" />
           Nuevo Paquete
         </Button>
@@ -113,10 +152,20 @@ const Paquetes = () => {
                 </div>
               </div>
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => handleEdit(paquete)}
+                >
                   Editar
                 </Button>
-                <Button variant="outline" size="sm" className="flex-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={() => handleViewHistory(paquete)}
+                >
                   Ver Historial
                 </Button>
               </div>
@@ -124,6 +173,22 @@ const Paquetes = () => {
           </Card>
         ))}
       </div>
+
+      <Dialog open={showForm} onOpenChange={(open) => {
+        setShowForm(open);
+        if (!open) setEditingPaquete(null);
+      }}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <PaqueteForm 
+            onClose={() => {
+              setShowForm(false);
+              setEditingPaquete(null);
+            }} 
+            onSubmit={handleCreateOrUpdate}
+            paquete={editingPaquete}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

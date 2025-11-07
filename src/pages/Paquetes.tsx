@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Package } from 'lucide-react';
@@ -8,92 +10,125 @@ import PaqueteForm from '@/components/forms/PaqueteForm';
 import { toast } from 'sonner';
 
 const Paquetes = () => {
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingPaquete, setEditingPaquete] = useState<any>(null);
-  
-  const initialPaquetes = [
-    {
-      id: '1',
-      tipo: 'Anestesia General Balanceada Adulto',
-      insumos: [
-        { nombre: 'Propofol 200mg', cantidad: 2 },
-        { nombre: 'Fentanilo 500mcg', cantidad: 1 },
-        { nombre: 'Rocuronio 50mg', cantidad: 1 },
-        { nombre: 'Sevoflurano', cantidad: 1 },
-      ],
-      descripcion: 'Para procedimientos quirúrgicos generales en adultos',
-    },
-    {
-      id: '2',
-      tipo: 'Anestesia General Balanceada Pediátrica',
-      insumos: [
-        { nombre: 'Propofol 200mg', cantidad: 1 },
-        { nombre: 'Fentanilo 500mcg', cantidad: 1 },
-        { nombre: 'Rocuronio 50mg', cantidad: 1 },
-        { nombre: 'Sevoflurano', cantidad: 1 },
-      ],
-      descripcion: 'Adaptado para pacientes pediátricos',
-    },
-    {
-      id: '3',
-      tipo: 'Anestesia General de Alta Especialidad',
-      insumos: [
-        { nombre: 'Propofol 200mg', cantidad: 3 },
-        { nombre: 'Fentanilo 500mcg', cantidad: 2 },
-        { nombre: 'Rocuronio 50mg', cantidad: 2 },
-        { nombre: 'Remifentanilo', cantidad: 1 },
-        { nombre: 'Sevoflurano', cantidad: 2 },
-      ],
-      descripcion: 'Para cirugías complejas de larga duración',
-    },
-    {
-      id: '4',
-      tipo: 'Anestesia General Endovenosa',
-      insumos: [
-        { nombre: 'Propofol 200mg', cantidad: 4 },
-        { nombre: 'Remifentanilo', cantidad: 2 },
-        { nombre: 'Rocuronio 50mg', cantidad: 1 },
-      ],
-      descripcion: 'Técnica totalmente intravenosa',
-    },
-    {
-      id: '5',
-      tipo: 'Anestesia Locorregional',
-      insumos: [
-        { nombre: 'Lidocaína 2%', cantidad: 2 },
-        { nombre: 'Bupivacaína 0.5%', cantidad: 2 },
-        { nombre: 'Fentanilo 500mcg', cantidad: 1 },
-      ],
-      descripcion: 'Bloqueos nerviosos y epidurales',
-    },
-    {
-      id: '6',
-      tipo: 'Sedación',
-      insumos: [
-        { nombre: 'Propofol 200mg', cantidad: 1 },
-        { nombre: 'Midazolam', cantidad: 1 },
-        { nombre: 'Fentanilo 500mcg', cantidad: 1 },
-      ],
-      descripcion: 'Para procedimientos ambulatorios y endoscopías',
-    },
-  ];
+  const [paquetes, setPaquetes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [paquetes, setPaquetes] = useState(initialPaquetes);
-
-  const handleCreateOrUpdate = (data: any) => {
-    if (editingPaquete) {
-      setPaquetes(paquetes.map(p => 
-        p.id === editingPaquete.id ? { ...p, ...data } : p
-      ));
-      setEditingPaquete(null);
-    } else {
-      const newPaquete = {
-        id: String(paquetes.length + 1),
-        ...data,
-      };
-      setPaquetes([newPaquete, ...paquetes]);
+  useEffect(() => {
+    if (user) {
+      fetchPaquetes();
     }
-    setShowForm(false);
+  }, [user]);
+
+  const fetchPaquetes = async () => {
+    try {
+      setLoading(true);
+      const { data: paquetesData, error: paquetesError } = await supabase
+        .from('paquetes_anestesia')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (paquetesError) throw paquetesError;
+
+      const paquetesConInsumos = await Promise.all(
+        (paquetesData || []).map(async (paquete) => {
+          const { data: insumosData } = await supabase
+            .from('paquete_insumos')
+            .select('*')
+            .eq('paquete_id', paquete.id);
+
+          return {
+            ...paquete,
+            insumos: (insumosData || []).map(i => ({
+              nombre: i.nombre_insumo,
+              cantidad: i.cantidad,
+            })),
+          };
+        })
+      );
+
+      setPaquetes(paquetesConInsumos);
+    } catch (error: any) {
+      toast.error('Error al cargar paquetes', {
+        description: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateOrUpdate = async (data: any) => {
+    try {
+      if (editingPaquete) {
+        const { error: paqueteError } = await supabase
+          .from('paquetes_anestesia')
+          .update({
+            tipo: data.tipo,
+            descripcion: data.descripcion,
+          })
+          .eq('id', editingPaquete.id);
+
+        if (paqueteError) throw paqueteError;
+
+        await supabase
+          .from('paquete_insumos')
+          .delete()
+          .eq('paquete_id', editingPaquete.id);
+
+        if (data.insumos && data.insumos.length > 0) {
+          const insumosData = data.insumos.map((insumo: any) => ({
+            paquete_id: editingPaquete.id,
+            nombre_insumo: insumo.nombre,
+            cantidad: insumo.cantidad,
+          }));
+
+          const { error: insumosError } = await supabase
+            .from('paquete_insumos')
+            .insert(insumosData);
+
+          if (insumosError) throw insumosError;
+        }
+
+        toast.success('Paquete actualizado exitosamente');
+      } else {
+        const { data: paqueteData, error: paqueteError } = await supabase
+          .from('paquetes_anestesia')
+          .insert({
+            tipo: data.tipo,
+            descripcion: data.descripcion,
+          })
+          .select()
+          .single();
+
+        if (paqueteError) throw paqueteError;
+
+        if (data.insumos && data.insumos.length > 0) {
+          const insumosData = data.insumos.map((insumo: any) => ({
+            paquete_id: paqueteData.id,
+            nombre_insumo: insumo.nombre,
+            cantidad: insumo.cantidad,
+          }));
+
+          const { error: insumosError } = await supabase
+            .from('paquete_insumos')
+            .insert(insumosData);
+
+          if (insumosError) throw insumosError;
+        }
+
+        toast.success('Paquete creado exitosamente');
+      }
+
+      setShowForm(false);
+      setEditingPaquete(null);
+      fetchPaquetes();
+    } catch (error: any) {
+      toast.error('Error al guardar paquete', {
+        description: error.message,
+      });
+    }
   };
 
   const handleEdit = (paquete: any) => {
@@ -123,8 +158,15 @@ const Paquetes = () => {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {paquetes.map((paquete) => (
+      {loading ? (
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-center text-muted-foreground">Cargando paquetes...</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {paquetes.map((paquete) => (
           <Card key={paquete.id} className="border-l-4 border-l-accent">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -171,8 +213,9 @@ const Paquetes = () => {
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <Dialog open={showForm} onOpenChange={(open) => {
         setShowForm(open);

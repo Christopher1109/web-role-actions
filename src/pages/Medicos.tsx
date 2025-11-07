@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, User } from 'lucide-react';
@@ -10,66 +12,78 @@ import MedicoForm from '@/components/forms/MedicoForm';
 import { toast } from 'sonner';
 
 const Medicos = () => {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingMedico, setEditingMedico] = useState<any>(null);
-  
-  const initialMedicos = [
-    {
-      id: '1',
-      nombre: 'Dr. Carlos Martínez López',
-      especialidad: 'cirujano',
-      subespecialidad: 'Cirugía General',
-      unidad: 'Unidad Central',
-      telefono: '555-0101',
-      procedimientosRealizados: 156,
-    },
-    {
-      id: '2',
-      nombre: 'Dra. Ana García Ruiz',
-      especialidad: 'anestesiologo',
-      subespecialidad: 'Anestesiología Cardiovascular',
-      unidad: 'Unidad Central',
-      telefono: '555-0102',
-      procedimientosRealizados: 342,
-    },
-    {
-      id: '3',
-      nombre: 'Dra. María Hernández Díaz',
-      especialidad: 'cirujano',
-      subespecialidad: 'Ginecología y Obstetricia',
-      unidad: 'Unidad Sur',
-      telefono: '555-0103',
-      procedimientosRealizados: 289,
-    },
-    {
-      id: '4',
-      nombre: 'Dr. José Ramírez Castro',
-      especialidad: 'anestesiologo',
-      subespecialidad: 'Anestesiología Pediátrica',
-      unidad: 'Unidad Norte',
-      telefono: '555-0104',
-      procedimientosRealizados: 198,
-    },
-  ];
-  
-  const [medicos, setMedicos] = useState(initialMedicos);
+  const [medicos, setMedicos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleCreateOrUpdate = (data: any) => {
-    if (editingMedico) {
-      setMedicos(medicos.map(m => 
-        m.id === editingMedico.id ? { ...m, ...data } : m
-      ));
-      setEditingMedico(null);
-    } else {
-      const newMedico = {
-        id: String(medicos.length + 1),
-        ...data,
-        procedimientosRealizados: 0,
-      };
-      setMedicos([newMedico, ...medicos]);
+  useEffect(() => {
+    if (user) {
+      fetchMedicos();
     }
-    setShowForm(false);
+  }, [user]);
+
+  const fetchMedicos = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('medicos')
+        .select('*')
+        .eq('activo', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setMedicos(data || []);
+    } catch (error: any) {
+      toast.error('Error al cargar médicos', {
+        description: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateOrUpdate = async (data: any) => {
+    try {
+      if (editingMedico) {
+        const { error } = await supabase
+          .from('medicos')
+          .update({
+            nombre: data.nombre,
+            especialidad: data.especialidad,
+            subespecialidad: data.subespecialidad,
+            unidad: data.unidad,
+            telefono: data.telefono,
+          })
+          .eq('id', editingMedico.id);
+
+        if (error) throw error;
+        toast.success('Médico actualizado exitosamente');
+      } else {
+        const { error } = await supabase
+          .from('medicos')
+          .insert({
+            nombre: data.nombre,
+            especialidad: data.especialidad,
+            subespecialidad: data.subespecialidad,
+            unidad: data.unidad,
+            telefono: data.telefono,
+          });
+
+        if (error) throw error;
+        toast.success('Médico creado exitosamente');
+      }
+
+      setShowForm(false);
+      setEditingMedico(null);
+      fetchMedicos();
+    } catch (error: any) {
+      toast.error('Error al guardar médico', {
+        description: error.message,
+      });
+    }
   };
 
   const handleEdit = (medico: any) => {
@@ -114,8 +128,14 @@ const Medicos = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {medicos.map((medico) => (
+              {loading ? (
+                <p className="text-center text-muted-foreground">Cargando médicos...</p>
+              ) : (
+                <div className="space-y-4">
+                  {medicos.filter(m => searchTerm === '' || 
+                    m.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    m.especialidad.toLowerCase().includes(searchTerm.toLowerCase())
+                  ).map((medico) => (
                   <Card key={medico.id} className="border-l-4 border-l-primary">
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between">
@@ -133,8 +153,48 @@ const Medicos = () => {
                             <div className="grid gap-1 text-sm">
                               <p><span className="font-medium">Especialidad:</span> {medico.subespecialidad}</p>
                               <p><span className="font-medium">Unidad:</span> {medico.unidad}</p>
-                              <p><span className="font-medium">Teléfono:</span> {medico.telefono}</p>
-                              <p><span className="font-medium">Procedimientos:</span> {medico.procedimientosRealizados}</p>
+                              <p><span className="font-medium">Teléfono:</span> {medico.telefono || 'No especificado'}</p>
+                              <p><span className="font-medium">Procedimientos:</span> {medico.procedimientos_realizados || 0}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleEdit(medico)}
+                        >
+                          Editar
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="anestesiologos">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                {medicos.filter(m => m.especialidad === 'anestesiologo').map((medico) => (
+                  <Card key={medico.id} className="border-l-4 border-l-primary">
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex gap-4">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                            <User className="h-6 w-6 text-primary" />
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <h3 className="font-semibold">{medico.nombre}</h3>
+                              <Badge variant="default">Anestesiólogo</Badge>
+                            </div>
+                            <div className="grid gap-1 text-sm">
+                              <p><span className="font-medium">Especialidad:</span> {medico.subespecialidad}</p>
+                              <p><span className="font-medium">Unidad:</span> {medico.unidad}</p>
                             </div>
                           </div>
                         </div>
@@ -154,18 +214,41 @@ const Medicos = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="anestesiologos">
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-muted-foreground">Filtro de anestesiólogos...</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="cirujanos">
           <Card>
             <CardContent className="pt-6">
-              <p className="text-muted-foreground">Filtro de cirujanos...</p>
+              <div className="space-y-4">
+                {medicos.filter(m => m.especialidad === 'cirujano').map((medico) => (
+                  <Card key={medico.id} className="border-l-4 border-l-secondary">
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex gap-4">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/10">
+                            <User className="h-6 w-6 text-secondary" />
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <h3 className="font-semibold">{medico.nombre}</h3>
+                              <Badge variant="secondary">Cirujano</Badge>
+                            </div>
+                            <div className="grid gap-1 text-sm">
+                              <p><span className="font-medium">Especialidad:</span> {medico.subespecialidad}</p>
+                              <p><span className="font-medium">Unidad:</span> {medico.unidad}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleEdit(medico)}
+                        >
+                          Editar
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

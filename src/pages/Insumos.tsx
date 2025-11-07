@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, AlertCircle } from 'lucide-react';
@@ -7,64 +7,72 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import InsumoForm from '@/components/forms/InsumoForm';
 import InsumoDetailDialog from '@/components/dialogs/InsumoDetailDialog';
-
-const mockInsumosData = [
-    {
-      id: '1',
-      nombre: 'Propofol 200mg',
-      lote: 'LOT-2024-A123',
-      cantidad: 45,
-      fechaCaducidad: '2025-06-15',
-      origen: 'LOAD',
-      stockMinimo: 20,
-    },
-    {
-      id: '2',
-      nombre: 'Fentanilo 500mcg',
-      lote: 'LOT-2024-B456',
-      cantidad: 12,
-      fechaCaducidad: '2025-03-20',
-      origen: 'Prestado',
-      stockMinimo: 15,
-    },
-    {
-      id: '3',
-      nombre: 'Rocuronio 50mg',
-      lote: 'LOT-2024-C789',
-      cantidad: 67,
-      fechaCaducidad: '2025-08-10',
-      origen: 'LOAD',
-      stockMinimo: 30,
-    },
-    {
-      id: '4',
-      nombre: 'Lidocaína 2%',
-      lote: 'LOT-2024-D012',
-      cantidad: 8,
-      fechaCaducidad: '2024-12-05',
-      origen: 'LOAD',
-      stockMinimo: 25,
-    },
-];
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
 const Insumos = () => {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [insumos, setInsumos] = useState(mockInsumosData);
+  const [insumos, setInsumos] = useState<any[]>([]);
   const [selectedInsumo, setSelectedInsumo] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const handleCreateInsumo = (data: any) => {
-    const newInsumo = {
-      id: String(insumos.length + 1),
-      nombre: data.nombre,
-      lote: data.lote,
-      cantidad: data.cantidad,
-      fechaCaducidad: data.fechaCaducidad,
-      origen: data.origen,
-      stockMinimo: data.stockMinimo,
-    };
-    setInsumos([newInsumo, ...insumos]);
+  useEffect(() => {
+    if (user) {
+      fetchInsumos();
+    }
+  }, [user]);
+
+  const fetchInsumos = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('insumos')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setInsumos(data || []);
+    } catch (error: any) {
+      toast.error('Error al cargar insumos', {
+        description: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateInsumo = async (data: any) => {
+    try {
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('insumos')
+        .insert({
+          nombre: data.nombre,
+          categoria: data.categoria,
+          cantidad: data.cantidad,
+          lote: data.lote,
+          fecha_caducidad: data.fechaCaducidad,
+          unidad: data.unidad,
+          origen: data.origen,
+          stock_minimo: data.stockMinimo || 10,
+          created_by: user.id,
+        });
+
+      if (error) throw error;
+
+      toast.success('Insumo registrado exitosamente');
+      setShowForm(false);
+      fetchInsumos();
+    } catch (error: any) {
+      toast.error('Error al registrar insumo', {
+        description: error.message,
+      });
+    }
   };
 
   const getStockStatus = (cantidad: number, stockMinimo: number) => {
@@ -78,6 +86,10 @@ const Insumos = () => {
     const days = diff / (1000 * 60 * 60 * 24);
     return days <= 60;
   };
+
+  const totalInsumos = insumos.reduce((sum, i) => sum + i.cantidad, 0);
+  const stockBajo = insumos.filter(i => i.cantidad <= (i.stock_minimo || 10)).length;
+  const proximosVencer = insumos.filter(i => isCaducidadProxima(i.fecha_caducidad)).length;
 
   return (
     <div className="space-y-6">
@@ -98,7 +110,7 @@ const Insumos = () => {
             <CardTitle className="text-sm font-medium">Total Insumos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">132</div>
+            <div className="text-2xl font-bold">{totalInsumos}</div>
             <p className="text-xs text-muted-foreground">unidades disponibles</p>
           </CardContent>
         </Card>
@@ -107,7 +119,7 @@ const Insumos = () => {
             <CardTitle className="text-sm font-medium">Stock Bajo</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-warning">2</div>
+            <div className="text-2xl font-bold text-warning">{stockBajo}</div>
             <p className="text-xs text-muted-foreground">requieren reabastecimiento</p>
           </CardContent>
         </Card>
@@ -116,7 +128,7 @@ const Insumos = () => {
             <CardTitle className="text-sm font-medium">Próximos a Caducar</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">1</div>
+            <div className="text-2xl font-bold text-destructive">{proximosVencer}</div>
             <p className="text-xs text-muted-foreground">en los próximos 60 días</p>
           </CardContent>
         </Card>
@@ -137,55 +149,66 @@ const Insumos = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {insumos.map((insumo) => {
-              const stockStatus = getStockStatus(insumo.cantidad, insumo.stockMinimo);
-              const caducidadProxima = isCaducidadProxima(insumo.fechaCaducidad);
-              
-              return (
-                <Card key={insumo.id} className="border-l-4 border-l-accent">
-                  <CardContent className="pt-6">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-2 flex-1">
-                        <div className="flex items-center gap-3">
-                          <h3 className="font-semibold">{insumo.nombre}</h3>
-                          <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
-                          <Badge variant={insumo.origen === 'LOAD' ? 'default' : 'secondary'}>
-                            {insumo.origen}
-                          </Badge>
-                        </div>
-                        <div className="grid gap-1 text-sm md:grid-cols-2">
-                          <p><span className="font-medium">Lote:</span> {insumo.lote}</p>
-                          <p><span className="font-medium">Cantidad:</span> {insumo.cantidad} unidades</p>
-                          <p className={caducidadProxima ? 'text-destructive font-medium' : ''}>
-                            <span className="font-medium">Caducidad:</span> {insumo.fechaCaducidad}
-                            {caducidadProxima && ' ⚠️'}
-                          </p>
-                          <p><span className="font-medium">Stock Mínimo:</span> {insumo.stockMinimo}</p>
-                        </div>
-                        {caducidadProxima && (
-                          <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-2 text-sm text-destructive">
-                            <AlertCircle className="h-4 w-4" />
-                            Próximo a caducar
+          {loading ? (
+            <p className="text-center text-muted-foreground py-8">Cargando insumos...</p>
+          ) : (
+            <div className="space-y-4">
+              {insumos
+                .filter(i => searchTerm === '' || 
+                  i.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  i.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+                .map((insumo) => {
+                  const stockStatus = getStockStatus(insumo.cantidad, insumo.stock_minimo || 10);
+                  const caducidadProxima = isCaducidadProxima(insumo.fecha_caducidad);
+                  
+                  return (
+                    <Card key={insumo.id} className="border-l-4 border-l-accent">
+                      <CardContent className="pt-6">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-2 flex-1">
+                            <div className="flex items-center gap-3">
+                              <h3 className="font-semibold">{insumo.nombre}</h3>
+                              <Badge variant={stockStatus.variant}>{stockStatus.label}</Badge>
+                              <Badge variant={insumo.origen === 'LOAD' ? 'default' : 'secondary'}>
+                                {insumo.origen}
+                              </Badge>
+                            </div>
+                            <div className="grid gap-1 text-sm md:grid-cols-2">
+                              <p><span className="font-medium">Lote:</span> {insumo.lote}</p>
+                              <p><span className="font-medium">Cantidad:</span> {insumo.cantidad} unidades</p>
+                              <p className={caducidadProxima ? 'text-destructive font-medium' : ''}>
+                                <span className="font-medium">Caducidad:</span> {new Date(insumo.fecha_caducidad).toLocaleDateString()}
+                                {caducidadProxima && ' ⚠️'}
+                              </p>
+                              <p><span className="font-medium">Stock Mínimo:</span> {insumo.stock_minimo || 10}</p>
+                              <p><span className="font-medium">Unidad:</span> {insumo.unidad}</p>
+                              <p><span className="font-medium">Categoría:</span> {insumo.categoria}</p>
+                            </div>
+                            {caducidadProxima && (
+                              <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-2 text-sm text-destructive">
+                                <AlertCircle className="h-4 w-4" />
+                                Próximo a caducar
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          setSelectedInsumo(insumo);
-                          setShowDetail(true);
-                        }}
-                      >
-                        Ver Detalle
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedInsumo(insumo);
+                              setShowDetail(true);
+                            }}
+                          >
+                            Ver Detalle
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+            </div>
+          )}
         </CardContent>
       </Card>
 

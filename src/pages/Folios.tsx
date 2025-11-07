@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { UserRole } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,76 +9,120 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import FolioForm from '@/components/forms/FolioForm';
 import FolioDetailDialog from '@/components/dialogs/FolioDetailDialog';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface FoliosProps {
   userRole: UserRole;
 }
 
-const mockFoliosData = [
-    {
-      id: '1',
-      numeroFolio: 'F-2024-001',
-      fecha: '2024-11-07',
-      paciente: 'Juan Pérez García',
-      cirugia: 'Apendicectomía',
-      tipoAnestesia: 'general_balanceada_adulto',
-      cirujano: 'Dr. Martínez López',
-      anestesiologo: 'Dra. García Ruiz',
-      estado: 'activo',
-    },
-    {
-      id: '2',
-      numeroFolio: 'F-2024-002',
-      fecha: '2024-11-07',
-      paciente: 'María González Torres',
-      cirugia: 'Cesárea',
-      tipoAnestesia: 'locorregional',
-      cirujano: 'Dra. Hernández Díaz',
-      anestesiologo: 'Dr. Ramírez Castro',
-      estado: 'activo',
-    },
-    {
-      id: '3',
-      numeroFolio: 'F-2024-003',
-      fecha: '2024-11-06',
-      paciente: 'Carlos Rodríguez Méndez',
-      cirugia: 'Colonoscopia',
-      tipoAnestesia: 'sedacion',
-      cirujano: 'Dr. López Sánchez',
-      anestesiologo: 'Dra. García Ruiz',
-      estado: 'cancelado',
-    },
-];
-
 const Folios = ({ userRole }: FoliosProps) => {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [folios, setFolios] = useState(mockFoliosData);
+  const [folios, setFolios] = useState<any[]>([]);
   const [selectedFolio, setSelectedFolio] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const canCancel = userRole === 'supervisor' || userRole === 'gerente';
 
-  const handleCreateFolio = (data: any) => {
-    const newFolio = {
-      id: String(folios.length + 1),
-      numeroFolio: data.numeroFolio,
-      fecha: new Date().toISOString().split('T')[0],
-      paciente: data.pacienteNombre,
-      cirugia: data.cirugia,
-      tipoAnestesia: data.tipoAnestesia,
-      cirujano: data.cirujano,
-      anestesiologo: data.anestesiologo,
-      estado: 'activo' as const,
-    };
-    setFolios([newFolio, ...folios]);
+  useEffect(() => {
+    if (user) {
+      fetchFolios();
+    }
+  }, [user]);
+
+  const fetchFolios = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('folios')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setFolios(data || []);
+    } catch (error: any) {
+      toast.error('Error al cargar folios', {
+        description: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCancelFolio = (folioId: string) => {
-    setFolios(folios.map(f => 
-      f.id === folioId ? { ...f, estado: 'cancelado' as const } : f
-    ));
-    toast.success('Folio cancelado exitosamente');
+  const handleCreateFolio = async (data: any) => {
+    try {
+      if (!user) return;
+
+      const numeroFolio = `FOL-${Date.now()}`;
+      
+      const { data: folioData, error: folioError } = await supabase
+        .from('folios')
+        .insert({
+          numero_folio: numeroFolio,
+          paciente_nombre: data.pacienteNombre,
+          paciente_edad: data.pacienteEdad,
+          paciente_genero: data.pacienteGenero,
+          cirugia: data.cirugia,
+          tipo_anestesia: data.tipoAnestesia,
+          unidad: data.unidad,
+          anestesiologo_id: data.anestesiologoId || null,
+          cirujano_id: data.cirujanoId || null,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (folioError) throw folioError;
+
+      if (data.insumos && data.insumos.length > 0) {
+        const insumosData = data.insumos.map((insumo: any) => ({
+          folio_id: folioData.id,
+          nombre_insumo: insumo.nombre,
+          cantidad: insumo.cantidad,
+          lote: insumo.lote || 'N/A',
+        }));
+
+        const { error: insumosError } = await supabase
+          .from('folio_insumos')
+          .insert(insumosData);
+
+        if (insumosError) throw insumosError;
+      }
+
+      toast.success('Folio creado exitosamente');
+      setShowForm(false);
+      fetchFolios();
+    } catch (error: any) {
+      toast.error('Error al crear folio', {
+        description: error.message,
+      });
+    }
+  };
+
+  const handleCancelFolio = async (folioId: string) => {
+    try {
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('folios')
+        .update({ 
+          estado: 'cancelado',
+          cancelado_por: user.id,
+        })
+        .eq('id', folioId);
+
+      if (error) throw error;
+
+      toast.success('Folio cancelado exitosamente');
+      fetchFolios();
+    } catch (error: any) {
+      toast.error('Error al cancelar folio', {
+        description: error.message,
+      });
+    }
   };
 
   const tiposAnestesiaLabels: Record<string, string> = {
@@ -118,55 +162,64 @@ const Folios = ({ userRole }: FoliosProps) => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {folios.map((folio) => (
-              <Card key={folio.id} className="border-l-4 border-l-primary">
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3">
-                        <h3 className="font-semibold">{folio.numeroFolio}</h3>
-                        <Badge variant={folio.estado === 'activo' ? 'default' : 'destructive'}>
-                          {folio.estado === 'activo' ? 'Activo' : 'Cancelado'}
-                        </Badge>
+          {loading ? (
+            <p className="text-center text-muted-foreground py-8">Cargando folios...</p>
+          ) : (
+            <div className="space-y-4">
+              {folios
+                .filter(f => searchTerm === '' || 
+                  f.numero_folio?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  f.paciente_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  f.cirugia?.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+                .map((folio) => (
+                  <Card key={folio.id} className="border-l-4 border-l-primary">
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-semibold">{folio.numero_folio}</h3>
+                            <Badge variant={folio.estado === 'activo' ? 'default' : 'destructive'}>
+                              {folio.estado === 'activo' ? 'Activo' : 'Cancelado'}
+                            </Badge>
+                          </div>
+                          <div className="grid gap-1 text-sm">
+                            <p><span className="font-medium">Paciente:</span> {folio.paciente_nombre}</p>
+                            <p><span className="font-medium">Cirugía:</span> {folio.cirugia}</p>
+                            <p><span className="font-medium">Fecha:</span> {new Date(folio.created_at).toLocaleDateString()}</p>
+                            <p><span className="font-medium">Tipo de Anestesia:</span> {tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia}</p>
+                            <p><span className="font-medium">Unidad:</span> {folio.unidad}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedFolio(folio);
+                              setShowDetail(true);
+                            }}
+                          >
+                            Ver Detalle
+                          </Button>
+                          {canCancel && folio.estado === 'activo' && (
+                            <Button 
+                              variant="destructive" 
+                              size="sm" 
+                              className="gap-2"
+                              onClick={() => handleCancelFolio(folio.id)}
+                            >
+                              <FileX className="h-4 w-4" />
+                              Cancelar
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <div className="grid gap-1 text-sm">
-                        <p><span className="font-medium">Paciente:</span> {folio.paciente}</p>
-                        <p><span className="font-medium">Cirugía:</span> {folio.cirugia}</p>
-                        <p><span className="font-medium">Fecha:</span> {folio.fecha}</p>
-                        <p><span className="font-medium">Tipo de Anestesia:</span> {tiposAnestesiaLabels[folio.tipoAnestesia]}</p>
-                        <p><span className="font-medium">Cirujano:</span> {folio.cirujano}</p>
-                        <p><span className="font-medium">Anestesiólogo:</span> {folio.anestesiologo}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          setSelectedFolio(folio);
-                          setShowDetail(true);
-                        }}
-                      >
-                        Ver Detalle
-                      </Button>
-                      {canCancel && folio.estado === 'activo' && (
-                        <Button 
-                          variant="destructive" 
-                          size="sm" 
-                          className="gap-2"
-                          onClick={() => handleCancelFolio(folio.id)}
-                        >
-                          <FileX className="h-4 w-4" />
-                          Cancelar
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

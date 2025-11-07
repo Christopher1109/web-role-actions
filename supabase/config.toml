@@ -1,4 +1,10 @@
 project_id = "nkwoiqlddngzvtrpmetu"
 
+[functions.create-user]
+verify_jwt = true
+
 [functions.setup-admin]
+verify_jwt = false
+
+[functions.create-demo-users]
 verify_jwt = false

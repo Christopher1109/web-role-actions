@@ -14,16 +14,442 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      folio_insumos: {
+        Row: {
+          cantidad: number
+          created_at: string
+          folio_id: string
+          id: string
+          lote: string
+          nombre_insumo: string
+        }
+        Insert: {
+          cantidad: number
+          created_at?: string
+          folio_id: string
+          id?: string
+          lote: string
+          nombre_insumo: string
+        }
+        Update: {
+          cantidad?: number
+          created_at?: string
+          folio_id?: string
+          id?: string
+          lote?: string
+          nombre_insumo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folio_insumos_folio_id_fkey"
+            columns: ["folio_id"]
+            isOneToOne: false
+            referencedRelation: "folios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      folios: {
+        Row: {
+          anestesiologo_id: string | null
+          cancelado_por: string | null
+          cirugia: string
+          cirujano_id: string | null
+          created_at: string
+          created_by: string
+          estado: Database["public"]["Enums"]["estado_folio"]
+          id: string
+          numero_folio: string
+          paciente_edad: number
+          paciente_genero: Database["public"]["Enums"]["genero"]
+          paciente_nombre: string
+          tipo_anestesia: Database["public"]["Enums"]["tipo_anestesia"]
+          unidad: string
+          updated_at: string
+        }
+        Insert: {
+          anestesiologo_id?: string | null
+          cancelado_por?: string | null
+          cirugia: string
+          cirujano_id?: string | null
+          created_at?: string
+          created_by: string
+          estado?: Database["public"]["Enums"]["estado_folio"]
+          id?: string
+          numero_folio: string
+          paciente_edad: number
+          paciente_genero: Database["public"]["Enums"]["genero"]
+          paciente_nombre: string
+          tipo_anestesia: Database["public"]["Enums"]["tipo_anestesia"]
+          unidad: string
+          updated_at?: string
+        }
+        Update: {
+          anestesiologo_id?: string | null
+          cancelado_por?: string | null
+          cirugia?: string
+          cirujano_id?: string | null
+          created_at?: string
+          created_by?: string
+          estado?: Database["public"]["Enums"]["estado_folio"]
+          id?: string
+          numero_folio?: string
+          paciente_edad?: number
+          paciente_genero?: Database["public"]["Enums"]["genero"]
+          paciente_nombre?: string
+          tipo_anestesia?: Database["public"]["Enums"]["tipo_anestesia"]
+          unidad?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folios_anestesiologo_id_fkey"
+            columns: ["anestesiologo_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folios_cancelado_por_fkey"
+            columns: ["cancelado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folios_cirujano_id_fkey"
+            columns: ["cirujano_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folios_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      insumos: {
+        Row: {
+          cantidad: number
+          categoria: string
+          created_at: string
+          created_by: string | null
+          fecha_caducidad: string
+          id: string
+          lote: string
+          nombre: string
+          origen: Database["public"]["Enums"]["origen_insumo"]
+          stock_minimo: number
+          unidad: string
+          updated_at: string
+        }
+        Insert: {
+          cantidad: number
+          categoria: string
+          created_at?: string
+          created_by?: string | null
+          fecha_caducidad: string
+          id?: string
+          lote: string
+          nombre: string
+          origen: Database["public"]["Enums"]["origen_insumo"]
+          stock_minimo?: number
+          unidad: string
+          updated_at?: string
+        }
+        Update: {
+          cantidad?: number
+          categoria?: string
+          created_at?: string
+          created_by?: string | null
+          fecha_caducidad?: string
+          id?: string
+          lote?: string
+          nombre?: string
+          origen?: Database["public"]["Enums"]["origen_insumo"]
+          stock_minimo?: number
+          unidad?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insumos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      medicos: {
+        Row: {
+          activo: boolean | null
+          created_at: string
+          especialidad: Database["public"]["Enums"]["especialidad_medica"]
+          id: string
+          nombre: string
+          procedimientos_realizados: number | null
+          subespecialidad: string | null
+          telefono: string | null
+          unidad: string
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string
+          especialidad: Database["public"]["Enums"]["especialidad_medica"]
+          id?: string
+          nombre: string
+          procedimientos_realizados?: number | null
+          subespecialidad?: string | null
+          telefono?: string | null
+          unidad: string
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string
+          especialidad?: Database["public"]["Enums"]["especialidad_medica"]
+          id?: string
+          nombre?: string
+          procedimientos_realizados?: number | null
+          subespecialidad?: string | null
+          telefono?: string | null
+          unidad?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      paquete_insumos: {
+        Row: {
+          cantidad: number
+          created_at: string
+          id: string
+          nombre_insumo: string
+          paquete_id: string
+        }
+        Insert: {
+          cantidad: number
+          created_at?: string
+          id?: string
+          nombre_insumo: string
+          paquete_id: string
+        }
+        Update: {
+          cantidad?: number
+          created_at?: string
+          id?: string
+          nombre_insumo?: string
+          paquete_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paquete_insumos_paquete_id_fkey"
+            columns: ["paquete_id"]
+            isOneToOne: false
+            referencedRelation: "paquetes_anestesia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paquetes_anestesia: {
+        Row: {
+          created_at: string
+          descripcion: string | null
+          id: string
+          tipo: Database["public"]["Enums"]["tipo_anestesia"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          tipo: Database["public"]["Enums"]["tipo_anestesia"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          tipo?: Database["public"]["Enums"]["tipo_anestesia"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          id: string
+          nombre_completo: string | null
+          unidad: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          nombre_completo?: string | null
+          unidad?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nombre_completo?: string | null
+          unidad?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      traspaso_insumos: {
+        Row: {
+          cantidad: number
+          created_at: string
+          id: string
+          nombre_insumo: string
+          traspaso_id: string
+        }
+        Insert: {
+          cantidad: number
+          created_at?: string
+          id?: string
+          nombre_insumo: string
+          traspaso_id: string
+        }
+        Update: {
+          cantidad?: number
+          created_at?: string
+          id?: string
+          nombre_insumo?: string
+          traspaso_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "traspaso_insumos_traspaso_id_fkey"
+            columns: ["traspaso_id"]
+            isOneToOne: false
+            referencedRelation: "traspasos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      traspasos: {
+        Row: {
+          aprobado_por: string | null
+          created_at: string
+          estado: Database["public"]["Enums"]["estado_traspaso"]
+          id: string
+          motivo_rechazo: string | null
+          solicitado_por: string
+          unidad_destino: string
+          unidad_origen: string
+          updated_at: string
+        }
+        Insert: {
+          aprobado_por?: string | null
+          created_at?: string
+          estado?: Database["public"]["Enums"]["estado_traspaso"]
+          id?: string
+          motivo_rechazo?: string | null
+          solicitado_por: string
+          unidad_destino: string
+          unidad_origen: string
+          updated_at?: string
+        }
+        Update: {
+          aprobado_por?: string | null
+          created_at?: string
+          estado?: Database["public"]["Enums"]["estado_traspaso"]
+          id?: string
+          motivo_rechazo?: string | null
+          solicitado_por?: string
+          unidad_destino?: string
+          unidad_origen?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "traspasos_aprobado_por_fkey"
+            columns: ["aprobado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "traspasos_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_any_role: {
+        Args: {
+          _roles: Database["public"]["Enums"]["app_role"][]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "auxiliar" | "almacenista" | "lider" | "supervisor" | "gerente"
+      especialidad_medica: "anestesiologo" | "cirujano"
+      estado_folio: "activo" | "cancelado"
+      estado_traspaso: "pendiente" | "completado" | "rechazado"
+      genero: "M" | "F" | "Otro"
+      origen_insumo: "LOAD" | "Prestado"
+      tipo_anestesia:
+        | "general_balanceada_adulto"
+        | "general_balanceada_pediatrica"
+        | "general_alta_especialidad"
+        | "general_endovenosa"
+        | "locorregional"
+        | "sedacion"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +576,21 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["auxiliar", "almacenista", "lider", "supervisor", "gerente"],
+      especialidad_medica: ["anestesiologo", "cirujano"],
+      estado_folio: ["activo", "cancelado"],
+      estado_traspaso: ["pendiente", "completado", "rechazado"],
+      genero: ["M", "F", "Otro"],
+      origen_insumo: ["LOAD", "Prestado"],
+      tipo_anestesia: [
+        "general_balanceada_adulto",
+        "general_balanceada_pediatrica",
+        "general_alta_especialidad",
+        "general_endovenosa",
+        "locorregional",
+        "sedacion",
+      ],
+    },
   },
 } as const

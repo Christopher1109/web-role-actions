@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,10 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { UserRole } from '@/types';
+import { AlertCircle } from 'lucide-react';
 
 const loginSchema = z.object({
   email: z.string()
@@ -23,67 +22,78 @@ const loginSchema = z.object({
     .max(100, { message: "Máximo 100 caracteres" }),
 });
 
-const signupSchema = loginSchema.extend({
-  nombreCompleto: z.string()
-    .trim()
-    .nonempty({ message: "El nombre completo es requerido" })
-    .max(200, { message: "Máximo 200 caracteres" }),
-  role: z.enum(['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente'], {
-    message: "Selecciona un rol válido"
-  }),
-  unidad: z.string()
-    .trim()
-    .nonempty({ message: "Selecciona una unidad" }),
-});
-
 type LoginFormValues = z.infer<typeof loginSchema>;
-type SignupFormValues = z.infer<typeof signupSchema>;
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    checkIfNeedsSetup();
+  }, []);
+
+  const checkIfNeedsSetup = async () => {
+    try {
+      // Intentar verificar si existe algún usuario gerente
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'gerente')
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking setup:', error);
+        setNeedsSetup(true);
+      } else {
+        setNeedsSetup(!data || data.length === 0);
+      }
+    } catch (error) {
+      console.error('Error checking setup:', error);
+      setNeedsSetup(true);
+    } finally {
+      setIsCheckingSetup(false);
+    }
+  };
+
+  const handleSetupAdmin = async () => {
+    setIsLoading(true);
+    
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/setup-admin`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al crear usuario administrador');
+      }
+
+      toast.success('¡Usuario gerente creado!', {
+        description: 'Ahora puedes iniciar sesión',
+      });
+      
+      setNeedsSetup(false);
+    } catch (error: any) {
+      toast.error('Error al crear usuario', {
+        description: error.message,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
   });
-
-  const signupForm = useForm<SignupFormValues>({
-    resolver: zodResolver(signupSchema),
-    defaultValues: {
-      role: 'auxiliar',
-      unidad: 'Unidad Central',
-    }
-  });
-
-  const roles: { value: UserRole; label: string; description: string }[] = [
-    { 
-      value: 'auxiliar', 
-      label: 'Auxiliar de Anestesia',
-      description: 'Registra folios e insumos'
-    },
-    { 
-      value: 'almacenista', 
-      label: 'Almacenista',
-      description: 'Gestiona inventario'
-    },
-    { 
-      value: 'lider', 
-      label: 'Líder Hospitalario',
-      description: 'Acceso a folios, insumos y reportes'
-    },
-    { 
-      value: 'supervisor', 
-      label: 'Supervisor Hospitalario',
-      description: 'Gestión completa de unidades'
-    },
-    { 
-      value: 'gerente', 
-      label: 'Gerente de Operaciones',
-      description: 'Control total del sistema'
-    },
-  ];
-
-  const unidades = ['Unidad Central', 'Unidad Norte', 'Unidad Sur', 'Unidad Este'];
 
   const handleLogin = async (data: LoginFormValues) => {
     setIsLoading(true);
@@ -122,55 +132,16 @@ const Auth = () => {
     }
   };
 
-  const handleSignup = async (data: SignupFormValues) => {
-    setIsLoading(true);
-    
-    try {
-      const redirectUrl = `${window.location.origin}/`;
-      
-      const { error } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            nombre_completo: data.nombreCompleto,
-            role: data.role,
-            unidad: data.unidad,
-          },
-        },
-      });
-
-      if (error) {
-        if (error.message.includes('User already registered')) {
-          toast.error('Usuario ya registrado', {
-            description: 'Este correo ya está en uso',
-          });
-        } else {
-          toast.error('Error al registrarse', {
-            description: error.message,
-          });
-        }
-        return;
-      }
-
-      toast.success('¡Registro exitoso!', {
-        description: 'Ya puedes iniciar sesión',
-      });
-      
-      // Cambiar a la pestaña de login
-      const loginTab = document.querySelector('[value="login"]');
-      if (loginTab instanceof HTMLElement) {
-        loginTab.click();
-      }
-    } catch (error) {
-      toast.error('Error inesperado', {
-        description: 'Por favor intenta nuevamente',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  if (isCheckingSetup) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Verificando configuración...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -178,45 +149,70 @@ const Auth = () => {
         <CardHeader>
           <CardTitle className="text-2xl font-bold">Sistema de Gestión de Anestesia</CardTitle>
           <CardDescription>
-            Inicia sesión con tus credenciales asignadas
+            {needsSetup ? 'Configuración inicial del sistema' : 'Inicia sesión con tus credenciales asignadas'}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="login-email">Correo Electrónico</Label>
-              <Input
-                id="login-email"
-                type="email"
-                placeholder="tu@email.com"
-                {...loginForm.register('email')}
-              />
-              {loginForm.formState.errors.email && (
-                <p className="text-sm text-destructive">
-                  {loginForm.formState.errors.email.message}
-                </p>
-              )}
-            </div>
+          {needsSetup ? (
+            <div className="space-y-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  El sistema necesita configuración inicial. Haz clic en el botón para crear el usuario gerente.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="rounded-lg bg-muted p-4 space-y-2">
+                <p className="text-sm font-semibold">Credenciales del gerente:</p>
+                <p className="text-sm text-muted-foreground">Email: gerente@hospital.com</p>
+                <p className="text-sm text-muted-foreground">Contraseña: gerente123</p>
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="login-password">Contraseña</Label>
-              <Input
-                id="login-password"
-                type="password"
-                placeholder="••••••••"
-                {...loginForm.register('password')}
-              />
-              {loginForm.formState.errors.password && (
-                <p className="text-sm text-destructive">
-                  {loginForm.formState.errors.password.message}
-                </p>
-              )}
+              <Button 
+                onClick={handleSetupAdmin} 
+                className="w-full" 
+                disabled={isLoading}
+              >
+                {isLoading ? 'Creando usuario...' : 'Crear Usuario Gerente'}
+              </Button>
             </div>
+          ) : (
+            <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="login-email">Correo Electrónico</Label>
+                <Input
+                  id="login-email"
+                  type="email"
+                  placeholder="tu@email.com"
+                  {...loginForm.register('email')}
+                />
+                {loginForm.formState.errors.email && (
+                  <p className="text-sm text-destructive">
+                    {loginForm.formState.errors.email.message}
+                  </p>
+                )}
+              </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-            </Button>
-          </form>
+              <div className="space-y-2">
+                <Label htmlFor="login-password">Contraseña</Label>
+                <Input
+                  id="login-password"
+                  type="password"
+                  placeholder="••••••••"
+                  {...loginForm.register('password')}
+                />
+                {loginForm.formState.errors.password && (
+                  <p className="text-sm text-destructive">
+                    {loginForm.formState.errors.password.message}
+                  </p>
+                )}
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>

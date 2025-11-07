@@ -5,17 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Plus, Search, FileX } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import FolioForm from '@/components/forms/FolioForm';
+import { toast } from 'sonner';
 
 interface FoliosProps {
   userRole: UserRole;
 }
 
-const Folios = ({ userRole }: FoliosProps) => {
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const canCancel = userRole === 'supervisor' || userRole === 'gerente';
-
-  const mockFolios = [
+const mockFoliosData = [
     {
       id: '1',
       numeroFolio: 'F-2024-001',
@@ -49,7 +47,36 @@ const Folios = ({ userRole }: FoliosProps) => {
       anestesiologo: 'Dra. García Ruiz',
       estado: 'cancelado',
     },
-  ];
+];
+
+const Folios = ({ userRole }: FoliosProps) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [folios, setFolios] = useState(mockFoliosData);
+
+  const canCancel = userRole === 'supervisor' || userRole === 'gerente';
+
+  const handleCreateFolio = (data: any) => {
+    const newFolio = {
+      id: String(folios.length + 1),
+      numeroFolio: data.numeroFolio,
+      fecha: new Date().toISOString().split('T')[0],
+      paciente: data.pacienteNombre,
+      cirugia: data.cirugia,
+      tipoAnestesia: data.tipoAnestesia,
+      cirujano: data.cirujano,
+      anestesiologo: data.anestesiologo,
+      estado: 'activo' as const,
+    };
+    setFolios([newFolio, ...folios]);
+  };
+
+  const handleCancelFolio = (folioId: string) => {
+    setFolios(folios.map(f => 
+      f.id === folioId ? { ...f, estado: 'cancelado' as const } : f
+    ));
+    toast.success('Folio cancelado exitosamente');
+  };
 
   const tiposAnestesiaLabels: Record<string, string> = {
     general_balanceada_adulto: 'General Balanceada Adulto',
@@ -67,7 +94,7 @@ const Folios = ({ userRole }: FoliosProps) => {
           <h1 className="text-3xl font-bold text-foreground">Folios</h1>
           <p className="text-muted-foreground">Gestión de procedimientos quirúrgicos</p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4" />
           Nuevo Folio
         </Button>
@@ -89,7 +116,7 @@ const Folios = ({ userRole }: FoliosProps) => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {mockFolios.map((folio) => (
+            {folios.map((folio) => (
               <Card key={folio.id} className="border-l-4 border-l-primary">
                 <CardContent className="pt-6">
                   <div className="flex items-start justify-between">
@@ -112,7 +139,12 @@ const Folios = ({ userRole }: FoliosProps) => {
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm">Ver Detalle</Button>
                       {canCancel && folio.estado === 'activo' && (
-                        <Button variant="destructive" size="sm" className="gap-2">
+                        <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          className="gap-2"
+                          onClick={() => handleCancelFolio(folio.id)}
+                        >
                           <FileX className="h-4 w-4" />
                           Cancelar
                         </Button>
@@ -125,6 +157,12 @@ const Folios = ({ userRole }: FoliosProps) => {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <FolioForm onClose={() => setShowForm(false)} onSubmit={handleCreateFolio} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

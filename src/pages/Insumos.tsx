@@ -4,11 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Plus, Search, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import InsumoForm from '@/components/forms/InsumoForm';
 
-const Insumos = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const mockInsumos = [
+const mockInsumosData = [
     {
       id: '1',
       nombre: 'Propofol 200mg',
@@ -45,7 +44,25 @@ const Insumos = () => {
       origen: 'LOAD',
       stockMinimo: 25,
     },
-  ];
+];
+
+const Insumos = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [insumos, setInsumos] = useState(mockInsumosData);
+
+  const handleCreateInsumo = (data: any) => {
+    const newInsumo = {
+      id: String(insumos.length + 1),
+      nombre: data.nombre,
+      lote: data.lote,
+      cantidad: data.cantidad,
+      fechaCaducidad: data.fechaCaducidad,
+      origen: data.origen,
+      stockMinimo: data.stockMinimo,
+    };
+    setInsumos([newInsumo, ...insumos]);
+  };
 
   const getStockStatus = (cantidad: number, stockMinimo: number) => {
     if (cantidad <= stockMinimo / 2) return { variant: 'destructive' as const, label: 'Crítico' };
@@ -66,7 +83,7 @@ const Insumos = () => {
           <h1 className="text-3xl font-bold text-foreground">Inventario de Insumos</h1>
           <p className="text-muted-foreground">Gestión y control de stock</p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4" />
           Registrar Entrada
         </Button>
@@ -118,7 +135,7 @@ const Insumos = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {mockInsumos.map((insumo) => {
+            {insumos.map((insumo) => {
               const stockStatus = getStockStatus(insumo.cantidad, insumo.stockMinimo);
               const caducidadProxima = isCaducidadProxima(insumo.fechaCaducidad);
               
@@ -159,6 +176,12 @@ const Insumos = () => {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <InsumoForm onClose={() => setShowForm(false)} onSubmit={handleCreateInsumo} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

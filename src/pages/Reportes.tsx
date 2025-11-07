@@ -1,10 +1,102 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, FileSpreadsheet, Calendar } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
+import { generateAnexoT29, generateAnexoT30 } from '@/utils/excelExport';
 
 const Reportes = () => {
+  const [t29FechaInicio, setT29FechaInicio] = useState('');
+  const [t29FechaFin, setT29FechaFin] = useState('');
+  const [t30FechaInicio, setT30FechaInicio] = useState('');
+  const [t30FechaFin, setT30FechaFin] = useState('');
+
+  // Datos de ejemplo - en producción vendrían de la BD
+  const mockFolios = [
+    {
+      numeroFolio: 'F-2024-001',
+      fechaHora: '2024-11-07',
+      paciente: { nombre: 'Juan Pérez García', edad: 45, genero: 'M' },
+      cirugia: 'Apendicectomía',
+      tipoAnestesia: 'general_balanceada_adulto',
+      cirujano: 'Dr. Martínez López',
+      anestesiologo: 'Dra. García Ruiz',
+      unidad: 'Unidad Central',
+      estado: 'activo',
+      insumosUtilizados: [
+        { nombre: 'Propofol 200mg', lote: 'LOT-2024-A123', cantidad: 2 },
+        { nombre: 'Fentanilo 500mcg', lote: 'LOT-2024-B456', cantidad: 1 },
+      ],
+    },
+    {
+      numeroFolio: 'F-2024-002',
+      fechaHora: '2024-11-07',
+      paciente: { nombre: 'María González Torres', edad: 32, genero: 'F' },
+      cirugia: 'Cesárea',
+      tipoAnestesia: 'locorregional',
+      cirujano: 'Dra. Hernández Díaz',
+      anestesiologo: 'Dr. Ramírez Castro',
+      unidad: 'Unidad Sur',
+      estado: 'activo',
+      insumosUtilizados: [
+        { nombre: 'Lidocaína 2%', lote: 'LOT-2024-D012', cantidad: 2 },
+        { nombre: 'Fentanilo 500mcg', lote: 'LOT-2024-B456', cantidad: 1 },
+      ],
+    },
+  ];
+
+  const handleDownloadT29 = () => {
+    if (!t29FechaInicio || !t29FechaFin) {
+      toast.error('Selecciona el periodo', {
+        description: 'Debes indicar fecha de inicio y fin',
+      });
+      return;
+    }
+
+    if (new Date(t29FechaInicio) > new Date(t29FechaFin)) {
+      toast.error('Fechas inválidas', {
+        description: 'La fecha de inicio debe ser anterior a la fecha de fin',
+      });
+      return;
+    }
+
+    try {
+      generateAnexoT29(mockFolios, t29FechaInicio, t29FechaFin);
+      toast.success('Anexo T29 generado', {
+        description: 'El archivo se descargó correctamente',
+      });
+    } catch (error) {
+      toast.error('Error al generar reporte');
+    }
+  };
+
+  const handleDownloadT30 = () => {
+    if (!t30FechaInicio || !t30FechaFin) {
+      toast.error('Selecciona el periodo', {
+        description: 'Debes indicar fecha de inicio y fin',
+      });
+      return;
+    }
+
+    if (new Date(t30FechaInicio) > new Date(t30FechaFin)) {
+      toast.error('Fechas inválidas', {
+        description: 'La fecha de inicio debe ser anterior a la fecha de fin',
+      });
+      return;
+    }
+
+    try {
+      generateAnexoT30(mockFolios, t30FechaInicio, t30FechaFin);
+      toast.success('Anexo T30 generado', {
+        description: 'El archivo se descargó correctamente',
+      });
+    } catch (error) {
+      toast.error('Error al generar reporte');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -36,7 +128,13 @@ const Reportes = () => {
                 <Label htmlFor="t29-inicio">Fecha Inicio</Label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="t29-inicio" type="date" className="pl-9" />
+                  <Input 
+                    id="t29-inicio" 
+                    type="date" 
+                    className="pl-9"
+                    value={t29FechaInicio}
+                    onChange={(e) => setT29FechaInicio(e.target.value)}
+                  />
                 </div>
               </div>
               
@@ -44,12 +142,18 @@ const Reportes = () => {
                 <Label htmlFor="t29-fin">Fecha Fin</Label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="t29-fin" type="date" className="pl-9" />
+                  <Input 
+                    id="t29-fin" 
+                    type="date" 
+                    className="pl-9"
+                    value={t29FechaFin}
+                    onChange={(e) => setT29FechaFin(e.target.value)}
+                  />
                 </div>
               </div>
             </div>
 
-            <Button className="w-full gap-2">
+            <Button className="w-full gap-2" onClick={handleDownloadT29}>
               <Download className="h-4 w-4" />
               Descargar Anexo T29
             </Button>
@@ -87,7 +191,13 @@ const Reportes = () => {
                 <Label htmlFor="t30-inicio">Fecha Inicio</Label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="t30-inicio" type="date" className="pl-9" />
+                  <Input 
+                    id="t30-inicio" 
+                    type="date" 
+                    className="pl-9"
+                    value={t30FechaInicio}
+                    onChange={(e) => setT30FechaInicio(e.target.value)}
+                  />
                 </div>
               </div>
               
@@ -95,12 +205,18 @@ const Reportes = () => {
                 <Label htmlFor="t30-fin">Fecha Fin</Label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="t30-fin" type="date" className="pl-9" />
+                  <Input 
+                    id="t30-fin" 
+                    type="date" 
+                    className="pl-9"
+                    value={t30FechaFin}
+                    onChange={(e) => setT30FechaFin(e.target.value)}
+                  />
                 </div>
               </div>
             </div>
 
-            <Button className="w-full gap-2">
+            <Button className="w-full gap-2" onClick={handleDownloadT30}>
               <Download className="h-4 w-4" />
               Descargar Anexo T30
             </Button>

@@ -12,6 +12,7 @@ import Medicos from './pages/Medicos';
 import Paquetes from './pages/Paquetes';
 import Reportes from './pages/Reportes';
 import Traspasos from './pages/Traspasos';
+import Usuarios from './pages/Usuarios';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -58,7 +59,10 @@ const AppContent = () => {
               </>
             )}
             {userRole === 'gerente' && (
-              <Route path="/traspasos" element={<Traspasos />} />
+              <>
+                <Route path="/traspasos" element={<Traspasos />} />
+                <Route path="/usuarios" element={<Usuarios />} />
+              </>
             )}
             <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

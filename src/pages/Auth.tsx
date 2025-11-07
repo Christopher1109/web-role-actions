@@ -178,158 +178,45 @@ const Auth = () => {
         <CardHeader>
           <CardTitle className="text-2xl font-bold">Sistema de Gestión de Anestesia</CardTitle>
           <CardDescription>
-            Inicia sesión o regístrate para acceder al sistema
+            Inicia sesión con tus credenciales asignadas
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
-              <TabsTrigger value="signup">Registrarse</TabsTrigger>
-            </TabsList>
+          <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="login-email">Correo Electrónico</Label>
+              <Input
+                id="login-email"
+                type="email"
+                placeholder="tu@email.com"
+                {...loginForm.register('email')}
+              />
+              {loginForm.formState.errors.email && (
+                <p className="text-sm text-destructive">
+                  {loginForm.formState.errors.email.message}
+                </p>
+              )}
+            </div>
 
-            <TabsContent value="login">
-              <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-email">Correo Electrónico</Label>
-                  <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="tu@email.com"
-                    {...loginForm.register('email')}
-                  />
-                  {loginForm.formState.errors.email && (
-                    <p className="text-sm text-destructive">
-                      {loginForm.formState.errors.email.message}
-                    </p>
-                  )}
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="login-password">Contraseña</Label>
+              <Input
+                id="login-password"
+                type="password"
+                placeholder="••••••••"
+                {...loginForm.register('password')}
+              />
+              {loginForm.formState.errors.password && (
+                <p className="text-sm text-destructive">
+                  {loginForm.formState.errors.password.message}
+                </p>
+              )}
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Contraseña</Label>
-                  <Input
-                    id="login-password"
-                    type="password"
-                    placeholder="••••••••"
-                    {...loginForm.register('password')}
-                  />
-                  {loginForm.formState.errors.password && (
-                    <p className="text-sm text-destructive">
-                      {loginForm.formState.errors.password.message}
-                    </p>
-                  )}
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="signup">
-              <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-nombre">Nombre Completo</Label>
-                  <Input
-                    id="signup-nombre"
-                    type="text"
-                    placeholder="Juan Pérez García"
-                    {...signupForm.register('nombreCompleto')}
-                  />
-                  {signupForm.formState.errors.nombreCompleto && (
-                    <p className="text-sm text-destructive">
-                      {signupForm.formState.errors.nombreCompleto.message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Correo Electrónico</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="tu@email.com"
-                    {...signupForm.register('email')}
-                  />
-                  {signupForm.formState.errors.email && (
-                    <p className="text-sm text-destructive">
-                      {signupForm.formState.errors.email.message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Contraseña</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="Mínimo 6 caracteres"
-                    {...signupForm.register('password')}
-                  />
-                  {signupForm.formState.errors.password && (
-                    <p className="text-sm text-destructive">
-                      {signupForm.formState.errors.password.message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signup-role">Rol en el Sistema</Label>
-                  <Select
-                    onValueChange={(value) => signupForm.setValue('role', value as UserRole)}
-                    defaultValue="auxiliar"
-                  >
-                    <SelectTrigger id="signup-role">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles.map((role) => (
-                        <SelectItem key={role.value} value={role.value}>
-                          {role.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {roles.find(r => r.value === signupForm.watch('role'))?.description}
-                  </p>
-                  {signupForm.formState.errors.role && (
-                    <p className="text-sm text-destructive">
-                      {signupForm.formState.errors.role.message}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signup-unidad">Unidad</Label>
-                  <Select
-                    onValueChange={(value) => signupForm.setValue('unidad', value)}
-                    defaultValue="Unidad Central"
-                  >
-                    <SelectTrigger id="signup-unidad">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {unidades.map((unidad) => (
-                        <SelectItem key={unidad} value={unidad}>
-                          {unidad}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {signupForm.formState.errors.unidad && (
-                    <p className="text-sm text-destructive">
-                      {signupForm.formState.errors.unidad.message}
-                    </p>
-                  )}
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Registrando...' : 'Registrarse'}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

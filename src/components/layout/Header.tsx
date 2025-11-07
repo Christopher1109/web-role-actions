@@ -14,6 +14,7 @@ const Header = () => {
       '/paquetes': 'Paquetes de Anestesia',
       '/reportes': 'Reportes',
       '/traspasos': 'Traspasos entre Unidades',
+      '/usuarios': 'Gestión de Usuarios',
     };
     
     return titles[path] || 'Sistema de Anestesia';

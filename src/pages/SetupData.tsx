@@ -60,23 +60,43 @@ export default function SetupData() {
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer);
       
+      console.log('Hojas disponibles:', workbook.SheetNames);
+      
       // Usar la primera hoja (índice 0)
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+      console.log('Total de filas leídas:', jsonData.length);
+      if (jsonData.length > 0) {
+        console.log('Primera fila (ejemplo):', jsonData[0]);
+        console.log('Columnas disponibles:', Object.keys(jsonData[0]));
+      }
 
       // Mapa para rastrear hospitales únicos
       const hospitalesMap = new Map();
 
       // Procesar datos del Excel
       for (const row of jsonData) {
-        if (!row['ESTADO'] || !row['Clave\r\nPresupuestal']) continue;
+        // Obtener las claves exactas del objeto
+        const keys = Object.keys(row);
+        const estadoKey = keys.find(k => k.toUpperCase().includes('ESTADO'));
+        const claveKey = keys.find(k => k.toLowerCase().includes('clave') || k.toLowerCase().includes('presupuestal'));
+        const tipoKey = keys.find(k => k.toUpperCase().includes('TIPO'));
+        const numeroKey = keys.find(k => k.toLowerCase().includes('numero') || k.toLowerCase().includes('clinica'));
+        const localidadKey = keys.find(k => k.toUpperCase().includes('LOCALIDAD'));
+        const procedimientoKey = keys.find(k => k.toUpperCase().includes('PROCEDIMIENTO'));
 
-        const nombreEstado = String(row['ESTADO']).trim();
-        const clavePresupuestal = String(row['Clave\r\nPresupuestal']).trim();
-        const tipo = String(row['Tipo'] || '').trim();
-        const numero = String(row['Número DE CLINICA'] || '').trim();
-        const localidad = String(row['Localidad'] || '').trim();
-        const procedimiento = String(row['Procedimiento'] || '').trim();
+        if (!estadoKey || !claveKey) {
+          console.warn('Fila sin datos esenciales:', row);
+          continue;
+        }
+
+        const nombreEstado = String(row[estadoKey]).trim();
+        const clavePresupuestal = String(row[claveKey]).trim();
+        const tipo = tipoKey ? String(row[tipoKey] || '').trim() : '';
+        const numero = numeroKey ? String(row[numeroKey] || '').trim() : '';
+        const localidad = localidadKey ? String(row[localidadKey] || '').trim() : '';
+        const procedimiento = procedimientoKey ? String(row[procedimientoKey] || '').trim() : '';
 
         // Normalizar nombre del estado para obtener código
         let codigoEstado = '';

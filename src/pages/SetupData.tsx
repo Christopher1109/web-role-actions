@@ -75,28 +75,20 @@ export default function SetupData() {
       // Mapa para rastrear hospitales únicos
       const hospitalesMap = new Map();
 
-      // Procesar datos del Excel
+      // Procesar datos del Excel - usar índices de columna directamente
       for (const row of jsonData) {
-        // Obtener las claves exactas del objeto
-        const keys = Object.keys(row);
-        const estadoKey = keys.find(k => k.toUpperCase().includes('ESTADO'));
-        const claveKey = keys.find(k => k.toLowerCase().includes('clave') || k.toLowerCase().includes('presupuestal'));
-        const tipoKey = keys.find(k => k.toUpperCase().includes('TIPO'));
-        const numeroKey = keys.find(k => k.toLowerCase().includes('numero') || k.toLowerCase().includes('clinica'));
-        const localidadKey = keys.find(k => k.toUpperCase().includes('LOCALIDAD'));
-        const procedimientoKey = keys.find(k => k.toUpperCase().includes('PROCEDIMIENTO'));
+        // El Excel tiene columnas sin nombre, usar __EMPTY, __EMPTY_1, etc.
+        const nombreEstado = String(row['__EMPTY'] || '').trim();
+        const clavePresupuestal = String(row['__EMPTY_1'] || '').trim();
+        const tipo = String(row['__EMPTY_2'] || '').trim();
+        const numero = String(row['__EMPTY_3'] || '').trim();
+        const localidad = String(row['__EMPTY_4'] || '').trim();
+        const procedimiento = String(row['__EMPTY_5'] || '').trim();
 
-        if (!estadoKey || !claveKey) {
+        if (!nombreEstado || !clavePresupuestal) {
           console.warn('Fila sin datos esenciales:', row);
           continue;
         }
-
-        const nombreEstado = String(row[estadoKey]).trim();
-        const clavePresupuestal = String(row[claveKey]).trim();
-        const tipo = tipoKey ? String(row[tipoKey] || '').trim() : '';
-        const numero = numeroKey ? String(row[numeroKey] || '').trim() : '';
-        const localidad = localidadKey ? String(row[localidadKey] || '').trim() : '';
-        const procedimiento = procedimientoKey ? String(row[procedimientoKey] || '').trim() : '';
 
         // Normalizar nombre del estado para obtener código
         let codigoEstado = '';

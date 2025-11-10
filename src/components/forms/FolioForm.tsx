@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { X, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useState } from 'react';
+import { InsumoCombobox } from './InsumoCombobox';
 
 const folioSchema = z.object({
   numeroFolio: z.string()
@@ -102,6 +103,8 @@ const FolioForm = ({ onClose, onSubmit }: FolioFormProps) => {
   const [insumos, setInsumos] = useState<InsumoUtilizado[]>([]);
   const [editingInsumo, setEditingInsumo] = useState<InsumoUtilizado | null>(null);
   const [showAddInsumo, setShowAddInsumo] = useState(false);
+  const [selectedInsumo, setSelectedInsumo] = useState<InsumoUtilizado | null>(null);
+  const [newInsumoCantidad, setNewInsumoCantidad] = useState<number>(1);
 
   const tiposAnestesia = [
     { value: 'general_balanceada_adulto', label: 'General Balanceada Adulto' },
@@ -110,6 +113,10 @@ const FolioForm = ({ onClose, onSubmit }: FolioFormProps) => {
     { value: 'general_endovenosa', label: 'General Endovenosa' },
     { value: 'locorregional', label: 'Locorregional' },
     { value: 'sedacion', label: 'Sedación' },
+    { value: 'alta_especialidad_neurocirugia', label: 'Alta Especialidad en Neurocirugía' },
+    { value: 'alta_especialidad_trasplante_hepatico', label: 'Alta Especialidad en Trasplante Hepático' },
+    { value: 'alta_especialidad_trasplante_renal', label: 'Alta Especialidad en Trasplante Renal' },
+    { value: 'cuidados_anestesicos_monitoreados', label: 'Cuidados Anestésicos Monitoreados' },
   ];
 
   const cirujanos = [
@@ -165,8 +172,10 @@ const FolioForm = ({ onClose, onSubmit }: FolioFormProps) => {
   };
 
   const handleAddInsumo = (insumo: InsumoUtilizado) => {
-    setInsumos([...insumos, { ...insumo, id: `temp-${Date.now()}` }]);
+    setInsumos([...insumos, { ...insumo, id: `${insumo.id}-${Date.now()}` }]);
     setShowAddInsumo(false);
+    setSelectedInsumo(null);
+    setNewInsumoCantidad(1);
   };
 
   const handleUpdateInsumo = (updatedInsumo: InsumoUtilizado) => {
@@ -567,26 +576,31 @@ const FolioForm = ({ onClose, onSubmit }: FolioFormProps) => {
             <h3 className="font-semibold text-lg">Agregar Insumo</h3>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Descripción</Label>
-                <Input
-                  id="newInsumoNombre"
-                  placeholder="Nombre del insumo"
+                <Label>Buscar Insumo</Label>
+                <InsumoCombobox
+                  value={selectedInsumo?.id}
+                  onSelect={(insumo) => {
+                    setSelectedInsumo(insumo);
+                    if (insumo) {
+                      setNewInsumoCantidad(1);
+                    }
+                  }}
+                  tipoAnestesia={tipoAnestesia}
+                  placeholder="Buscar y seleccionar insumo..."
                 />
+                <p className="text-xs text-muted-foreground">
+                  {tipoAnestesia 
+                    ? "Solo se muestran insumos permitidos para este tipo de anestesia"
+                    : "Selecciona un tipo de anestesia primero para filtrar los insumos"}
+                </p>
               </div>
               <div className="space-y-2">
-                <Label>Lote</Label>
+                <Label>Cantidad a usar</Label>
                 <Input
-                  id="newInsumoLote"
-                  placeholder="LOT-2024-XXX"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Cantidad</Label>
-                <Input
-                  id="newInsumoCantidad"
                   type="number"
                   min="1"
-                  defaultValue="1"
+                  value={newInsumoCantidad}
+                  onChange={(e) => setNewInsumoCantidad(parseInt(e.target.value) || 1)}
                 />
               </div>
             </div>
@@ -594,7 +608,11 @@ const FolioForm = ({ onClose, onSubmit }: FolioFormProps) => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setShowAddInsumo(false)}
+                onClick={() => {
+                  setShowAddInsumo(false);
+                  setSelectedInsumo(null);
+                  setNewInsumoCantidad(1);
+                }}
                 className="flex-1"
               >
                 Cancelar
@@ -602,17 +620,17 @@ const FolioForm = ({ onClose, onSubmit }: FolioFormProps) => {
               <Button
                 type="button"
                 onClick={() => {
-                  const nombre = (document.getElementById('newInsumoNombre') as HTMLInputElement)?.value;
-                  const lote = (document.getElementById('newInsumoLote') as HTMLInputElement)?.value;
-                  const cantidad = parseInt((document.getElementById('newInsumoCantidad') as HTMLInputElement)?.value) || 1;
-                  
-                  if (nombre && lote) {
-                    handleAddInsumo({ id: '', nombre, lote, cantidad });
+                  if (selectedInsumo) {
+                    handleAddInsumo({ 
+                      ...selectedInsumo, 
+                      cantidad: newInsumoCantidad 
+                    });
                   } else {
-                    toast.error('Por favor completa todos los campos');
+                    toast.error('Por favor selecciona un insumo');
                   }
                 }}
                 className="flex-1"
+                disabled={!selectedInsumo}
               >
                 Agregar
               </Button>

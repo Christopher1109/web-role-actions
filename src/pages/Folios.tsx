@@ -111,6 +111,42 @@ const Folios = ({ userRole }: FoliosProps) => {
           .insert(insumosData);
 
         if (insumosError) throw insumosError;
+
+        // Descontar insumos del inventario
+        for (const insumo of data.insumos) {
+          // Buscar el insumo en el inventario
+          const { data: insumoInventario, error: searchError } = await supabase
+            .from('insumos')
+            .select('*')
+            .eq('nombre', insumo.nombre)
+            .eq('lote', insumo.lote)
+            .eq('hospital_id', profile?.hospital_id)
+            .single();
+
+          if (searchError || !insumoInventario) {
+            console.warn(`No se encontró el insumo ${insumo.nombre} (${insumo.lote}) en el inventario`);
+            continue;
+          }
+
+          // Verificar que hay suficiente cantidad
+          if (insumoInventario.cantidad < insumo.cantidad) {
+            toast.warning(`Stock insuficiente para ${insumo.nombre}`, {
+              description: `Disponible: ${insumoInventario.cantidad}, Requerido: ${insumo.cantidad}`,
+            });
+            continue;
+          }
+
+          // Actualizar la cantidad del insumo
+          const nuevaCantidad = insumoInventario.cantidad - insumo.cantidad;
+          const { error: updateError } = await supabase
+            .from('insumos')
+            .update({ cantidad: nuevaCantidad })
+            .eq('id', insumoInventario.id);
+
+          if (updateError) {
+            console.error(`Error al actualizar inventario de ${insumo.nombre}:`, updateError);
+          }
+        }
       }
 
       toast.success('Folio creado exitosamente');

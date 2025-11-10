@@ -278,6 +278,44 @@ export type Database = {
           },
         ]
       }
+      hospital_procedimientos: {
+        Row: {
+          clave_procedimiento: string
+          created_at: string
+          hospital_id: string
+          id: string
+          maximo_acumulado: number | null
+          nombre_procedimiento: string
+          precio_unitario: number | null
+        }
+        Insert: {
+          clave_procedimiento: string
+          created_at?: string
+          hospital_id: string
+          id?: string
+          maximo_acumulado?: number | null
+          nombre_procedimiento: string
+          precio_unitario?: number | null
+        }
+        Update: {
+          clave_procedimiento?: string
+          created_at?: string
+          hospital_id?: string
+          id?: string
+          maximo_acumulado?: number | null
+          nombre_procedimiento?: string
+          precio_unitario?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hospital_procedimientos_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hospitales: {
         Row: {
           codigo: string

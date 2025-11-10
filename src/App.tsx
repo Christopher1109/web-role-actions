@@ -13,6 +13,7 @@ import Paquetes from './pages/Paquetes';
 import Reportes from './pages/Reportes';
 import Traspasos from './pages/Traspasos';
 import Usuarios from './pages/Usuarios';
+import SetupData from './pages/SetupData';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -62,6 +63,7 @@ const AppContent = () => {
               <>
                 <Route path="/traspasos" element={<Traspasos />} />
                 <Route path="/usuarios" element={<Usuarios />} />
+                <Route path="/setup" element={<SetupData />} />
               </>
             )}
             <Route path="/auth" element={<Navigate to="/dashboard" replace />} />

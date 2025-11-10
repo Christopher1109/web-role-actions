@@ -1,9 +1,12 @@
 import { Bell, Settings } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { HospitalSelector } from '@/components/HospitalSelector';
+import { useState } from 'react';
 
 const Header = () => {
   const location = useLocation();
+  const [selectedHospitalId, setSelectedHospitalId] = useState<string>("");
   
   const getTitleFromPath = (path: string): string => {
     const titles: Record<string, string> = {
@@ -15,6 +18,7 @@ const Header = () => {
       '/reportes': 'Reportes',
       '/traspasos': 'Traspasos entre Unidades',
       '/usuarios': 'Gestión de Usuarios',
+      '/setup': 'Configuración Inicial',
     };
     
     return titles[path] || 'Sistema de Anestesia';
@@ -22,7 +26,10 @@ const Header = () => {
 
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-6">
-      <h2 className="text-2xl font-semibold text-foreground">{getTitleFromPath(location.pathname)}</h2>
+      <div className="flex items-center gap-6">
+        <h2 className="text-2xl font-semibold text-foreground">{getTitleFromPath(location.pathname)}</h2>
+        <HospitalSelector onHospitalChange={setSelectedHospitalId} />
+      </div>
       
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon">

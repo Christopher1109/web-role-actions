@@ -144,6 +144,15 @@ serve(async (req) => {
   }
 });
 
+// Función auxiliar para convertir nombre de estado a slug
+function estadoToSlug(nombreEstado: string): string {
+  return nombreEstado
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remover acentos
+    .replace(/\s+/g, '') // Remover espacios
+    .replace(/[^a-z0-9]/g, ''); // Solo letras y números
+}
+
 async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
   const usuariosCreados = {
     auxiliares: 0,
@@ -184,22 +193,40 @@ async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
   const hospitalesPorEstado = new Map();
   
   for (const hospital of hospitales) {
-    if (!hospitalesPorEstado.has(hospital.estado_id)) {
-      hospitalesPorEstado.set(hospital.estado_id, []);
+    // Obtener nombre del estado
+    const { data: estado } = await supabaseAdmin
+      .from('estados')
+      .select('id, nombre')
+      .eq('id', hospital.estado_id)
+      .single();
+
+    if (!estado) continue;
+
+    const estadoKey = estado.nombre;
+    if (!hospitalesPorEstado.has(estadoKey)) {
+      hospitalesPorEstado.set(estadoKey, {
+        estado_id: hospital.estado_id,
+        nombre: estadoKey,
+        hospitales: []
+      });
     }
-    hospitalesPorEstado.get(hospital.estado_id).push(hospital);
+    hospitalesPorEstado.get(estadoKey).hospitales.push(hospital);
   }
 
   // 3. Crear líderes hospitalarios (máximo 4 hospitales por líder)
-  for (const [estadoId, hospitalesEstado] of hospitalesPorEstado) {
+  for (const [estadoNombre, estadoData] of hospitalesPorEstado) {
+    const hospitalesEstado = estadoData.hospitales;
     const numLideres = Math.ceil(hospitalesEstado.length / 4);
+    const estadoSlug = estadoToSlug(estadoNombre);
     
     for (let i = 0; i < numLideres; i++) {
       const hospitalesAsignados = hospitalesEstado.slice(i * 4, (i + 1) * 4);
       const primerHospital = hospitalesAsignados[0];
       
       try {
-        const liderEmail = `lider.${estadoId.substring(0, 8)}.${i + 1}@imss.mx`;
+        const liderEmail = numLideres === 1 
+          ? `lider.${estadoSlug}@imss.mx`
+          : `lider.${estadoSlug}.${i + 1}@imss.mx`;
         const liderPassword = 'Lider123!';
         
         const { data: liderUser, error: liderError } = await supabaseAdmin.auth.admin.createUser({
@@ -207,7 +234,9 @@ async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
           password: liderPassword,
           email_confirm: true,
           user_metadata: {
-            nombre_completo: `Líder Hospitalario ${i + 1}`,
+            nombre_completo: numLideres === 1
+              ? `Líder Hospitalario ${estadoNombre}`
+              : `Líder Hospitalario ${estadoNombre} ${i + 1}`,
             role: 'lider'
           }
         });
@@ -225,7 +254,7 @@ async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
               role: 'lider',
               alcance: 'hospital',
               hospital_id: hosp.id,
-              estado_id: estadoId
+              estado_id: estadoData.estado_id
             });
           }
           usuariosCreados.lideres++;
@@ -236,7 +265,7 @@ async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
     }
   }
 
-  // 4. Crear auxiliares y almacenistas por unidad
+  // 4. Crear auxiliares y almacenistas por unidad con nombres legibles
   for (const hospital of hospitales) {
     // Obtener unidades del hospital
     const { data: unidades } = await supabaseAdmin
@@ -246,17 +275,36 @@ async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
 
     if (!unidades) continue;
 
+    // Obtener nombre del estado para el email
+    const { data: estado } = await supabaseAdmin
+      .from('estados')
+      .select('nombre')
+      .eq('id', hospital.estado_id)
+      .single();
+
+    const estadoSlug = estado ? estadoToSlug(estado.nombre) : 'unknown';
+
+    // Contadores por tipo de usuario en este hospital
+    let contadorAuxiliares = 0;
+    let contadorAlmacenistas = 0;
+
     for (const unidad of unidades) {
       // Crear auxiliar de anestesia para cada unidad de quirófano
       if (unidad.nombre.toLowerCase().includes('quirófano') || unidad.nombre.toLowerCase().includes('quirofano')) {
         try {
-          const auxiliarEmail = `auxiliar.${hospital.id.substring(0, 8)}.${unidad.id.substring(0, 8)}@imss.mx`;
+          contadorAuxiliares++;
+          const auxiliarEmail = contadorAuxiliares === 1
+            ? `auxiliar.${estadoSlug}@imss.mx`
+            : `auxiliar.${estadoSlug}.${contadorAuxiliares}@imss.mx`;
+            
           const { data: auxiliarUser } = await supabaseAdmin.auth.admin.createUser({
             email: auxiliarEmail,
             password: 'Auxiliar123!',
             email_confirm: true,
             user_metadata: {
-              nombre_completo: `Auxiliar ${unidad.nombre}`,
+              nombre_completo: contadorAuxiliares === 1
+                ? `Auxiliar ${estado?.nombre || ''}`
+                : `Auxiliar ${estado?.nombre || ''} ${contadorAuxiliares}`,
               role: 'auxiliar',
               unidad: unidad.nombre
             }
@@ -284,13 +332,19 @@ async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
       // Crear almacenista (solo para unidades de almacén)
       if (unidad.nombre.toLowerCase().includes('almacén') || unidad.nombre.toLowerCase().includes('almacen')) {
         try {
-          const almacenistaEmail = `almacen.${hospital.id.substring(0, 8)}.${unidad.id.substring(0, 8)}@imss.mx`;
+          contadorAlmacenistas++;
+          const almacenistaEmail = contadorAlmacenistas === 1
+            ? `almacenista.${estadoSlug}@imss.mx`
+            : `almacenista.${estadoSlug}.${contadorAlmacenistas}@imss.mx`;
+            
           const { data: almacenistaUser } = await supabaseAdmin.auth.admin.createUser({
             email: almacenistaEmail,
             password: 'Almacen123!',
             email_confirm: true,
             user_metadata: {
-              nombre_completo: `Almacenista ${unidad.nombre}`,
+              nombre_completo: contadorAlmacenistas === 1
+                ? `Almacenista ${estado?.nombre || ''}`
+                : `Almacenista ${estado?.nombre || ''} ${contadorAlmacenistas}`,
               role: 'almacenista',
               unidad: unidad.nombre
             }

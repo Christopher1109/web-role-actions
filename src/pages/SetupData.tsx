@@ -59,27 +59,73 @@ export default function SetupData() {
       // Leer el archivo Excel
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer);
-      const worksheet = workbook.Sheets[workbook.SheetNames[1]]; // Segunda hoja
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      
+      // Usar la primera hoja (índice 0)
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
 
       // Mapa para rastrear hospitales únicos
       const hospitalesMap = new Map();
 
-      // Procesar datos del Excel (empezar desde fila 3, índice 2)
-      for (let i = 2; i < jsonData.length; i++) {
-        const row = jsonData[i];
-        if (!row || row.length < 8) continue;
+      // Procesar datos del Excel
+      for (const row of jsonData) {
+        if (!row['ESTADO'] || !row['Clave\r\nPresupuestal']) continue;
 
-        const codigoEstado = String(row[2]).trim();
-        const nombreEstado = String(row[3]).trim();
-        const clavePresupuestal = String(row[4]).trim();
-        const tipo = String(row[5]).trim();
-        const numero = String(row[6]).trim();
-        const localidad = String(row[7]).trim();
-        const claveProcedimiento = String(row[8]).trim();
-        const nombreProcedimiento = String(row[9]).trim();
-        const maximoAcumulado = row[10] ? parseInt(String(row[10])) : null;
-        const precioUnitario = row[11] ? parseFloat(String(row[11]).replace(/[$,]/g, '')) : null;
+        const nombreEstado = String(row['ESTADO']).trim();
+        const clavePresupuestal = String(row['Clave\r\nPresupuestal']).trim();
+        const tipo = String(row['Tipo'] || '').trim();
+        const numero = String(row['Número DE CLINICA'] || '').trim();
+        const localidad = String(row['Localidad'] || '').trim();
+        const procedimiento = String(row['Procedimiento'] || '').trim();
+
+        // Normalizar nombre del estado para obtener código
+        let codigoEstado = '';
+        const estadoNormalizado = nombreEstado.toLowerCase();
+        
+        if (estadoNormalizado.includes('baja california sur')) {
+          codigoEstado = '03';
+        } else if (estadoNormalizado.includes('baja california')) {
+          codigoEstado = '02';
+        } else if (estadoNormalizado.includes('chihuahua')) {
+          codigoEstado = '08';
+        } else if (estadoNormalizado.includes('coahuila')) {
+          codigoEstado = '05';
+        } else if (estadoNormalizado.includes('durango')) {
+          codigoEstado = '10';
+        } else if (estadoNormalizado.includes('jalisco')) {
+          codigoEstado = '14';
+        } else if (estadoNormalizado.includes('nayarit')) {
+          codigoEstado = '19';
+        } else if (estadoNormalizado.includes('nuevo león') || estadoNormalizado.includes('nuevo leon')) {
+          codigoEstado = '20';
+        } else if (estadoNormalizado.includes('sinaloa')) {
+          codigoEstado = '26';
+        } else if (estadoNormalizado.includes('sonora')) {
+          codigoEstado = '27';
+        } else if (estadoNormalizado.includes('zacatecas')) {
+          codigoEstado = '34';
+        } else if (estadoNormalizado.includes('puebla')) {
+          codigoEstado = '22';
+        } else if (estadoNormalizado.includes('veracruz norte')) {
+          codigoEstado = '31';
+        } else if (estadoNormalizado.includes('veracruz sur')) {
+          codigoEstado = '32';
+        } else if (estadoNormalizado.includes('guanajuato')) {
+          codigoEstado = 'GTO';
+        } else if (estadoNormalizado.includes('ciudad de méxico') || estadoNormalizado.includes('cdmx')) {
+          codigoEstado = 'CDMX';
+        } else if (estadoNormalizado.includes('d.f. norte')) {
+          codigoEstado = '39';
+        } else if (estadoNormalizado.includes('d.f. sur')) {
+          codigoEstado = '40';
+        } else if (estadoNormalizado.includes('umae') && estadoNormalizado.includes('torreón')) {
+          codigoEstado = '4Q';
+        } else if (estadoNormalizado.includes('umae') && estadoNormalizado.includes('magdalena')) {
+          codigoEstado = '4O';
+        } else {
+          console.warn(`Estado no reconocido: ${nombreEstado}`);
+          continue;
+        }
 
         // Crear key único para hospital
         const hospitalKey = `${codigoEstado}-${clavePresupuestal}`;
@@ -102,12 +148,14 @@ export default function SetupData() {
         }
 
         // Agregar procedimiento
-        hospitalesMap.get(hospitalKey).procedimientos.push({
-          clave: claveProcedimiento,
-          nombre: nombreProcedimiento,
-          maximo: maximoAcumulado,
-          precio: precioUnitario
-        });
+        if (procedimiento) {
+          hospitalesMap.get(hospitalKey).procedimientos.push({
+            clave: `PROC-${procedimiento.substring(0, 20).toUpperCase().replace(/\s+/g, '-')}`,
+            nombre: procedimiento,
+            maximo: null,
+            precio: null
+          });
+        }
       }
 
       console.log(`Procesados ${hospitalesMap.size} hospitales únicos`);
@@ -249,26 +297,36 @@ export default function SetupData() {
 
             <div>
               <p className="font-semibold">Líderes Hospitalarios:</p>
-              <p>Email: lider.[estado-id].[número]@imss.mx</p>
+              <p>Email: lider.[estado].1@imss.mx (ej: lider.chihuahua.1@imss.mx)</p>
               <p>Contraseña: Lider123!</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                * Si un estado tiene más de 4 hospitales, se crean múltiples líderes numerados
+              </p>
             </div>
 
             <div>
               <p className="font-semibold">Auxiliares de Anestesia:</p>
-              <p>Email: auxiliar.[hospital-id].[unidad-id]@imss.mx</p>
+              <p>Email: auxiliar.[estado].1@imss.mx (ej: auxiliar.chihuahua.1@imss.mx)</p>
               <p>Contraseña: Auxiliar123!</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                * Un auxiliar por cada quirófano
+              </p>
             </div>
 
             <div>
               <p className="font-semibold">Almacenistas:</p>
-              <p>Email: almacen.[hospital-id].[unidad-id]@imss.mx</p>
+              <p>Email: almacenista.[estado].1@imss.mx (ej: almacenista.chihuahua.1@imss.mx)</p>
               <p>Contraseña: Almacen123!</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                * Un almacenista por cada almacén
+              </p>
             </div>
           </div>
 
           <div className="bg-amber-50 p-4 rounded-lg">
             <p className="text-sm text-amber-800 font-semibold">Importante:</p>
             <p className="text-sm text-amber-700">
+              Los nombres de estado en los emails están sin espacios ni acentos (ej: "nuevoleon", "bajacalifornia").
               Se recomienda que cada usuario cambie su contraseña después del primer inicio de sesión.
             </p>
           </div>

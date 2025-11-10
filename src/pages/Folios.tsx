@@ -56,33 +56,53 @@ const Folios = ({ userRole }: FoliosProps) => {
     try {
       if (!user) return;
 
-      const numeroFolio = `FOL-${Date.now()}`;
-      
+      // Obtener el hospital_id del perfil del usuario
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('hospital_id')
+        .eq('id', user.id)
+        .single();
+
+      // Insertar el folio con todos los campos del T33
       const { data: folioData, error: folioError } = await supabase
         .from('folios')
         .insert({
-          numero_folio: numeroFolio,
-          paciente_nombre: data.pacienteNombre,
+          numero_folio: data.numeroFolio,
+          hospital_id: profile?.hospital_id,
+          unidad: data.unidad,
+          numero_quirofano: data.numeroQuirofano,
+          hora_inicio_procedimiento: data.horaInicioProcedimiento,
+          hora_fin_procedimiento: data.horaFinProcedimiento,
+          hora_inicio_anestesia: data.horaInicioAnestesia,
+          hora_fin_anestesia: data.horaFinAnestesia,
+          paciente_nombre: `${data.pacienteNombre} ${data.pacienteApellidoPaterno} ${data.pacienteApellidoMaterno}`,
+          paciente_apellido_paterno: data.pacienteApellidoPaterno,
+          paciente_apellido_materno: data.pacienteApellidoMaterno,
+          paciente_nss: data.pacienteNSS,
           paciente_edad: data.pacienteEdad,
           paciente_genero: data.pacienteGenero,
           cirugia: data.cirugia,
+          especialidad_quirurgica: data.especialidadQuirurgica,
+          tipo_cirugia: data.tipoCirugia,
+          tipo_evento: data.tipoEvento,
           tipo_anestesia: data.tipoAnestesia,
-          unidad: data.unidad,
-          anestesiologo_id: data.anestesiologoId || null,
-          cirujano_id: data.cirujanoId || null,
+          cirujano_id: null, // TODO: vincular con tabla medicos
+          anestesiologo_id: null, // TODO: vincular con tabla medicos
           created_by: user.id,
+          estado: 'activo',
         })
         .select()
         .single();
 
       if (folioError) throw folioError;
 
+      // Insertar los insumos utilizados
       if (data.insumos && data.insumos.length > 0) {
         const insumosData = data.insumos.map((insumo: any) => ({
           folio_id: folioData.id,
           nombre_insumo: insumo.nombre,
+          lote: insumo.lote,
           cantidad: insumo.cantidad,
-          lote: insumo.lote || 'N/A',
         }));
 
         const { error: insumosError } = await supabase

@@ -160,14 +160,25 @@ export type Database = {
           cirujano_id: string | null
           created_at: string
           created_by: string
+          especialidad_quirurgica: string | null
           estado: Database["public"]["Enums"]["estado_folio"]
+          hora_fin_anestesia: string | null
+          hora_fin_procedimiento: string | null
+          hora_inicio_anestesia: string | null
+          hora_inicio_procedimiento: string | null
           hospital_id: string | null
           id: string
           numero_folio: string
+          numero_quirofano: string | null
+          paciente_apellido_materno: string | null
+          paciente_apellido_paterno: string | null
           paciente_edad: number
           paciente_genero: Database["public"]["Enums"]["genero"]
           paciente_nombre: string
+          paciente_nss: string | null
           tipo_anestesia: Database["public"]["Enums"]["tipo_anestesia"]
+          tipo_cirugia: string | null
+          tipo_evento: string | null
           unidad: string
           updated_at: string
         }
@@ -178,14 +189,25 @@ export type Database = {
           cirujano_id?: string | null
           created_at?: string
           created_by: string
+          especialidad_quirurgica?: string | null
           estado?: Database["public"]["Enums"]["estado_folio"]
+          hora_fin_anestesia?: string | null
+          hora_fin_procedimiento?: string | null
+          hora_inicio_anestesia?: string | null
+          hora_inicio_procedimiento?: string | null
           hospital_id?: string | null
           id?: string
           numero_folio: string
+          numero_quirofano?: string | null
+          paciente_apellido_materno?: string | null
+          paciente_apellido_paterno?: string | null
           paciente_edad: number
           paciente_genero: Database["public"]["Enums"]["genero"]
           paciente_nombre: string
+          paciente_nss?: string | null
           tipo_anestesia: Database["public"]["Enums"]["tipo_anestesia"]
+          tipo_cirugia?: string | null
+          tipo_evento?: string | null
           unidad: string
           updated_at?: string
         }
@@ -196,14 +218,25 @@ export type Database = {
           cirujano_id?: string | null
           created_at?: string
           created_by?: string
+          especialidad_quirurgica?: string | null
           estado?: Database["public"]["Enums"]["estado_folio"]
+          hora_fin_anestesia?: string | null
+          hora_fin_procedimiento?: string | null
+          hora_inicio_anestesia?: string | null
+          hora_inicio_procedimiento?: string | null
           hospital_id?: string | null
           id?: string
           numero_folio?: string
+          numero_quirofano?: string | null
+          paciente_apellido_materno?: string | null
+          paciente_apellido_paterno?: string | null
           paciente_edad?: number
           paciente_genero?: Database["public"]["Enums"]["genero"]
           paciente_nombre?: string
+          paciente_nss?: string | null
           tipo_anestesia?: Database["public"]["Enums"]["tipo_anestesia"]
+          tipo_cirugia?: string | null
+          tipo_evento?: string | null
           unidad?: string
           updated_at?: string
         }

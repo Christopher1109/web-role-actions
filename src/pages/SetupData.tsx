@@ -134,6 +134,14 @@ export default function SetupData() {
           codigoEstado = '4Q';
         } else if (estadoNormalizado.includes('umae') && estadoNormalizado.includes('magdalena')) {
           codigoEstado = '4O';
+        } else if (estadoNormalizado.includes('umae') && (estadoNormalizado.includes('la raza') || estadoNormalizado.includes('cmn la raza'))) {
+          codigoEstado = 'LARAZA';
+        } else if (estadoNormalizado.includes('umae') && (estadoNormalizado.includes('monterrey') || estadoNormalizado.includes('cmn monterrey'))) {
+          codigoEstado = 'CMTRY';
+        } else if (estadoNormalizado.includes('umae') && (estadoNormalizado.includes('oblatos') || estadoNormalizado.includes('cmn occ'))) {
+          codigoEstado = 'OBLATOS';
+        } else if (estadoNormalizado.includes('umae') && (estadoNormalizado.includes('siglo xxi') || estadoNormalizado.includes('cmn siglo'))) {
+          codigoEstado = 'SXXI';
         } else {
           console.warn(`Estado no reconocido: ${nombreEstado}`);
           continue;

@@ -19,12 +19,29 @@ const Insumos = () => {
   const [selectedInsumo, setSelectedInsumo] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [hospitalId, setHospitalId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
+      fetchUserHospital();
       fetchInsumos();
     }
   }, [user]);
+
+  const fetchUserHospital = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('hospital_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      setHospitalId(data?.hospital_id);
+    } catch (error: any) {
+      console.error('Error al obtener hospital del usuario:', error);
+    }
+  };
 
   const fetchInsumos = async () => {
     try {
@@ -61,6 +78,7 @@ const Insumos = () => {
           origen: data.origen,
           stock_minimo: data.stockMinimo || 10,
           created_by: user.id,
+          hospital_id: hospitalId,
         });
 
       if (error) throw error;

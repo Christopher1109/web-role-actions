@@ -22,6 +22,7 @@ const Folios = ({ userRole }: FoliosProps) => {
   const [showForm, setShowForm] = useState(false);
   const [folios, setFolios] = useState<any[]>([]);
   const [selectedFolio, setSelectedFolio] = useState<any>(null);
+  const [selectedFolioInsumos, setSelectedFolioInsumos] = useState<any[]>([]);
   const [showDetail, setShowDetail] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -215,8 +216,14 @@ const Folios = ({ userRole }: FoliosProps) => {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => {
+                            onClick={async () => {
                               setSelectedFolio(folio);
+                              // Fetch insumos for this folio
+                              const { data: insumosData } = await supabase
+                                .from('folio_insumos')
+                                .select('*')
+                                .eq('folio_id', folio.id);
+                              setSelectedFolioInsumos(insumosData || []);
                               setShowDetail(true);
                             }}
                           >
@@ -254,6 +261,7 @@ const Folios = ({ userRole }: FoliosProps) => {
         onOpenChange={setShowDetail}
         folio={selectedFolio}
         tiposAnestesiaLabels={tiposAnestesiaLabels}
+        insumos={selectedFolioInsumos}
       />
     </div>
   );

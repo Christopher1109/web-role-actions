@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.create-demo-users]
 verify_jwt = false
+
+[functions.populate-from-excel]
+verify_jwt = false

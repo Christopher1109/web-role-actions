@@ -1,14 +1,23 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface ExcelRow {
+  Nombre_Usuario: string;
+  Rol: string;
+  Estado: string;
+  Hospital: string;
+  Hospitales_Asignados: string;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
@@ -23,353 +32,264 @@ serve(async (req) => {
       }
     );
 
-    // Verificar autenticación
-    const authHeader = req.headers.get('Authorization')!;
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-
-    if (!user) {
-      throw new Error('No autenticado');
+    const formData = await req.formData();
+    const file = formData.get('file') as File;
+    
+    if (!file) {
+      throw new Error('No file provided');
     }
 
-    // Verificar que sea gerente
-    const { data: userRole } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
+    // Read Excel file
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data: ExcelRow[] = XLSX.utils.sheet_to_json(worksheet);
+
+    console.log(`Processing ${data.length} rows from Excel`);
+
+    // 1. Create empresa (Grupo CB)
+    const { data: empresa, error: empresaError } = await supabaseAdmin
+      .from('empresas')
+      .insert({ nombre: 'Grupo CB', codigo: 'CB' })
+      .select()
       .single();
 
-    if (userRole?.role !== 'gerente') {
-      throw new Error('Solo gerentes pueden ejecutar esta función');
-    }
+    if (empresaError) throw empresaError;
+    console.log('Empresa created:', empresa.id);
 
-    const { hospitales } = await req.json();
-
-    if (!hospitales || !Array.isArray(hospitales)) {
-      throw new Error('Datos de hospitales inválidos');
-    }
-
-    const hospitalesCreados = [];
-    
-    // Crear hospitales, unidades y procedimientos
-    for (const hospital of hospitales) {
-      // Obtener estado_id
-      const { data: estado } = await supabaseAdmin
-        .from('estados')
-        .select('id')
-        .eq('codigo', hospital.codigo_estado)
-        .single();
-
-      if (!estado) {
-        console.warn(`Estado no encontrado: ${hospital.codigo_estado}`);
-        continue;
+    // 2. Extract unique estados and create them
+    const estadosSet = new Set<string>();
+    data.forEach(row => {
+      if (row.Estado && row.Estado !== 'Todos') {
+        estadosSet.add(row.Estado);
       }
+    });
 
-      // Crear hospital
-      const { data: hospitalCreado, error: hospitalError } = await supabaseAdmin
-        .from('hospitales')
-        .upsert({
-          estado_id: estado.id,
-          codigo: hospital.clave_presupuestal,
-          nombre: hospital.nombre,
-          direccion: hospital.localidad,
-        }, {
-          onConflict: 'codigo',
-          ignoreDuplicates: false
+    const estadosMap = new Map<string, string>();
+    for (const estadoNombre of estadosSet) {
+      const codigo = estadoNombre.substring(0, 3).toUpperCase();
+      const { data: estado, error: estadoError } = await supabaseAdmin
+        .from('estados')
+        .insert({
+          nombre: estadoNombre,
+          codigo: codigo,
+          empresa_id: empresa.id
         })
         .select()
         .single();
 
-      if (hospitalError) {
-        console.error(`Error creando hospital ${hospital.nombre}:`, hospitalError);
-        continue;
-      }
+      if (estadoError) throw estadoError;
+      estadosMap.set(estadoNombre, estado.id);
+      console.log(`Estado created: ${estadoNombre} (${estado.id})`);
+    }
 
-      hospitalesCreados.push(hospitalCreado);
+    // 3. Extract unique hospitales and create them
+    const hospitalesMap = new Map<string, { id: string, estado: string }>();
+    for (const row of data) {
+      if (row.Hospital && row.Hospital !== 'Todos' && !hospitalesMap.has(row.Hospital)) {
+        const estadoId = estadosMap.get(row.Estado);
+        if (!estadoId) continue;
 
-      // Crear unidades
-      for (const unidadNombre of hospital.unidades) {
-        await supabaseAdmin
-          .from('unidades')
-          .upsert({
-            hospital_id: hospitalCreado.id,
-            codigo: `${hospital.clave_presupuestal}-${unidadNombre.substring(0, 3).toUpperCase()}`,
-            nombre: unidadNombre,
-            tipo: hospital.tipo
-          }, {
-            onConflict: 'codigo,hospital_id',
-            ignoreDuplicates: true
-          });
-      }
+        const { data: hospital, error: hospitalError } = await supabaseAdmin
+          .from('hospitales')
+          .insert({
+            nombre: row.Hospital,
+            codigo: row.Hospital.substring(0, 10).toUpperCase().replace(/\s/g, ''),
+            estado_id: estadoId
+          })
+          .select()
+          .single();
 
-      // Insertar procedimientos
-      for (const proc of hospital.procedimientos) {
-        await supabaseAdmin
-          .from('hospital_procedimientos')
-          .upsert({
-            hospital_id: hospitalCreado.id,
-            clave_procedimiento: proc.clave,
-            nombre_procedimiento: proc.nombre,
-            precio_unitario: proc.precio,
-            maximo_acumulado: proc.maximo
-          }, {
-            onConflict: 'hospital_id,clave_procedimiento',
-            ignoreDuplicates: true
-          });
+        if (hospitalError) throw hospitalError;
+        hospitalesMap.set(row.Hospital, { id: hospital.id, estado: row.Estado });
+        
+        // Create unidades for this hospital
+        await supabaseAdmin.from('unidades').insert([
+          {
+            nombre: 'Quirófano',
+            codigo: 'QX',
+            tipo: 'quirofano',
+            hospital_id: hospital.id
+          },
+          {
+            nombre: 'Almacén',
+            codigo: 'ALM',
+            tipo: 'almacen',
+            hospital_id: hospital.id
+          }
+        ]);
+
+        console.log(`Hospital created: ${row.Hospital} (${hospital.id})`);
       }
     }
 
-    console.log(`Hospitales creados: ${hospitalesCreados.length}`);
+    // 4. Create users
+    const createdUsers = [];
+    
+    for (const row of data) {
+      const email = generateEmail(row);
+      const password = 'imss2024'; // Default password
+      
+      // Create auth user
+      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: email,
+        password: password,
+        email_confirm: true,
+        user_metadata: {
+          nombre_completo: row.Nombre_Usuario
+        }
+      });
 
-    // Crear usuarios
-    const usuariosCreados = await crearUsuarios(supabaseAdmin, hospitalesCreados);
+      if (authError) {
+        console.error(`Error creating user ${email}:`, authError);
+        continue;
+      }
+
+      console.log(`User created: ${email} (${authUser.user.id})`);
+
+      // Determine role and scope
+      const roleInfo = determineRoleAndScope(row, estadosMap, hospitalesMap, empresa.id);
+      
+      // Create profile
+      const hospitalId = row.Hospital && row.Hospital !== 'Todos' 
+        ? hospitalesMap.get(row.Hospital)?.id 
+        : null;
+
+      await supabaseAdmin.from('profiles').upsert({
+        id: authUser.user.id,
+        nombre_completo: row.Nombre_Usuario,
+        unidad: row.Hospital || 'Central',
+        hospital_id: hospitalId
+      });
+
+      // Create user role
+      await supabaseAdmin.from('user_roles').insert({
+        user_id: authUser.user.id,
+        role: roleInfo.role,
+        alcance: roleInfo.alcance,
+        hospital_id: roleInfo.hospital_id,
+        estado_id: roleInfo.estado_id,
+        empresa_id: roleInfo.empresa_id
+      });
+
+      createdUsers.push({
+        nombre: row.Nombre_Usuario,
+        email: email,
+        password: password,
+        rol: row.Rol,
+        estado: row.Estado,
+        hospital: row.Hospital,
+        hospitales_asignados: row.Hospitales_Asignados || row.Hospital
+      });
+    }
 
     return new Response(
       JSON.stringify({ 
-        success: true,
-        hospitales: hospitalesCreados.length,
-        usuarios: usuariosCreados,
-        message: 'Datos cargados exitosamente'
+        success: true, 
+        message: `${createdUsers.length} usuarios creados exitosamente`,
+        users: createdUsers,
+        summary: {
+          empresa: empresa.nombre,
+          estados: estadosMap.size,
+          hospitales: hospitalesMap.size,
+          usuarios: createdUsers.length
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
 
-// Función auxiliar para convertir nombre de estado a slug
-function estadoToSlug(nombreEstado: string): string {
-  return nombreEstado
-    .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remover acentos
-    .replace(/\s+/g, '') // Remover espacios
-    .replace(/[^a-z0-9]/g, ''); // Solo letras y números
+function generateEmail(row: ExcelRow): string {
+  const rol = row.Rol.toLowerCase();
+  const estado = row.Estado.toLowerCase().replace(/\s+/g, '-');
+  const hospital = row.Hospital ? row.Hospital.toLowerCase().replace(/\s+/g, '-') : '';
+  
+  if (rol.includes('gerente de operaciones')) {
+    return 'gerente.operaciones@imss.mx';
+  } else if (rol.includes('supervisor')) {
+    const match = row.Nombre_Usuario.match(/Supervisor (.+) (\d+)/);
+    const numero = match ? match[2] : '1';
+    return `supervisor.${estado}.${numero}@imss.mx`;
+  } else if (rol.includes('líder')) {
+    return `lider.${estado}.${hospital}@imss.mx`;
+  } else if (rol.includes('auxiliar')) {
+    return `auxiliar.${estado}.${hospital}@imss.mx`;
+  } else if (rol.includes('almacenista')) {
+    return `almacenista.${estado}.${hospital}@imss.mx`;
+  }
+  
+  return `${rol}.${estado}@imss.mx`;
 }
 
-async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
-  const usuariosCreados = {
-    auxiliares: 0,
-    almacenistas: 0,
-    lideres: 0,
-    gerentes: 0
-  };
-
-  // 1. Crear gerente de operaciones (solo uno)
-  try {
-    const gerenteEmail = 'gerente@imss.mx';
-    const gerentePassword = 'Gerente123!';
-    
-    const { data: gerenteUser, error: gerenteError } = await supabaseAdmin.auth.admin.createUser({
-      email: gerenteEmail,
-      password: gerentePassword,
-      email_confirm: true,
-      user_metadata: {
-        nombre_completo: 'Gerente de Operaciones IMSS',
-        role: 'gerente'
-      }
-    });
-
-    if (!gerenteError && gerenteUser) {
-      await supabaseAdmin.from('user_roles').insert({
-        user_id: gerenteUser.user.id,
-        role: 'gerente',
-        alcance: 'empresa',
-        empresa_id: '11111111-1111-1111-1111-111111111111'
-      });
-      usuariosCreados.gerentes++;
-    }
-  } catch (error) {
-    console.error('Error creando gerente:', error);
-  }
-
-  // 2. Agrupar hospitales por estado para crear líderes
-  const hospitalesPorEstado = new Map();
+function determineRoleAndScope(
+  row: ExcelRow,
+  estadosMap: Map<string, string>,
+  hospitalesMap: Map<string, { id: string, estado: string }>,
+  empresaId: string
+): {
+  role: string;
+  alcance: string;
+  hospital_id: string | null;
+  estado_id: string | null;
+  empresa_id: string | null;
+} {
+  const rol = row.Rol.toLowerCase();
   
-  for (const hospital of hospitales) {
-    // Obtener nombre del estado
-    const { data: estado } = await supabaseAdmin
-      .from('estados')
-      .select('id, nombre')
-      .eq('id', hospital.estado_id)
-      .single();
-
-    if (!estado) continue;
-
-    const estadoKey = estado.nombre;
-    if (!hospitalesPorEstado.has(estadoKey)) {
-      hospitalesPorEstado.set(estadoKey, {
-        estado_id: hospital.estado_id,
-        nombre: estadoKey,
-        hospitales: []
-      });
-    }
-    hospitalesPorEstado.get(estadoKey).hospitales.push(hospital);
+  if (rol.includes('gerente de operaciones')) {
+    return {
+      role: 'gerente',
+      alcance: 'empresa',
+      hospital_id: null,
+      estado_id: null,
+      empresa_id: empresaId
+    };
+  } else if (rol.includes('supervisor')) {
+    return {
+      role: 'supervisor',
+      alcance: 'estado',
+      hospital_id: null,
+      estado_id: estadosMap.get(row.Estado) || null,
+      empresa_id: null
+    };
+  } else if (rol.includes('líder')) {
+    return {
+      role: 'lider',
+      alcance: 'hospital',
+      hospital_id: hospitalesMap.get(row.Hospital)?.id || null,
+      estado_id: null,
+      empresa_id: null
+    };
+  } else if (rol.includes('auxiliar')) {
+    return {
+      role: 'auxiliar',
+      alcance: 'hospital',
+      hospital_id: hospitalesMap.get(row.Hospital)?.id || null,
+      estado_id: null,
+      empresa_id: null
+    };
+  } else if (rol.includes('almacenista')) {
+    return {
+      role: 'almacenista',
+      alcance: 'hospital',
+      hospital_id: hospitalesMap.get(row.Hospital)?.id || null,
+      estado_id: null,
+      empresa_id: null
+    };
   }
-
-  // 3. Crear líderes hospitalarios (máximo 4 hospitales por líder)
-  for (const [estadoNombre, estadoData] of hospitalesPorEstado) {
-    const hospitalesEstado = estadoData.hospitales;
-    const numLideres = Math.ceil(hospitalesEstado.length / 4);
-    const estadoSlug = estadoToSlug(estadoNombre);
-    
-    for (let i = 0; i < numLideres; i++) {
-      const hospitalesAsignados = hospitalesEstado.slice(i * 4, (i + 1) * 4);
-      const primerHospital = hospitalesAsignados[0];
-      
-      try {
-        const liderEmail = numLideres === 1 
-          ? `lider.${estadoSlug}@imss.mx`
-          : `lider.${estadoSlug}.${i + 1}@imss.mx`;
-        const liderPassword = 'Lider123!';
-        
-        const { data: liderUser, error: liderError } = await supabaseAdmin.auth.admin.createUser({
-          email: liderEmail,
-          password: liderPassword,
-          email_confirm: true,
-          user_metadata: {
-            nombre_completo: numLideres === 1
-              ? `Líder Hospitalario ${estadoNombre}`
-              : `Líder Hospitalario ${estadoNombre} ${i + 1}`,
-            role: 'lider'
-          }
-        });
-
-        if (!liderError && liderUser?.user) {
-          // Asignar perfil al primer hospital de su grupo
-          await supabaseAdmin.from('profiles').update({
-            hospital_id: primerHospital.id
-          }).eq('id', liderUser.user.id);
-
-          // Crear roles para cada hospital asignado
-          for (const hosp of hospitalesAsignados) {
-            await supabaseAdmin.from('user_roles').insert({
-              user_id: liderUser.user.id,
-              role: 'lider',
-              alcance: 'hospital',
-              hospital_id: hosp.id,
-              estado_id: estadoData.estado_id
-            });
-          }
-          usuariosCreados.lideres++;
-        }
-      } catch (error) {
-        console.error('Error creando líder:', error);
-      }
-    }
-  }
-
-  // 4. Crear auxiliares y almacenistas por unidad con nombres legibles
-  for (const hospital of hospitales) {
-    // Obtener unidades del hospital
-    const { data: unidades } = await supabaseAdmin
-      .from('unidades')
-      .select('*')
-      .eq('hospital_id', hospital.id);
-
-    if (!unidades) continue;
-
-    // Obtener nombre del estado para el email
-    const { data: estado } = await supabaseAdmin
-      .from('estados')
-      .select('nombre')
-      .eq('id', hospital.estado_id)
-      .single();
-
-    const estadoSlug = estado ? estadoToSlug(estado.nombre) : 'unknown';
-
-    // Contadores por tipo de usuario en este hospital
-    let contadorAuxiliares = 0;
-    let contadorAlmacenistas = 0;
-
-    for (const unidad of unidades) {
-      // Crear auxiliar de anestesia para cada unidad de quirófano
-      if (unidad.nombre.toLowerCase().includes('quirófano') || unidad.nombre.toLowerCase().includes('quirofano')) {
-        try {
-          contadorAuxiliares++;
-          const auxiliarEmail = contadorAuxiliares === 1
-            ? `auxiliar.${estadoSlug}@imss.mx`
-            : `auxiliar.${estadoSlug}.${contadorAuxiliares}@imss.mx`;
-            
-          const { data: auxiliarUser } = await supabaseAdmin.auth.admin.createUser({
-            email: auxiliarEmail,
-            password: 'Auxiliar123!',
-            email_confirm: true,
-            user_metadata: {
-              nombre_completo: contadorAuxiliares === 1
-                ? `Auxiliar ${estado?.nombre || ''}`
-                : `Auxiliar ${estado?.nombre || ''} ${contadorAuxiliares}`,
-              role: 'auxiliar',
-              unidad: unidad.nombre
-            }
-          });
-
-          if (auxiliarUser?.user) {
-            await supabaseAdmin.from('profiles').update({
-              hospital_id: hospital.id,
-              unidad: unidad.nombre
-            }).eq('id', auxiliarUser.user.id);
-
-            await supabaseAdmin.from('user_roles').insert({
-              user_id: auxiliarUser.user.id,
-              role: 'auxiliar',
-              alcance: 'hospital',
-              hospital_id: hospital.id
-            });
-            usuariosCreados.auxiliares++;
-          }
-        } catch (error) {
-          console.error('Error creando auxiliar:', error);
-        }
-      }
-
-      // Crear almacenista (solo para unidades de almacén)
-      if (unidad.nombre.toLowerCase().includes('almacén') || unidad.nombre.toLowerCase().includes('almacen')) {
-        try {
-          contadorAlmacenistas++;
-          const almacenistaEmail = contadorAlmacenistas === 1
-            ? `almacenista.${estadoSlug}@imss.mx`
-            : `almacenista.${estadoSlug}.${contadorAlmacenistas}@imss.mx`;
-            
-          const { data: almacenistaUser } = await supabaseAdmin.auth.admin.createUser({
-            email: almacenistaEmail,
-            password: 'Almacen123!',
-            email_confirm: true,
-            user_metadata: {
-              nombre_completo: contadorAlmacenistas === 1
-                ? `Almacenista ${estado?.nombre || ''}`
-                : `Almacenista ${estado?.nombre || ''} ${contadorAlmacenistas}`,
-              role: 'almacenista',
-              unidad: unidad.nombre
-            }
-          });
-
-          if (almacenistaUser?.user) {
-            await supabaseAdmin.from('profiles').update({
-              hospital_id: hospital.id,
-              unidad: unidad.nombre
-            }).eq('id', almacenistaUser.user.id);
-
-            await supabaseAdmin.from('user_roles').insert({
-              user_id: almacenistaUser.user.id,
-              role: 'almacenista',
-              alcance: 'hospital',
-              hospital_id: hospital.id
-            });
-            usuariosCreados.almacenistas++;
-          }
-        } catch (error) {
-          console.error('Error creando almacenista:', error);
-        }
-      }
-    }
-  }
-
-  return usuariosCreados;
+  
+  return {
+    role: 'auxiliar',
+    alcance: 'hospital',
+    hospital_id: null,
+    estado_id: null,
+    empresa_id: null
+  };
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -36,12 +36,13 @@ type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
 const Usuarios = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [unidades, setUnidades] = useState<{ nombre: string; hospital: string }[]>([]);
 
   const form = useForm<CreateUserFormValues>({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
       role: 'auxiliar',
-      unidad: 'Unidad Central',
+      unidad: '',
     }
   });
 
@@ -73,7 +74,25 @@ const Usuarios = () => {
     },
   ];
 
-  const unidades = ['Unidad Central', 'Unidad Norte', 'Unidad Sur', 'Unidad Este'];
+  useEffect(() => {
+    const loadUnidades = async () => {
+      const { data: unidadesData } = await supabase
+        .from('unidades')
+        .select('nombre, hospitales(nombre)')
+        .order('nombre');
+
+      if (unidadesData) {
+        setUnidades(
+          unidadesData.map((u: any) => ({
+            nombre: u.nombre,
+            hospital: u.hospitales?.nombre || 'Sin hospital'
+          }))
+        );
+      }
+    };
+
+    loadUnidades();
+  }, []);
 
   const handleCreateUser = async (data: CreateUserFormValues) => {
     setIsLoading(true);
@@ -226,15 +245,15 @@ const Usuarios = () => {
                 <Label htmlFor="unidad">Unidad</Label>
                 <Select
                   onValueChange={(value) => form.setValue('unidad', value)}
-                  defaultValue="Unidad Central"
+                  defaultValue=""
                 >
                   <SelectTrigger id="unidad">
-                    <SelectValue />
+                    <SelectValue placeholder="Selecciona una unidad" />
                   </SelectTrigger>
                   <SelectContent>
                     {unidades.map((unidad) => (
-                      <SelectItem key={unidad} value={unidad}>
-                        {unidad}
+                      <SelectItem key={unidad.nombre} value={unidad.nombre}>
+                        {unidad.nombre} - {unidad.hospital}
                       </SelectItem>
                     ))}
                   </SelectContent>

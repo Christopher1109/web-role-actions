@@ -188,17 +188,20 @@ serve(async (req) => {
       // Determine role and scope
       const roleInfo = determineRoleAndScope(row, estadosMap, hospitalesMap, empresa.id);
       
-      // Create profile
+      // Create profile - SOLO si tiene hospital_id válido
       const hospitalId = row.Hospital && row.Hospital !== 'Todos' 
         ? hospitalesMap.get(row.Hospital)?.id 
         : null;
 
-      await supabaseAdmin.from('profiles').upsert({
-        id: authUser.user.id,
-        nombre_completo: row.Nombre_Usuario,
-        unidad: row.Hospital || 'Central',
-        hospital_id: hospitalId
-      });
+      // Solo crear perfiles para usuarios que tienen hospital asignado
+      if (hospitalId || roleInfo.role === 'gerente') {
+        await supabaseAdmin.from('profiles').upsert({
+          id: authUser.user.id,
+          nombre_completo: row.Nombre_Usuario,
+          unidad: row.Hospital || 'Todos',
+          hospital_id: hospitalId
+        });
+      }
 
       // Create user role
       await supabaseAdmin.from('user_roles').insert({
@@ -250,9 +253,21 @@ serve(async (req) => {
 });
 
 function generateEmail(row: ExcelRow): string {
+  // Normalizar caracteres especiales (tildes, ñ, etc.)
+  const normalizeText = (text: string): string => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Quitar tildes
+      .replace(/ñ/g, 'n')
+      .replace(/[^a-z0-9]/g, '-') // Solo letras, números y guiones
+      .replace(/-+/g, '-') // Eliminar guiones múltiples
+      .replace(/^-|-$/g, ''); // Eliminar guiones al inicio/final
+  };
+  
   const rol = row.Rol.toLowerCase();
-  const estado = row.Estado.toLowerCase().replace(/\s+/g, '-');
-  const hospital = row.Hospital ? row.Hospital.toLowerCase().replace(/\s+/g, '-') : '';
+  const estado = normalizeText(row.Estado);
+  const hospital = row.Hospital ? normalizeText(row.Hospital) : '';
   
   if (rol.includes('gerente de operaciones')) {
     return 'gerente.operaciones@imss.mx';

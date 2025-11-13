@@ -155,73 +155,73 @@ serve(async (req) => {
     const skippedUsers = [];
     
     for (const row of excelData) {
-      const email = generateEmail(row);
-      const password = 'imss2024';
-      
-      // Check if user already exists
-      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
-      const userExists = existingUser.users.some(u => u.email === email);
-      
-      if (userExists) {
-        console.log(`User already exists, skipping: ${email}`);
-        skippedUsers.push(email);
-        continue;
-      }
-      
-      // Create auth user
-      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email: email,
-        password: password,
-        email_confirm: true,
-        user_metadata: {
-          nombre_completo: row.Nombre_Usuario
-        }
-      });
-
-      if (authError) {
-        console.error(`Error creating user ${email}:`, authError);
-        continue;
-      }
-
-      console.log(`User created: ${email} (${authUser.user.id})`);
-
-      // Determine role and scope
-      const roleInfo = determineRoleAndScope(row, estadosMap, hospitalesMap, empresa.id);
-      
-      // Create profile - SOLO si tiene hospital_id válido
-      const hospitalId = row.Hospital && row.Hospital !== 'Todos' 
-        ? hospitalesMap.get(row.Hospital)?.id 
-        : null;
-
-      // Solo crear perfiles para usuarios que tienen hospital asignado
-      if (hospitalId || roleInfo.role === 'gerente') {
-        await supabaseAdmin.from('profiles').upsert({
-          id: authUser.user.id,
-          nombre_completo: row.Nombre_Usuario,
-          unidad: row.Hospital || 'Todos',
-          hospital_id: hospitalId
+      try {
+        const email = generateEmail(row);
+        const password = 'imss2024';
+        
+        // Try to create auth user directly - it will fail if exists
+        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: email,
+          password: password,
+          email_confirm: true,
+          user_metadata: {
+            nombre_completo: row.Nombre_Usuario
+          }
         });
+
+        if (authError) {
+          if (authError.message?.includes('already been registered')) {
+            console.log(`User already exists, skipping: ${email}`);
+            skippedUsers.push(email);
+            continue;
+          }
+          console.error(`Error creating user ${email}:`, authError);
+          continue;
+        }
+
+        console.log(`User created: ${email} (${authUser.user.id})`);
+
+        // Determine role and scope
+        const roleInfo = determineRoleAndScope(row, estadosMap, hospitalesMap, empresa.id);
+        
+        // Create profile - SOLO si tiene hospital_id válido
+        const hospitalId = row.Hospital && row.Hospital !== 'Todos' 
+          ? hospitalesMap.get(row.Hospital)?.id 
+          : null;
+
+        // Solo crear perfiles para usuarios que tienen hospital asignado
+        if (hospitalId || roleInfo.role === 'gerente') {
+          await supabaseAdmin.from('profiles').upsert({
+            id: authUser.user.id,
+            nombre_completo: row.Nombre_Usuario,
+            unidad: row.Hospital || 'Todos',
+            hospital_id: hospitalId
+          });
+        }
+
+        // Create user role
+        await supabaseAdmin.from('user_roles').insert({
+          user_id: authUser.user.id,
+          role: roleInfo.role,
+          alcance: roleInfo.alcance,
+          hospital_id: roleInfo.hospital_id,
+          estado_id: roleInfo.estado_id,
+          empresa_id: roleInfo.empresa_id
+        });
+
+        createdUsers.push({
+          nombre: row.Nombre_Usuario,
+          email: email,
+          password: password,
+          rol: row.Rol,
+          estado: row.Estado,
+          hospital: row.Hospital,
+          hospitales_asignados: row.Hospitales_Asignados || row.Hospital
+        });
+      } catch (rowError) {
+        console.error(`Error processing row for ${row.Nombre_Usuario}:`, rowError);
+        continue;
       }
-
-      // Create user role
-      await supabaseAdmin.from('user_roles').insert({
-        user_id: authUser.user.id,
-        role: roleInfo.role,
-        alcance: roleInfo.alcance,
-        hospital_id: roleInfo.hospital_id,
-        estado_id: roleInfo.estado_id,
-        empresa_id: roleInfo.empresa_id
-      });
-
-      createdUsers.push({
-        nombre: row.Nombre_Usuario,
-        email: email,
-        password: password,
-        rol: row.Rol,
-        estado: row.Estado,
-        hospital: row.Hospital,
-        hospitales_asignados: row.Hospitales_Asignados || row.Hospital
-      });
     }
 
     console.log(`Process completed: ${createdUsers.length} new users, ${skippedUsers.length} skipped`);

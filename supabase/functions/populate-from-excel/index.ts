@@ -241,7 +241,7 @@ async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
           }
         });
 
-        if (!liderError && liderUser) {
+        if (!liderError && liderUser?.user) {
           // Asignar perfil al primer hospital de su grupo
           await supabaseAdmin.from('profiles').update({
             hospital_id: primerHospital.id
@@ -310,7 +310,7 @@ async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
             }
           });
 
-          if (auxiliarUser) {
+          if (auxiliarUser?.user) {
             await supabaseAdmin.from('profiles').update({
               hospital_id: hospital.id,
               unidad: unidad.nombre
@@ -350,7 +350,7 @@ async function crearUsuarios(supabaseAdmin: any, hospitales: any[]) {
             }
           });
 
-          if (almacenistaUser) {
+          if (almacenistaUser?.user) {
             await supabaseAdmin.from('profiles').update({
               hospital_id: hospital.id,
               unidad: unidad.nombre

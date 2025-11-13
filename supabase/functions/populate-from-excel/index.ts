@@ -226,17 +226,26 @@ serve(async (req) => {
 
     console.log(`Process completed: ${createdUsers.length} new users, ${skippedUsers.length} skipped`);
 
+    // Get total users in system
+    const { data: allUsers } = await supabaseAdmin.auth.admin.listUsers();
+    const totalUsersInSystem = allUsers?.users.length || 0;
+
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `${createdUsers.length} usuarios creados exitosamente${skippedUsers.length > 0 ? `, ${skippedUsers.length} ya existían` : ''}`,
+        message: createdUsers.length > 0 
+          ? `${createdUsers.length} usuarios creados exitosamente${skippedUsers.length > 0 ? `, ${skippedUsers.length} ya existían` : ''}`
+          : `Todos los usuarios (${skippedUsers.length}) ya existían en el sistema`,
         users: createdUsers,
         skippedCount: skippedUsers.length,
+        totalInSystem: totalUsersInSystem,
         summary: {
           empresa: empresa.nombre,
           estados: estadosMap.size,
           hospitales: hospitalesMap.size,
-          usuarios: createdUsers.length
+          usuarios: createdUsers.length,
+          usuariosExistentes: skippedUsers.length,
+          totalUsuarios: totalUsersInSystem
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

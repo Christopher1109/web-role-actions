@@ -19,11 +19,15 @@ export default function AutoSetup() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [result, setResult] = useState<{
     users: UserResult[];
+    skippedCount: number;
+    totalInSystem: number;
     summary: {
       empresa: string;
       estados: number;
       hospitales: number;
       usuarios: number;
+      usuariosExistentes: number;
+      totalUsuarios: number;
     };
   } | null>(null);
   const [error, setError] = useState<string>('');
@@ -74,7 +78,9 @@ export default function AutoSetup() {
         
         toast({
           title: "¡Sistema Configurado!",
-          description: `${data.summary.usuarios} usuarios creados en ${data.summary.estados} estados y ${data.summary.hospitales} hospitales`,
+          description: data.summary.usuarios > 0
+            ? `${data.summary.usuarios} usuarios creados en ${data.summary.estados} estados y ${data.summary.hospitales} hospitales`
+            : `Sistema ya configurado. Total: ${data.summary.totalUsuarios} usuarios en ${data.summary.estados} estados y ${data.summary.hospitales} hospitales`,
         });
       } catch (err: any) {
         console.error('Error:', err);
@@ -139,50 +145,72 @@ export default function AutoSetup() {
                   <div className="text-sm text-muted-foreground">Hospitales</div>
                 </div>
                 <div className="text-center p-4 bg-muted rounded-lg">
-                  <div className="text-2xl font-bold">{result.summary.usuarios}</div>
-                  <div className="text-sm text-muted-foreground">Usuarios</div>
+                  <div className="text-2xl font-bold">
+                    {result.summary.usuarios > 0 ? result.summary.usuarios : result.summary.totalUsuarios}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {result.summary.usuarios > 0 ? 'Nuevos Usuarios' : 'Total Usuarios'}
+                  </div>
+                  {result.summary.usuariosExistentes > 0 && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      ({result.summary.usuariosExistentes} ya existían)
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
 
             <Card className="p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">Usuarios Generados</h2>
-              <div className="overflow-auto max-h-[600px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Password</TableHead>
-                      <TableHead>Rol</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Hospital</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {result.users.map((user, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium text-sm">{user.nombre}</TableCell>
-                        <TableCell className="text-xs">{user.email}</TableCell>
-                        <TableCell className="text-xs font-mono">{user.password}</TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            user.rol.includes('Gerente') ? 'bg-blue-100 text-blue-800' :
-                            user.rol.includes('Supervisor') ? 'bg-purple-100 text-purple-800' :
-                            user.rol.includes('Líder') ? 'bg-green-100 text-green-800' :
-                            user.rol.includes('Auxiliar') ? 'bg-orange-100 text-orange-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {user.rol}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs">{user.estado}</TableCell>
-                        <TableCell className="text-xs">{user.hospital}</TableCell>
+              <h2 className="text-xl font-semibold mb-4">
+                {result.users.length > 0 ? 'Usuarios Generados' : 'Estado del Sistema'}
+              </h2>
+              
+              {result.users.length === 0 ? (
+                <div className="p-6 text-center">
+                  <p className="text-muted-foreground">
+                    Todos los usuarios del archivo Excel ya existen en el sistema.
+                    <br />
+                    <span className="font-semibold">Total de usuarios en el sistema: {result.summary.totalUsuarios}</span>
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-auto max-h-[600px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Password</TableHead>
+                        <TableHead>Rol</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Hospital</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {result.users.map((user, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium text-sm">{user.nombre}</TableCell>
+                          <TableCell className="text-xs">{user.email}</TableCell>
+                          <TableCell className="text-xs font-mono">{user.password}</TableCell>
+                          <TableCell>
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              user.rol.includes('Gerente') ? 'bg-blue-100 text-blue-800' :
+                              user.rol.includes('Supervisor') ? 'bg-purple-100 text-purple-800' :
+                              user.rol.includes('Líder') ? 'bg-green-100 text-green-800' :
+                              user.rol.includes('Auxiliar') ? 'bg-orange-100 text-orange-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {user.rol}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-xs">{user.estado}</TableCell>
+                          <TableCell className="text-xs">{user.hospital}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </Card>
 
             <Card className="p-6">

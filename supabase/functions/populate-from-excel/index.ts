@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,28 +23,16 @@ serve(async (req) => {
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
-    
-    if (!file) {
-      throw new Error('No file provided');
+    const { data: excelData } = await req.json();
+
+    if (!excelData || !Array.isArray(excelData)) {
+      throw new Error('Invalid data format. Expected array of Excel rows.');
     }
 
-    // Read Excel file
-    const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data: ExcelRow[] = XLSX.utils.sheet_to_json(worksheet);
-
-    console.log(`Processing ${data.length} rows from Excel`);
+    console.log(`Processing ${excelData.length} rows from Excel`);
 
     // 1. Create empresa (Grupo CB)
     const { data: empresa, error: empresaError } = await supabaseAdmin
@@ -59,7 +46,7 @@ serve(async (req) => {
 
     // 2. Extract unique estados and create them
     const estadosSet = new Set<string>();
-    data.forEach(row => {
+    excelData.forEach((row: ExcelRow) => {
       if (row.Estado && row.Estado !== 'Todos') {
         estadosSet.add(row.Estado);
       }
@@ -85,7 +72,7 @@ serve(async (req) => {
 
     // 3. Extract unique hospitales and create them
     const hospitalesMap = new Map<string, { id: string, estado: string }>();
-    for (const row of data) {
+    for (const row of excelData) {
       if (row.Hospital && row.Hospital !== 'Todos' && !hospitalesMap.has(row.Hospital)) {
         const estadoId = estadosMap.get(row.Estado);
         if (!estadoId) continue;
@@ -126,9 +113,9 @@ serve(async (req) => {
     // 4. Create users
     const createdUsers = [];
     
-    for (const row of data) {
+    for (const row of excelData) {
       const email = generateEmail(row);
-      const password = 'imss2024'; // Default password
+      const password = 'imss2024';
       
       // Create auth user
       const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -200,8 +187,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

@@ -76,19 +76,31 @@ const Usuarios = () => {
 
   useEffect(() => {
     const loadUnidades = async () => {
+      // Primero cargar las unidades
       const { data: unidadesData } = await supabase
         .from('unidades')
-        .select('nombre, hospitales(nombre)')
+        .select('nombre, hospital_id')
         .order('nombre');
 
-      if (unidadesData) {
-        setUnidades(
-          unidadesData.map((u: any) => ({
-            nombre: u.nombre,
-            hospital: u.hospitales?.nombre || 'Sin hospital'
-          }))
-        );
-      }
+      if (!unidadesData) return;
+
+      // Luego cargar los hospitales por separado
+      const { data: hospitalesData } = await supabase
+        .from('hospitales')
+        .select('id, nombre')
+        .in('id', unidadesData.map(u => u.hospital_id));
+
+      // Combinar los datos
+      const hospitalesMap = new Map(
+        hospitalesData?.map(h => [h.id, h.nombre]) || []
+      );
+
+      setUnidades(
+        unidadesData.map((u: any) => ({
+          nombre: u.nombre,
+          hospital: hospitalesMap.get(u.hospital_id) || 'Sin hospital'
+        }))
+      );
     };
 
     loadUnidades();

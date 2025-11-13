@@ -36,6 +36,7 @@ type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
 const Usuarios = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [unidades, setUnidades] = useState<{ nombre: string; hospital: string }[]>([]);
 
   const form = useForm<CreateUserFormValues>({
@@ -157,6 +158,50 @@ const Usuarios = () => {
     }
   };
 
+  const handleGenerateAllUsers = async () => {
+    setIsGeneratingAll(true);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error('No autenticado', {
+          description: 'Debes iniciar sesión primero',
+        });
+        return;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-all-users`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al crear usuarios');
+      }
+
+      toast.success('¡Usuarios generados exitosamente!', {
+        description: `Gerentes: ${result.usuarios.gerente}, Líderes: ${result.usuarios.lideres}, Auxiliares: ${result.usuarios.auxiliares}, Almacenistas: ${result.usuarios.almacenistas}`,
+        duration: 6000,
+      });
+      
+    } catch (error: any) {
+      toast.error('Error al generar usuarios', {
+        description: error.message,
+      });
+    } finally {
+      setIsGeneratingAll(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -165,6 +210,44 @@ const Usuarios = () => {
           Crea usuarios con credenciales personalizadas
         </p>
       </div>
+
+      {/* Generación automática de usuarios */}
+      <Card className="max-w-2xl border-primary/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5" />
+            Generar Usuarios Automáticamente
+          </CardTitle>
+          <CardDescription>
+            Crea todos los usuarios del sistema (gerente, líderes, auxiliares y almacenistas) según la estructura organizacional
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/50 p-4 space-y-2 text-sm">
+              <p className="font-medium">Se crearán usuarios con este formato:</p>
+              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                <li>Gerente: gerente@imss.mx (contraseña: Gerente123!)</li>
+                <li>Líderes: lider.chihuahua@imss.mx (contraseña: Lider123!)</li>
+                <li>Auxiliares: auxiliar.durango.2@imss.mx (contraseña: Auxiliar123!)</li>
+                <li>Almacenistas: almacenista.sonora@imss.mx (contraseña: Almacen123!)</li>
+              </ul>
+              <p className="text-xs text-muted-foreground mt-2">
+                * Los números indican múltiples usuarios del mismo rol en el mismo estado
+              </p>
+            </div>
+            
+            <Button 
+              onClick={handleGenerateAllUsers} 
+              disabled={isGeneratingAll}
+              className="w-full"
+              size="lg"
+            >
+              {isGeneratingAll ? 'Generando usuarios...' : 'Generar Todos los Usuarios'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="max-w-2xl">
         <CardHeader>

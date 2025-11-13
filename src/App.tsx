@@ -34,8 +34,14 @@ const AppContent = () => {
     );
   }
 
+  // Allow access to auto-setup without authentication
   if (!user || !userRole) {
-    return <Auth />;
+    return (
+      <Routes>
+        <Route path="/auto-setup" element={<AutoSetup />} />
+        <Route path="*" element={<Auth />} />
+      </Routes>
+    );
   }
 
   return (

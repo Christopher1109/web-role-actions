@@ -34,17 +34,30 @@ serve(async (req) => {
 
     console.log(`Processing ${excelData.length} rows from Excel`);
 
-    // 1. Create empresa (Grupo CB)
-    const { data: empresa, error: empresaError } = await supabaseAdmin
+    // 1. Get or create empresa (Grupo CB)
+    let empresa;
+    const { data: existingEmpresa } = await supabaseAdmin
       .from('empresas')
-      .insert({ nombre: 'Grupo CB', codigo: 'CB' })
-      .select()
+      .select('*')
+      .eq('codigo', 'CB')
       .single();
 
-    if (empresaError) throw empresaError;
-    console.log('Empresa created:', empresa.id);
+    if (existingEmpresa) {
+      empresa = existingEmpresa;
+      console.log('Using existing empresa:', empresa.id);
+    } else {
+      const { data: newEmpresa, error: empresaError } = await supabaseAdmin
+        .from('empresas')
+        .insert({ nombre: 'Grupo CB', codigo: 'CB' })
+        .select()
+        .single();
+      
+      if (empresaError) throw empresaError;
+      empresa = newEmpresa;
+      console.log('Empresa created:', empresa.id);
+    }
 
-    // 2. Extract unique estados and create them
+    // 2. Get or create estados
     const estadosSet = new Set<string>();
     excelData.forEach((row: ExcelRow) => {
       if (row.Estado && row.Estado !== 'Todos') {
@@ -55,67 +68,105 @@ serve(async (req) => {
     const estadosMap = new Map<string, string>();
     for (const estadoNombre of estadosSet) {
       const codigo = estadoNombre.substring(0, 3).toUpperCase();
-      const { data: estado, error: estadoError } = await supabaseAdmin
+      
+      const { data: existingEstado } = await supabaseAdmin
         .from('estados')
-        .insert({
-          nombre: estadoNombre,
-          codigo: codigo,
-          empresa_id: empresa.id
-        })
-        .select()
+        .select('*')
+        .eq('empresa_id', empresa.id)
+        .eq('codigo', codigo)
         .single();
 
-      if (estadoError) throw estadoError;
-      estadosMap.set(estadoNombre, estado.id);
-      console.log(`Estado created: ${estadoNombre} (${estado.id})`);
+      if (existingEstado) {
+        estadosMap.set(estadoNombre, existingEstado.id);
+        console.log(`Using existing estado: ${estadoNombre} (${existingEstado.id})`);
+      } else {
+        const { data: newEstado, error: estadoError } = await supabaseAdmin
+          .from('estados')
+          .insert({
+            nombre: estadoNombre,
+            codigo: codigo,
+            empresa_id: empresa.id
+          })
+          .select()
+          .single();
+
+        if (estadoError) throw estadoError;
+        estadosMap.set(estadoNombre, newEstado.id);
+        console.log(`Estado created: ${estadoNombre} (${newEstado.id})`);
+      }
     }
 
-    // 3. Extract unique hospitales and create them
+    // 3. Get or create hospitales
     const hospitalesMap = new Map<string, { id: string, estado: string }>();
     for (const row of excelData) {
       if (row.Hospital && row.Hospital !== 'Todos' && !hospitalesMap.has(row.Hospital)) {
         const estadoId = estadosMap.get(row.Estado);
         if (!estadoId) continue;
 
-        const { data: hospital, error: hospitalError } = await supabaseAdmin
+        const codigo = row.Hospital.substring(0, 10).toUpperCase().replace(/\s/g, '');
+        
+        const { data: existingHospital } = await supabaseAdmin
           .from('hospitales')
-          .insert({
-            nombre: row.Hospital,
-            codigo: row.Hospital.substring(0, 10).toUpperCase().replace(/\s/g, ''),
-            estado_id: estadoId
-          })
-          .select()
+          .select('*')
+          .eq('codigo', codigo)
+          .eq('estado_id', estadoId)
           .single();
 
-        if (hospitalError) throw hospitalError;
-        hospitalesMap.set(row.Hospital, { id: hospital.id, estado: row.Estado });
-        
-        // Create unidades for this hospital
-        await supabaseAdmin.from('unidades').insert([
-          {
-            nombre: 'Quirófano',
-            codigo: 'QX',
-            tipo: 'quirofano',
-            hospital_id: hospital.id
-          },
-          {
-            nombre: 'Almacén',
-            codigo: 'ALM',
-            tipo: 'almacen',
-            hospital_id: hospital.id
-          }
-        ]);
+        if (existingHospital) {
+          hospitalesMap.set(row.Hospital, { id: existingHospital.id, estado: row.Estado });
+          console.log(`Using existing hospital: ${row.Hospital} (${existingHospital.id})`);
+        } else {
+          const { data: newHospital, error: hospitalError } = await supabaseAdmin
+            .from('hospitales')
+            .insert({
+              nombre: row.Hospital,
+              codigo: codigo,
+              estado_id: estadoId
+            })
+            .select()
+            .single();
 
-        console.log(`Hospital created: ${row.Hospital} (${hospital.id})`);
+          if (hospitalError) throw hospitalError;
+          hospitalesMap.set(row.Hospital, { id: newHospital.id, estado: row.Estado });
+          
+          // Create unidades for this hospital
+          await supabaseAdmin.from('unidades').insert([
+            {
+              nombre: 'Quirófano',
+              codigo: 'QX',
+              tipo: 'quirofano',
+              hospital_id: newHospital.id
+            },
+            {
+              nombre: 'Almacén',
+              codigo: 'ALM',
+              tipo: 'almacen',
+              hospital_id: newHospital.id
+            }
+          ]);
+
+          console.log(`Hospital created: ${row.Hospital} (${newHospital.id})`);
+        }
       }
     }
 
-    // 4. Create users
+    // 4. Create users (skip if already exists)
     const createdUsers = [];
+    const skippedUsers = [];
     
     for (const row of excelData) {
       const email = generateEmail(row);
       const password = 'imss2024';
+      
+      // Check if user already exists
+      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+      const userExists = existingUser.users.some(u => u.email === email);
+      
+      if (userExists) {
+        console.log(`User already exists, skipping: ${email}`);
+        skippedUsers.push(email);
+        continue;
+      }
       
       // Create auth user
       const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -170,11 +221,14 @@ serve(async (req) => {
       });
     }
 
+    console.log(`Process completed: ${createdUsers.length} new users, ${skippedUsers.length} skipped`);
+
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `${createdUsers.length} usuarios creados exitosamente`,
+        message: `${createdUsers.length} usuarios creados exitosamente${skippedUsers.length > 0 ? `, ${skippedUsers.length} ya existían` : ''}`,
         users: createdUsers,
+        skippedCount: skippedUsers.length,
         summary: {
           empresa: empresa.nombre,
           estados: estadosMap.size,
@@ -187,7 +241,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

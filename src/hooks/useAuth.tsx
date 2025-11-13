@@ -45,17 +45,27 @@ export const useAuth = () => {
 
   const fetchUserRole = async (userId: string) => {
     try {
+      // Obtener todos los roles del usuario y elegir el de mayor jerarquía
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
-        .eq('user_id', userId)
-        .single();
+        .eq('user_id', userId);
 
       if (error) {
         console.error('Error fetching user role:', error);
         setUserRole('auxiliar'); // Rol por defecto
+      } else if (data && data.length > 0) {
+        // Jerarquía de roles (mayor a menor)
+        const roleHierarchy: UserRole[] = ['gerente', 'supervisor', 'lider', 'almacenista', 'auxiliar'];
+        
+        // Encontrar el rol con mayor jerarquía
+        const highestRole = roleHierarchy.find(role => 
+          data.some(r => r.role === role)
+        );
+        
+        setUserRole(highestRole || 'auxiliar');
       } else {
-        setUserRole(data.role as UserRole);
+        setUserRole('auxiliar');
       }
     } catch (error) {
       console.error('Error fetching user role:', error);

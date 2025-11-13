@@ -69,53 +69,40 @@ const Auth = () => {
   };
 
   const credenciales = {
-    "Unidad Central": [
-      { email: "gerente.central@hospital.com", password: "gerente123", nombre: "María González García", role: "Gerente" },
-      { email: "supervisor.central@hospital.com", password: "supervisor123", nombre: "Carlos Ramírez López", role: "Supervisor" },
-      { email: "lider.central@hospital.com", password: "lider123", nombre: "Ana Martínez Sánchez", role: "Líder" },
-      { email: "almacenista1.central@hospital.com", password: "almacen123", nombre: "José Torres Flores", role: "Almacenista" },
-      { email: "almacenista2.central@hospital.com", password: "almacen456", nombre: "Laura Hernández Cruz", role: "Almacenista" },
-      { email: "auxiliar1.central@hospital.com", password: "auxiliar123", nombre: "Roberto Jiménez Ruiz", role: "Auxiliar" },
-      { email: "auxiliar2.central@hospital.com", password: "auxiliar456", nombre: "Patricia Morales Díaz", role: "Auxiliar" },
-      { email: "auxiliar3.central@hospital.com", password: "auxiliar789", nombre: "Miguel Ángel Pérez", role: "Auxiliar" },
-      { email: "auxiliar4.central@hospital.com", password: "auxiliar321", nombre: "Sandra López Vega", role: "Auxiliar" },
-      { email: "auxiliar5.central@hospital.com", password: "auxiliar654", nombre: "Fernando Castillo Reyes", role: "Auxiliar" },
+    "Baja California - HGPMF 31": [
+      { email: "lider.baja-california.hgpmf-31@imss.mx", password: "imss2024", nombre: "Líder Baja California HGPMF 31", role: "Líder" },
+      { email: "auxiliar.baja-california.hgpmf-31@imss.mx", password: "imss2024", nombre: "Auxiliar Baja California HGPMF 31", role: "Auxiliar" },
+      { email: "almacenista.baja-california.hgpmf-31@imss.mx", password: "imss2024", nombre: "Almacenista Baja California HGPMF 31", role: "Almacenista" },
     ],
-    "Unidad Norte": [
-      { email: "supervisor.norte@hospital.com", password: "supervisor123", nombre: "Ricardo Mendoza Silva", role: "Supervisor" },
-      { email: "lider.norte@hospital.com", password: "lider123", nombre: "Gabriela Ramos Ortiz", role: "Líder" },
-      { email: "almacenista1.norte@hospital.com", password: "almacen123", nombre: "Luis Alberto García", role: "Almacenista" },
-      { email: "almacenista2.norte@hospital.com", password: "almacen456", nombre: "Carmen Zavala Torres", role: "Almacenista" },
-      { email: "auxiliar1.norte@hospital.com", password: "auxiliar123", nombre: "Andrés Soto Vargas", role: "Auxiliar" },
-      { email: "auxiliar2.norte@hospital.com", password: "auxiliar456", nombre: "Mónica Guerrero León", role: "Auxiliar" },
-      { email: "auxiliar3.norte@hospital.com", password: "auxiliar789", nombre: "Daniel Campos Rojas", role: "Auxiliar" },
-      { email: "auxiliar4.norte@hospital.com", password: "auxiliar321", nombre: "Verónica Navarro Ruiz", role: "Auxiliar" },
-      { email: "auxiliar5.norte@hospital.com", password: "auxiliar654", nombre: "Pablo Domínguez Cruz", role: "Auxiliar" },
-      { email: "auxiliar6.norte@hospital.com", password: "auxiliar987", nombre: "Isabel Aguilar Santos", role: "Auxiliar" },
+    "Baja California - HGR 1": [
+      { email: "lider.baja-california.hgr-1@imss.mx", password: "imss2024", nombre: "Líder Baja California HGR 1", role: "Líder" },
+      { email: "auxiliar.baja-california.hgr-1@imss.mx", password: "imss2024", nombre: "Auxiliar Baja California HGR 1", role: "Auxiliar" },
+      { email: "almacenista.baja-california.hgr-1@imss.mx", password: "imss2024", nombre: "Almacenista Baja California HGR 1", role: "Almacenista" },
     ],
-    "Unidad Sur": [
-      { email: "supervisor.sur@hospital.com", password: "supervisor123", nombre: "Eduardo Vázquez Luna", role: "Supervisor" },
-      { email: "lider.sur@hospital.com", password: "lider123", nombre: "Rosa María Delgado", role: "Líder" },
-      { email: "almacenista1.sur@hospital.com", password: "almacen123", nombre: "Jorge Medina Castro", role: "Almacenista" },
-      { email: "almacenista2.sur@hospital.com", password: "almacen456", nombre: "Teresa Pacheco Gómez", role: "Almacenista" },
-      { email: "auxiliar1.sur@hospital.com", password: "auxiliar123", nombre: "Alberto Núñez Molina", role: "Auxiliar" },
-      { email: "auxiliar2.sur@hospital.com", password: "auxiliar456", nombre: "Beatriz Salazar Rivas", role: "Auxiliar" },
-      { email: "auxiliar3.sur@hospital.com", password: "auxiliar789", nombre: "Héctor Fuentes Ortega", role: "Auxiliar" },
-      { email: "auxiliar4.sur@hospital.com", password: "auxiliar321", nombre: "Adriana Guzmán Peña", role: "Auxiliar" },
-      { email: "auxiliar5.sur@hospital.com", password: "auxiliar654", nombre: "Raúl Cervantes Valle", role: "Auxiliar" },
-      { email: "auxiliar6.sur@hospital.com", password: "auxiliar987", nombre: "Claudia Ríos Paredes", role: "Auxiliar" },
+    "Chihuahua - HGO 15": [
+      { email: "lider.chihuahua.hgo-15@imss.mx", password: "imss2024", nombre: "Líder Chihuahua HGO 15", role: "Líder" },
+      { email: "auxiliar.chihuahua.hgo-15@imss.mx", password: "imss2024", nombre: "Auxiliar Chihuahua HGO 15", role: "Auxiliar" },
+      { email: "almacenista.chihuahua.hgo-15@imss.mx", password: "imss2024", nombre: "Almacenista Chihuahua HGO 15", role: "Almacenista" },
     ],
-    "Unidad Este": [
-      { email: "supervisor.este@hospital.com", password: "supervisor123", nombre: "Francisco Ibarra León", role: "Supervisor" },
-      { email: "lider.este@hospital.com", password: "lider123", nombre: "Silvia Rojas Herrera", role: "Líder" },
-      { email: "almacenista1.este@hospital.com", password: "almacen123", nombre: "Arturo Valdez Soto", role: "Almacenista" },
-      { email: "almacenista2.este@hospital.com", password: "almacen456", nombre: "Norma Sandoval Mejía", role: "Almacenista" },
-      { email: "auxiliar1.este@hospital.com", password: "auxiliar123", nombre: "Sergio Benitez Mata", role: "Auxiliar" },
-      { email: "auxiliar2.este@hospital.com", password: "auxiliar456", nombre: "Diana Coronado Luna", role: "Auxiliar" },
-      { email: "auxiliar3.este@hospital.com", password: "auxiliar789", nombre: "Guillermo Montes Lara", role: "Auxiliar" },
-      { email: "auxiliar4.este@hospital.com", password: "auxiliar321", nombre: "Mariana Acosta Téllez", role: "Auxiliar" },
-      { email: "auxiliar5.este@hospital.com", password: "auxiliar654", nombre: "Omar Villanueva Parra", role: "Auxiliar" },
-      { email: "auxiliar6.este@hospital.com", password: "auxiliar987", nombre: "Liliana Espinoza Bravo", role: "Auxiliar" },
+    "Jalisco - HGR 45": [
+      { email: "lider.jalisco.hgr-45@imss.mx", password: "imss2024", nombre: "Líder Jalisco HGR 45", role: "Líder" },
+      { email: "auxiliar.jalisco.hgr-45@imss.mx", password: "imss2024", nombre: "Auxiliar Jalisco HGR 45", role: "Auxiliar" },
+      { email: "almacenista.jalisco.hgr-45@imss.mx", password: "imss2024", nombre: "Almacenista Jalisco HGR 45", role: "Almacenista" },
+    ],
+    "Nuevo León - HGZ 17": [
+      { email: "lider.nuevo-leon.hgz-17@imss.mx", password: "imss2024", nombre: "Líder Nuevo León HGZ 17", role: "Líder" },
+      { email: "auxiliar.nuevo-leon.hgz-17@imss.mx", password: "imss2024", nombre: "Auxiliar Nuevo León HGZ 17", role: "Auxiliar" },
+      { email: "almacenista.nuevo-leon.hgz-17@imss.mx", password: "imss2024", nombre: "Almacenista Nuevo León HGZ 17", role: "Almacenista" },
+    ],
+    "Sonora - HGR 1": [
+      { email: "lider.sonora.hgr-1@imss.mx", password: "imss2024", nombre: "Líder Sonora HGR 1", role: "Líder" },
+      { email: "auxiliar.sonora.hgr-1@imss.mx", password: "imss2024", nombre: "Auxiliar Sonora HGR 1", role: "Auxiliar" },
+      { email: "almacenista.sonora.hgr-1@imss.mx", password: "imss2024", nombre: "Almacenista Sonora HGR 1", role: "Almacenista" },
+    ],
+    "Gerencia y Supervisión": [
+      { email: "gerente.operaciones@imss.mx", password: "imss2024", nombre: "Gerente de Operaciones", role: "Gerente" },
+      { email: "supervisor.baja-california.1@imss.mx", password: "imss2024", nombre: "Supervisor Baja California 1", role: "Supervisor" },
+      { email: "supervisor.jalisco.1@imss.mx", password: "imss2024", nombre: "Supervisor Jalisco 1", role: "Supervisor" },
     ],
   };
 

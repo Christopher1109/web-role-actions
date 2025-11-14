@@ -55,14 +55,16 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
       </div>
       
       <div className="flex-1 overflow-y-auto px-3 py-4">
-        <div className="mb-4 rounded-lg bg-sidebar-accent p-3">
+        <div className="mb-3 rounded-lg bg-sidebar-accent p-3">
           <p className="text-xs text-sidebar-accent-foreground/70">Usuario actual</p>
           <p className="font-semibold text-sidebar-accent-foreground">{roleLabels[userRole]}</p>
         </div>
 
-        <HospitalSelector />
+        <div className="mb-3">
+          <HospitalSelector />
+        </div>
 
-        <nav className="space-y-1 mt-4">{filteredMenuItems.map((item) => {
+        <nav className="space-y-1">{filteredMenuItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <Link

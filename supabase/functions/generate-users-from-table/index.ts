@@ -65,12 +65,23 @@ serve(async (req) => {
       'auxiliar': 'auxiliar'
     };
 
+    // Función para sanitizar username y convertirlo en email válido
+    const sanitizeUsername = (username: string): string => {
+      return username
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Eliminar acentos
+        .replace(/[^a-z0-9_.-]/g, '_') // Reemplazar caracteres no válidos con _
+        .replace(/_+/g, '_') // Evitar múltiples guiones bajos consecutivos
+        .replace(/^[._]|[._]$/g, ''); // Eliminar puntos/guiones al inicio o final
+    };
+
     for (const user of usersFromTable) {
       try {
-        const email = `${user.username}@hospital.imss.gob.mx`;
+        const sanitizedUsername = sanitizeUsername(user.username);
+        const email = `${sanitizedUsername}@hospital.imss.gob.mx`;
         const password = `IMSS2025${user.role}`;
         
-        console.log(`Procesando: ${user.username} (${user.role})`);
+        console.log(`Procesando: ${user.username} -> ${sanitizedUsername} (${user.role})`);
 
         // Verificar si el usuario ya existe por email
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();

@@ -1,8 +1,8 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Definition of a hospital record based on the actual hospitales table structure
+ * Estructura de un hospital según la tabla reales `hospitales`
  */
 export interface Hospital {
   id: string;
@@ -18,7 +18,7 @@ export interface Hospital {
 }
 
 /**
- * Exposed context values for the HospitalProvider
+ * Valores expuestos por el contexto de hospitales
  */
 interface HospitalContextType {
   selectedHospital: Hospital | null;
@@ -32,36 +32,50 @@ interface HospitalContextType {
 const HospitalContext = createContext<HospitalContextType | undefined>(undefined);
 
 /**
- * Hook for consuming the HospitalContext
+ * Hook para consumir el contexto de hospitales
  */
 export const useHospital = (): HospitalContextType => {
   const context = useContext(HospitalContext);
   if (!context) {
-    throw new Error('useHospital must be used within HospitalProvider');
+    throw new Error("useHospital must be used within HospitalProvider");
   }
   return context;
 };
 
 interface HospitalProviderProps {
   children: ReactNode;
-  userId: string | null;
-  userRole: string | null;
+  userId: string | null; // aquí esperamos el username (ej. 'almacenista_baja_california_31')
+  userRole: string | null; // 'gerente_operaciones', 'supervisor', 'almacenista', 'lider', 'auxiliar'
 }
 
 /**
- * HospitalProvider loads the list of hospitals based on the current user's
- * role and user ID from user_roles table
+ * HospitalProvider: carga los hospitales basándose en la tabla `users`
+ * (NO usa user_roles, porque ahí no tienes hospitales asignados).
  */
 export const HospitalProvider = ({ children, userId, userRole }: HospitalProviderProps) => {
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
   const [availableHospitals, setAvailableHospitals] = useState<Hospital[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Determine whether the user can pick from multiple hospitals
-  const canSelectHospital = userRole === 'gerente_operaciones' || userRole === 'supervisor';
+  // Gerente y supervisor pueden elegir hospital; los demás NO
+  const canSelectHospital = userRole === "gerente_operaciones" || userRole === "supervisor";
+
+  // Helper para mapear el registro crudo de la tabla hospitales a la interfaz Hospital
+  const mapHospital = (h: any): Hospital => ({
+    id: h.id,
+    nombre: h.nombre,
+    state_name: "", // opcional, si luego quieres lo llenamos con la tabla `states`
+    budget_code: h.budget_code || h.codigo || "",
+    hospital_type: h.hospital_type || "",
+    clinic_number: h.clinic_number || "",
+    locality: h.locality || "",
+    display_name: h.display_name || h.nombre,
+    codigo: h.codigo || "",
+    estado_id: h.estado_id || h.state_id || "",
+  });
 
   useEffect(() => {
-    // If there is no user or role, clear hospitals and stop loading
+    // Si no hay usuario o rol, limpiamos
     if (!userId || !userRole) {
       setAvailableHospitals([]);
       setSelectedHospital(null);
@@ -72,123 +86,151 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
     const loadHospitals = async () => {
       try {
         setLoading(true);
-        
-        // Get current authenticated user
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-          console.error('Error getting user:', userError);
-          setAvailableHospitals([]);
-          setSelectedHospital(null);
-          setLoading(false);
-          return;
-        }
 
-        // Managers can see all hospitals
-        if (userRole === 'gerente_operaciones') {
-          const { data: allHospitals, error } = await supabase
-            .from('hospitales')
-            .select('*')
-            .order('nombre');
-          
+        // 1) GERENTE DE OPERACIONES → ve todos los hospitales
+        if (userRole === "gerente_operaciones") {
+          const { data: allHospitals, error } = await supabase.from("hospitales").select("*").order("nombre");
+
           if (error) {
-            console.error('Error loading hospitals for manager:', error);
+            console.error("Error loading hospitals for manager:", error);
             setAvailableHospitals([]);
             setSelectedHospital(null);
-            setLoading(false);
             return;
           }
 
-          // Map hospitals to our interface
-          const hospitals: Hospital[] = (allHospitals || []).map((h: any) => ({
-            id: h.id,
-            nombre: h.nombre,
-            state_name: '', // Will be populated from state_id if needed
-            budget_code: h.budget_code || h.codigo || '',
-            hospital_type: h.hospital_type || '',
-            clinic_number: h.clinic_number || '',
-            locality: h.locality || '',
-            display_name: h.display_name || h.nombre,
-            codigo: h.codigo || '',
-            estado_id: h.estado_id || h.state_id || ''
-          }));
-
+          const hospitals: Hospital[] = (allHospitals || []).map(mapHospital);
           setAvailableHospitals(hospitals);
           if (hospitals.length > 0) {
             setSelectedHospital(hospitals[0]);
           }
-          setLoading(false);
           return;
         }
 
-        // For other roles, get hospitals from user_roles table
-        const { data: userRoles, error: userRolesError } = await supabase
-          .from('user_roles')
-          .select('hospital_id')
-          .eq('user_id', user.id);
+        // 2) TODOS LOS DEMÁS ROLES → obtenemos su fila en la tabla `users`
+        // userId aquí debe ser el username, por ejemplo 'almacenista_baja_california_31'
+        const { data: userRow, error: userError } = await supabase
+          .from("users")
+          .select("*")
+          .eq("username", userId)
+          .maybeSingle();
 
-        if (userRolesError) {
-          console.error('Error fetching user roles:', userRolesError);
+        if (userError) {
+          console.error("Error fetching user from users table:", userError);
           setAvailableHospitals([]);
           setSelectedHospital(null);
-          setLoading(false);
           return;
         }
 
-        if (!userRoles || userRoles.length === 0) {
+        if (!userRow) {
+          console.warn("No se encontró registro en users para", userId);
           setAvailableHospitals([]);
           setSelectedHospital(null);
-          setLoading(false);
           return;
         }
 
-        // Get unique hospital IDs
-        const hospitalIds = [...new Set(userRoles.map(ur => ur.hospital_id).filter(Boolean))];
+        // 2a) SUPERVISOR → lista de hospitales en `assigned_hospitals`
+        if (userRole === "supervisor") {
+          const assigned = (userRow.assigned_hospitals || "") as string;
 
-        if (hospitalIds.length === 0) {
+          const hospitalNames = assigned
+            .split(",")
+            .map((h) => h.trim())
+            .filter((h) => h.length > 0);
+
+          if (hospitalNames.length === 0) {
+            console.warn("Supervisor sin hospitales asignados en assigned_hospitals");
+            setAvailableHospitals([]);
+            setSelectedHospital(null);
+            return;
+          }
+
+          const { data: hospitalsData, error: hospitalsError } = await supabase
+            .from("hospitales")
+            .select("*")
+            .in("display_name", hospitalNames)
+            .order("nombre");
+
+          if (hospitalsError) {
+            console.error("Error fetching supervisor hospitals:", hospitalsError);
+            setAvailableHospitals([]);
+            setSelectedHospital(null);
+            return;
+          }
+
+          const hospitals: Hospital[] = (hospitalsData || []).map(mapHospital);
+          setAvailableHospitals(hospitals);
+          if (hospitals.length > 0) {
+            setSelectedHospital(hospitals[0]);
+          } else {
+            setSelectedHospital(null);
+          }
+          return;
+        }
+
+        // 2b) ROLES DE UN SOLO HOSPITAL → almacenista, lider, auxiliar
+        const budgetCode = userRow.hospital_budget_code as string | null;
+        const displayName = userRow.hospital_display_name as string | null;
+
+        if (!budgetCode || !displayName) {
+          console.warn("Usuario de un solo hospital sin hospital_budget_code/display_name en users");
           setAvailableHospitals([]);
           setSelectedHospital(null);
-          setLoading(false);
           return;
         }
 
-        // Fetch hospital details
-        const { data: hospitalsData, error: hospitalsError } = await supabase
-          .from('hospitales')
-          .select('*')
-          .in('id', hospitalIds);
+        // Buscamos el hospital por budget_code
+        const { data: hospitalData, error: hospitalError } = await supabase
+          .from("hospitales")
+          .select("*")
+          .eq("budget_code", budgetCode)
+          .maybeSingle();
 
-        if (hospitalsError) {
-          console.error('Error fetching hospitals:', hospitalsError);
-          setAvailableHospitals([]);
-          setSelectedHospital(null);
-          setLoading(false);
-          return;
+        let hospital: Hospital;
+
+        if (hospitalError) {
+          console.error("Error fetching hospital by budget_code:", hospitalError);
+          // fallback: crear hospital "virtual" desde users
+          hospital = {
+            id: "",
+            nombre: displayName,
+            state_name: userRow.state_name || "",
+            budget_code: budgetCode,
+            hospital_type: "",
+            clinic_number: "",
+            locality: "",
+            display_name: displayName,
+            codigo: "",
+            estado_id: "",
+          };
+        } else if (!hospitalData) {
+          // Sin match exacto en hospitales → fallback igual
+          hospital = {
+            id: "",
+            nombre: displayName,
+            state_name: userRow.state_name || "",
+            budget_code: budgetCode,
+            hospital_type: "",
+            clinic_number: "",
+            locality: "",
+            display_name: displayName,
+            codigo: "",
+            estado_id: "",
+          };
+        } else {
+          hospital = mapHospital(hospitalData);
+          // si quieres, aquí podríamos sobreescribir state_name con userRow.state_name
+          if (userRow.state_name) {
+            hospital.state_name = userRow.state_name;
+          }
         }
 
-        // Map hospitals to our interface
-        const hospitals: Hospital[] = (hospitalsData || []).map((h: any) => ({
-          id: h.id,
-          nombre: h.nombre,
-          state_name: '', // Will be populated from state_id if needed
-          budget_code: h.budget_code || h.codigo || '',
-          hospital_type: h.hospital_type || '',
-          clinic_number: h.clinic_number || '',
-          locality: h.locality || '',
-          display_name: h.display_name || h.nombre,
-          codigo: h.codigo || '',
-          estado_id: h.estado_id || h.state_id || ''
-        }));
-
-        setAvailableHospitals(hospitals);
-        if (hospitals.length > 0) {
-          setSelectedHospital(hospitals[0]);
-        }
-        setLoading(false);
-
+        setAvailableHospitals([hospital]);
+        setSelectedHospital(hospital);
       } catch (error) {
-        console.error('Error in loadHospitals:', error);
+        console.error("Error in loadHospitals:", error);
         setAvailableHospitals([]);
         setSelectedHospital(null);
+      } finally {
         setLoading(false);
       }
     };

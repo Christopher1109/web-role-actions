@@ -1,252 +1,158 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from 'sonner';
-import { X, Calendar } from 'lucide-react';
+import { useHospital } from '@/contexts/HospitalContext';
 
+// Define the schema for an insumo (inventory item).  Adjust fields as
+// necessary to match your database structure.  The important part is
+// `unidad`, which will capture the hospital display name and be
+// synchronised automatically with the hospital context.
 const insumoSchema = z.object({
-  nombre: z.string()
-    .trim()
-    .nonempty({ message: "El nombre del insumo es requerido" })
-    .max(200, { message: "Máximo 200 caracteres" }),
-  lote: z.string()
-    .trim()
-    .nonempty({ message: "El lote es requerido" })
-    .max(100, { message: "Máximo 100 caracteres" })
-    .regex(/^[A-Za-z0-9-]+$/, { message: "Solo letras, números y guiones" }),
-  cantidad: z.coerce.number()
-    .min(1, { message: "La cantidad debe ser mayor a 0" })
-    .max(10000, { message: "Cantidad máxima excedida" }),
-  fechaCaducidad: z.string()
-    .nonempty({ message: "La fecha de caducidad es requerida" })
-    .refine((date) => {
-      const selectedDate = new Date(date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return selectedDate > today;
-    }, { message: "La fecha debe ser futura" }),
-  unidad: z.string()
-    .trim()
-    .nonempty({ message: "Selecciona una unidad" }),
-  origen: z.enum(['LOAD', 'Prestado'], { message: "Selecciona el origen" }),
-  stockMinimo: z.coerce.number()
-    .min(1, { message: "El stock mínimo debe ser mayor a 0" })
-    .max(1000, { message: "Stock mínimo máximo excedido" }),
-  categoria: z.string()
-    .nonempty({ message: "Selecciona una categoría" }),
+  nombre: z.string().nonempty('El nombre es obligatorio'),
+  clave: z.string().nonempty('La clave es obligatoria'),
+  descripcion: z.string().optional(),
+  unidad: z.string().nonempty('Debes seleccionar un hospital'),
 });
 
 type InsumoFormValues = z.infer<typeof insumoSchema>;
 
 interface InsumoFormProps {
   onClose: () => void;
-  onSubmit: (data: InsumoFormValues) => void;
+  onSubmit: (values: any) => void;
+  defaultValues?: Partial<InsumoFormValues>;
 }
 
-const InsumoForm = ({ onClose, onSubmit }: InsumoFormProps) => {
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<InsumoFormValues>({
+/**
+ * Updated insumo form that uses HospitalContext to choose the hospital
+ * instead of a hard coded list of units.  For roles that can select
+ * hospitals, this form shows a dropdown; otherwise it displays a
+ * read‑only text field.  When a hospital is selected the `unidad`
+ * field is updated.
+ */
+export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoFormProps) {
+  const { selectedHospital, availableHospitals, canSelectHospital, setSelectedHospital } = useHospital();
+  const form = useForm<InsumoFormValues>({
     resolver: zodResolver(insumoSchema),
     defaultValues: {
-      unidad: 'Unidad Central',
-      origen: 'LOAD',
-      stockMinimo: 10,
-      categoria: 'anestesicos',
-    }
+      nombre: '',
+      clave: '',
+      descripcion: '',
+      unidad: selectedHospital?.display_name || '',
+      ...defaultValues,
+    },
   });
 
-  const unidades = ['Unidad Central', 'Unidad Norte', 'Unidad Sur', 'Unidad Este'];
-  
-  const categorias = [
-    { value: 'anestesicos', label: 'Anestésicos' },
-    { value: 'analgesicos', label: 'Analgésicos' },
-    { value: 'relajantes', label: 'Relajantes Musculares' },
-    { value: 'sedantes', label: 'Sedantes' },
-    { value: 'anestesicos_locales', label: 'Anestésicos Locales' },
-    { value: 'otros', label: 'Otros' },
-  ];
-
-  const handleFormSubmit = async (data: InsumoFormValues) => {
-    try {
-      await onSubmit(data);
-      
-      toast.success('Insumo registrado exitosamente', {
-        description: `${data.cantidad} unidades de ${data.nombre} agregadas al inventario`,
-      });
-      
-      onClose();
-    } catch (error) {
-      toast.error('Error al registrar insumo', {
-        description: 'Por favor intenta nuevamente',
-      });
+  // Synchronise the `unidad` value whenever selectedHospital changes
+  useEffect(() => {
+    if (selectedHospital) {
+      form.setValue('unidad', selectedHospital.display_name);
     }
+  }, [selectedHospital, form]);
+
+  const handleSubmit = (values: InsumoFormValues) => {
+    // Include hospital metadata when submitting the insumo.  This ensures
+    // that the record is stored against the correct hospital in the
+    // database.  You can adjust field names to match your table.
+    const hospital = selectedHospital;
+    onSubmit({
+      ...values,
+      state_name: hospital?.state_name,
+      hospital_budget_code: hospital?.budget_code,
+      hospital_display_name: hospital?.display_name,
+    });
   };
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Registrar Entrada de Insumo</h2>
-        <Button type="button" variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
+    <form
+      onSubmit={form.handleSubmit(handleSubmit)}
+      className="space-y-4"
+    >
+      {/* Nombre del insumo */}
+      <div className="grid gap-1">
+        <label className="text-sm font-medium" htmlFor="nombre">Nombre</label>
+        <input
+          id="nombre"
+          type="text"
+          {...form.register('nombre')}
+          className="w-full rounded-md border px-3 py-2 text-sm"
+        />
+        {form.formState.errors.nombre && (
+          <p className="text-sm text-red-500">{form.formState.errors.nombre.message}</p>
+        )}
       </div>
 
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="nombre">Nombre del Insumo *</Label>
-          <Input 
-            id="nombre" 
-            {...register('nombre')} 
-            placeholder="Propofol 200mg" 
+      {/* Clave del insumo */}
+      <div className="grid gap-1">
+        <label className="text-sm font-medium" htmlFor="clave">Clave</label>
+        <input
+          id="clave"
+          type="text"
+          {...form.register('clave')}
+          className="w-full rounded-md border px-3 py-2 text-sm"
+        />
+        {form.formState.errors.clave && (
+          <p className="text-sm text-red-500">{form.formState.errors.clave.message}</p>
+        )}
+      </div>
+
+      {/* Descripción */}
+      <div className="grid gap-1">
+        <label className="text-sm font-medium" htmlFor="descripcion">Descripción</label>
+        <textarea
+          id="descripcion"
+          {...form.register('descripcion')}
+          className="w-full rounded-md border px-3 py-2 text-sm"
+        />
+      </div>
+
+      {/* Hospital selector / display */}
+      <div className="grid gap-1">
+        <label className="text-sm font-medium" htmlFor="unidad">Hospital</label>
+        {canSelectHospital ? (
+          <select
+            id="unidad"
+            {...form.register('unidad')}
+            value={form.watch('unidad')}
+            onChange={(e) => {
+              const value = e.target.value;
+              form.setValue('unidad', value);
+              const hospital = availableHospitals.find((h) => h.display_name === value);
+              if (hospital) {
+                setSelectedHospital(hospital);
+              }
+            }}
+            className="w-full rounded-md border px-3 py-2 text-sm"
+          >
+            <option value="" disabled>Selecciona hospital</option>
+            {availableHospitals.map((h) => (
+              <option key={h.budget_code} value={h.display_name}>
+                {h.display_name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            id="unidad"
+            readOnly
+            value={selectedHospital?.display_name || ''}
+            className="w-full rounded-md border px-3 py-2 text-sm bg-gray-100"
           />
-          {errors.nombre && (
-            <p className="text-sm text-destructive">{errors.nombre.message}</p>
-          )}
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="categoria">Categoría *</Label>
-            <Select onValueChange={(value) => setValue('categoria', value)} defaultValue="anestesicos">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {categorias.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.categoria && (
-              <p className="text-sm text-destructive">{errors.categoria.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="lote">Número de Lote *</Label>
-            <Input 
-              id="lote" 
-              {...register('lote')} 
-              placeholder="LOT-2024-A123"
-              className="uppercase"
-            />
-            {errors.lote && (
-              <p className="text-sm text-destructive">{errors.lote.message}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="cantidad">Cantidad *</Label>
-            <Input 
-              type="number" 
-              id="cantidad" 
-              {...register('cantidad')} 
-              placeholder="50"
-              min="1"
-            />
-            {errors.cantidad && (
-              <p className="text-sm text-destructive">{errors.cantidad.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="stockMinimo">Stock Mínimo *</Label>
-            <Input 
-              type="number" 
-              id="stockMinimo" 
-              {...register('stockMinimo')} 
-              placeholder="10"
-              min="1"
-            />
-            {errors.stockMinimo && (
-              <p className="text-sm text-destructive">{errors.stockMinimo.message}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="fechaCaducidad">Fecha de Caducidad *</Label>
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input 
-              type="date" 
-              id="fechaCaducidad" 
-              {...register('fechaCaducidad')} 
-              className="pl-9"
-            />
-          </div>
-          {errors.fechaCaducidad && (
-            <p className="text-sm text-destructive">{errors.fechaCaducidad.message}</p>
-          )}
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="unidad">Unidad *</Label>
-            <Select onValueChange={(value) => setValue('unidad', value)} defaultValue="Unidad Central">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {unidades.map((unidad) => (
-                  <SelectItem key={unidad} value={unidad}>
-                    {unidad}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.unidad && (
-              <p className="text-sm text-destructive">{errors.unidad.message}</p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="origen">Origen *</Label>
-            <Select onValueChange={(value) => setValue('origen', value as 'LOAD' | 'Prestado')} defaultValue="LOAD">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="LOAD">LOAD</SelectItem>
-                <SelectItem value="Prestado">Prestado por la Unidad</SelectItem>
-              </SelectContent>
-            </Select>
-            {errors.origen && (
-              <p className="text-sm text-destructive">{errors.origen.message}</p>
-            )}
-          </div>
-        </div>
+        )}
+        {form.formState.errors.unidad && (
+          <p className="text-sm text-red-500">{form.formState.errors.unidad.message}</p>
+        )}
       </div>
 
-      <div className="rounded-lg bg-muted/50 p-4">
-        <p className="text-sm text-muted-foreground">
-          <strong>Nota:</strong> Este registro agregará los insumos al inventario de la unidad seleccionada. 
-          Asegúrate de verificar la información antes de guardar.
-        </p>
-      </div>
-
-      <div className="flex gap-3 pt-4">
-        <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+      {/* Botones de acción */}
+      <div className="flex justify-end space-x-2 pt-4">
+        <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-md border">
           Cancelar
-        </Button>
-        <Button type="submit" disabled={isSubmitting} className="flex-1">
-          {isSubmitting ? 'Guardando...' : 'Registrar Insumo'}
-        </Button>
+        </button>
+        <button type="submit" className="px-4 py-2 text-sm rounded-md bg-blue-600 text-white">
+          Guardar
+        </button>
       </div>
     </form>
   );
-};
-
-export default InsumoForm;
+}

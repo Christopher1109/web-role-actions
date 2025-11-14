@@ -30,6 +30,7 @@ const ImportSetup = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   // Hardcoded data from PDF
   const hospitalData = [
@@ -127,6 +128,32 @@ const ImportSetup = () => {
     }
   };
 
+  const handleReset = async () => {
+    if (!confirm('¿Estás seguro de eliminar TODOS los datos del sistema?')) {
+      return;
+    }
+
+    setResetting(true);
+    setError(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('reset-system');
+
+      if (error) throw error;
+
+      toast.success('Sistema limpiado exitosamente');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (err: any) {
+      console.error('Error:', err);
+      setError(err.message);
+      toast.error('Error al limpiar el sistema');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -138,6 +165,25 @@ const ImportSetup = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="p-4 bg-destructive/10 border border-destructive rounded-lg space-y-3">
+              <p className="font-medium text-destructive">⚠️ Primero debes limpiar el sistema</p>
+              <p className="text-sm">Elimina todos los usuarios y datos viejos antes de importar.</p>
+              <Button 
+                onClick={handleReset} 
+                disabled={resetting}
+                variant="destructive"
+              >
+                {resetting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Limpiando...
+                  </>
+                ) : (
+                  'Limpiar Sistema Completo'
+                )}
+              </Button>
+            </div>
+
             <div className="flex items-center gap-4">
               <Button onClick={handleImport} disabled={loading} size="lg">
                 {loading ? (

@@ -101,54 +101,52 @@ const Folios = ({ userRole }: FoliosProps) => {
 
       if (folioError) throw folioError;
 
-      // Insertar los insumos utilizados
+      // Insertar los insumos del folio
       if (data.insumos && data.insumos.length > 0) {
-        const insumosData = data.insumos.map((insumo: any) => ({
+        const insumosPayload = data.insumos.map((item: any) => ({
           folio_id: folioData.id,
-          nombre_insumo: insumo.nombre,
-          lote: insumo.lote,
-          cantidad: insumo.cantidad,
+          insumo_id: item.insumo.id,
+          cantidad: item.cantidad,
         }));
 
-        const { error: insumosError } = await supabase
-          .from('folio_insumos')
-          .insert(insumosData);
+        const { error: insumosError } = await (supabase as any)
+          .from('folios_insumos')
+          .insert(insumosPayload);
 
         if (insumosError) throw insumosError;
 
         // Descontar insumos del inventario
-        for (const insumo of data.insumos) {
+        for (const item of data.insumos) {
           // Buscar el insumo en el inventario
           const { data: insumoInventario, error: searchError } = await (supabase as any)
             .from('insumos')
             .select('*')
-            .eq('nombre', insumo.nombre)
-            .eq('lote', insumo.lote)
+            .eq('id', item.insumo.id)
             .eq('hospital_budget_code', selectedHospital.budget_code)
             .maybeSingle();
 
           if (searchError || !insumoInventario) {
-            console.warn(`No se encontró el insumo ${insumo.nombre} (${insumo.lote}) en el inventario`);
+            console.warn(`No se encontró el insumo ${item.insumo.descripcion} en el inventario`);
             continue;
           }
 
           // Verificar que hay suficiente cantidad
-          if (insumoInventario.cantidad < insumo.cantidad) {
-            toast.warning(`Stock insuficiente para ${insumo.nombre}`, {
-              description: `Disponible: ${insumoInventario.cantidad}, Requerido: ${insumo.cantidad}`,
+          if (insumoInventario.cantidad < item.cantidad) {
+            toast.warning(`Stock insuficiente para ${item.insumo.descripcion}`, {
+              description: `Disponible: ${insumoInventario.cantidad}, Requerido: ${item.cantidad}`,
             });
             continue;
           }
 
           // Actualizar la cantidad del insumo
-          const nuevaCantidad = insumoInventario.cantidad - insumo.cantidad;
-          const { error: updateError } = await supabase
+          const nuevaCantidad = insumoInventario.cantidad - item.cantidad;
+          const { error: updateError } = await (supabase as any)
             .from('insumos')
             .update({ cantidad: nuevaCantidad })
             .eq('id', insumoInventario.id);
 
           if (updateError) {
-            console.error(`Error al actualizar inventario de ${insumo.nombre}:`, updateError);
+            console.error(`Error al actualizar inventario de ${item.insumo.descripcion}:`, updateError);
           }
         }
       }
@@ -271,8 +269,8 @@ const Folios = ({ userRole }: FoliosProps) => {
                             onClick={async () => {
                               setSelectedFolio(folio);
                               // Fetch insumos for this folio
-                              const { data: insumosData } = await supabase
-                                .from('folio_insumos')
+                              const { data: insumosData } = await (supabase as any)
+                                .from('folios_insumos')
                                 .select('*')
                                 .eq('folio_id', folio.id);
                               setSelectedFolioInsumos(insumosData || []);

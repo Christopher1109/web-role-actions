@@ -41,7 +41,7 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
   const [loading, setLoading] = useState(true);
 
   // Determinar si el usuario puede seleccionar hospital
-  const canSelectHospital = userRole === 'gerente' || userRole === 'supervisor';
+  const canSelectHospital = userRole === 'gerente_operaciones' || userRole === 'supervisor';
 
   useEffect(() => {
     if (!userId || !userRole) {
@@ -65,8 +65,8 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
           return;
         }
 
-        if (userRole === 'gerente') {
-          // Gerente puede ver TODOS los hospitales
+        if (userRole === 'gerente_operaciones') {
+          // Gerente de operaciones puede ver TODOS los hospitales
           const { data: allHospitals } = await (supabase as any)
             .from('hospitales')
             .select('estados(name), budget_code, hospital_type, clinic_number, locality, display_name')

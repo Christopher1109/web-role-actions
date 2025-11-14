@@ -274,7 +274,12 @@ const Medicos = () => {
               setEditingMedico(null);
             }} 
             onSubmit={handleCreateOrUpdate}
-            medico={editingMedico}
+            defaultValues={editingMedico ? {
+              nombre: editingMedico.nombre,
+              especialidad: editingMedico.especialidad,
+              cedula: editingMedico.cedula || '',
+              unidad: editingMedico.hospital_display_name || ''
+            } : undefined}
           />
         </DialogContent>
       </Dialog>

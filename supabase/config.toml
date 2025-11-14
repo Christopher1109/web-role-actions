@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.populate-from-excel]
 verify_jwt = false
+
+[functions.import-and-setup]
+verify_jwt = false

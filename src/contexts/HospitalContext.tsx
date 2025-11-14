@@ -53,31 +53,28 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
       try {
         setLoading(true);
 
-        // Obtener información del usuario desde la tabla users
-        const { data: userData, error: userError } = await supabase
+        // Obtener información del usuario desde la tabla users  
+        const { data: userData } = await (supabase as any)
           .from('users')
           .select('*')
           .eq('username', userId)
-          .single();
+          .maybeSingle();
 
-        if (userError) {
-          console.error('Error loading user data:', userError);
+        if (!userData) {
           setLoading(false);
           return;
         }
 
         if (userRole === 'gerente') {
           // Gerente puede ver TODOS los hospitales
-          const { data: allHospitals, error: hospitalsError } = await supabase
+          const { data: allHospitals } = await (supabase as any)
             .from('hospitales')
-            .select('state_name:estados(name), budget_code, hospital_type, clinic_number, locality, display_name')
+            .select('estados(name), budget_code, hospital_type, clinic_number, locality, display_name')
             .order('display_name');
 
-          if (hospitalsError) {
-            console.error('Error loading hospitals:', hospitalsError);
-          } else {
+          if (allHospitals) {
             const hospitals = (allHospitals || []).map((h: any) => ({
-              state_name: h.state_name?.name || '',
+              state_name: h.estados?.name || '',
               budget_code: h.budget_code || '',
               hospital_type: h.hospital_type || '',
               clinic_number: h.clinic_number || '',
@@ -93,17 +90,15 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
             // Parsear la lista de hospitales asignados
             const hospitalNames = userData.assigned_hospitals.split(',').map((h: string) => h.trim());
             
-            const { data: supervisorHospitals, error: hospitalsError } = await supabase
+            const { data: supervisorHospitals } = await (supabase as any)
               .from('hospitales')
-              .select('state_name:estados(name), budget_code, hospital_type, clinic_number, locality, display_name')
+              .select('estados(name), budget_code, hospital_type, clinic_number, locality, display_name')
               .in('display_name', hospitalNames)
               .order('display_name');
 
-            if (hospitalsError) {
-              console.error('Error loading supervisor hospitals:', hospitalsError);
-            } else {
+            if (supervisorHospitals) {
               const hospitals = (supervisorHospitals || []).map((h: any) => ({
-                state_name: h.state_name?.name || '',
+                state_name: h.estados?.name || '',
                 budget_code: h.budget_code || '',
                 hospital_type: h.hospital_type || '',
                 clinic_number: h.clinic_number || '',

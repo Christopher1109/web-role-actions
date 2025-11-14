@@ -57,10 +57,10 @@ export const useAuth = () => {
         .from('profiles')
         .select('nombre')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (profileData?.nombre) {
-        setUsername(profileData.nombre);
+      if (profileData) {
+        setUsername((profileData as any).nombre);
       }
 
       if (error) {

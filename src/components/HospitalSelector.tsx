@@ -42,11 +42,11 @@ export const HospitalSelector = () => {
     }
 
     return (
-      <div className="flex items-center gap-2 px-4 py-2 border-b">
-        <Building2 className="h-4 w-4 text-primary" />
+      <div className="flex items-center gap-2 rounded-lg bg-sidebar-accent p-3">
+        <Building2 className="h-4 w-4 text-sidebar-accent-foreground" />
         <div className="flex flex-col">
-          <span className="text-xs text-muted-foreground">Hospital:</span>
-          <span className="text-sm font-medium truncate">{selectedHospital.display_name}</span>
+          <span className="text-xs text-sidebar-accent-foreground/70">Hospital:</span>
+          <span className="text-sm font-medium truncate text-sidebar-accent-foreground">{selectedHospital.display_name}</span>
         </div>
       </div>
     );
@@ -64,12 +64,12 @@ export const HospitalSelector = () => {
   }
 
   return (
-    <div className="px-4 py-2 border-b">
+    <div className="rounded-lg bg-sidebar-accent p-3">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button 
-            variant="outline" 
-            className="w-full justify-between"
+            variant="ghost" 
+            className="w-full justify-between hover:bg-sidebar-accent/50"
             size="sm"
           >
             <div className="flex items-center gap-2 overflow-hidden">
@@ -103,7 +103,7 @@ export const HospitalSelector = () => {
       </DropdownMenu>
 
       {!selectedHospital && (
-        <p className="text-xs text-muted-foreground mt-2">
+        <p className="text-xs text-sidebar-accent-foreground/70 mt-2">
           Debes seleccionar un hospital para continuar
         </p>
       )}

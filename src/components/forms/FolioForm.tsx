@@ -72,6 +72,12 @@ interface FolioFormProps {
   defaultValues?: Partial<FolioFormValues>;
 }
 
+type Medico = {
+  id: string;
+  nombre: string;
+  especialidad: string;
+};
+
 export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFormProps) {
   const { selectedHospital, availableHospitals, canSelectHospital, setSelectedHospital } = useHospital();
   
@@ -80,6 +86,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   const [insumosFolio, setInsumosFolio] = useState<FolioInsumo[]>([]);
   const [showAgregarInsumo, setShowAgregarInsumo] = useState(false);
   const [selectedInsumoId, setSelectedInsumoId] = useState<string>('');
+  const [cirujanos, setCirujanos] = useState<Medico[]>([]);
+  const [anestesiologos, setAnestesiologos] = useState<Medico[]>([]);
 
   const form = useForm<FolioFormValues>({
     resolver: zodResolver(folioSchema),
@@ -113,6 +121,47 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       form.setValue('unidad', selectedHospital.display_name);
     }
   }, [selectedHospital, form]);
+
+  // Cargar médicos activos
+  useEffect(() => {
+    const loadMedicos = async () => {
+      const { data: medicosData, error } = await (supabase as any)
+        .from('medicos')
+        .select('id, nombre, especialidad')
+        .eq('activo', true)
+        .order('nombre');
+
+      if (error) {
+        console.error('Error cargando médicos', error);
+        toast.error('Error al cargar médicos');
+        return;
+      }
+
+      if (medicosData) {
+        // Separar por especialidad
+        const cirujanosData = medicosData.filter((m: any) => 
+          m.especialidad && (
+            m.especialidad.toLowerCase().includes('cirujano') || 
+            m.especialidad.toLowerCase().includes('cirugía') ||
+            m.especialidad.toLowerCase().includes('cirugia')
+          )
+        );
+        
+        const anestesiologosData = medicosData.filter((m: any) => 
+          m.especialidad && (
+            m.especialidad.toLowerCase().includes('anestesia') ||
+            m.especialidad.toLowerCase().includes('anestesiología') ||
+            m.especialidad.toLowerCase().includes('anestesiologia')
+          )
+        );
+
+        setCirujanos(cirujanosData.length > 0 ? cirujanosData : medicosData);
+        setAnestesiologos(anestesiologosData.length > 0 ? anestesiologosData : medicosData);
+      }
+    };
+
+    loadMedicos();
+  }, []);
 
   // Cargar insumos cuando cambia el tipo de anestesia
   useEffect(() => {
@@ -568,9 +617,17 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="Dr. López">Dr. López</SelectItem>
-                      <SelectItem value="Dr. Martínez">Dr. Martínez</SelectItem>
-                      <SelectItem value="Dra. Hernández">Dra. Hernández</SelectItem>
+                      {cirujanos.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground">
+                          No hay cirujanos disponibles
+                        </div>
+                      ) : (
+                        cirujanos.map((medico) => (
+                          <SelectItem key={medico.id} value={medico.nombre}>
+                            {medico.nombre}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -591,9 +648,17 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="Dr. García">Dr. García</SelectItem>
-                      <SelectItem value="Dra. Rodríguez">Dra. Rodríguez</SelectItem>
-                      <SelectItem value="Dr. Sánchez">Dr. Sánchez</SelectItem>
+                      {anestesiologos.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground">
+                          No hay anestesiólogos disponibles
+                        </div>
+                      ) : (
+                        anestesiologos.map((medico) => (
+                          <SelectItem key={medico.id} value={medico.nombre}>
+                            {medico.nombre}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />

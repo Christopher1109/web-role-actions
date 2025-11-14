@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.fix-users]
 verify_jwt = false
+
+[functions.reset-system]
+verify_jwt = false

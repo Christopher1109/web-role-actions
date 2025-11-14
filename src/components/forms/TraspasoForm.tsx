@@ -8,12 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Plus, X } from 'lucide-react';
+import { useHospital } from '@/contexts/HospitalContext';
+import { InsumoCombobox } from './InsumoCombobox';
 
 const traspasoSchema = z.object({
-  unidadOrigen: z.string().min(1, 'La unidad de origen es requerida'),
-  unidadDestino: z.string().min(1, 'La unidad de destino es requerida'),
+  hospitalDestino: z.string().min(1, 'El hospital de destino es requerido'),
+  stateNameDestino: z.string().min(1),
+  hospitalDisplayNameDestino: z.string().min(1),
   insumos: z.array(z.object({
-    nombre: z.string().min(1, 'El nombre del insumo es requerido'),
+    id: z.string().min(1, 'Debe seleccionar un insumo'),
+    nombre: z.string().min(1),
     cantidad: z.number().min(1, 'La cantidad debe ser mayor a 0'),
   })).min(1, 'Debe agregar al menos un insumo'),
 });
@@ -26,12 +30,15 @@ interface TraspasoFormProps {
 }
 
 const TraspasoForm = ({ onClose, onSubmit }: TraspasoFormProps) => {
+  const { selectedHospital, availableHospitals } = useHospital();
+  
   const form = useForm<TraspasoFormData>({
     resolver: zodResolver(traspasoSchema),
     defaultValues: {
-      unidadOrigen: '',
-      unidadDestino: '',
-      insumos: [{ nombre: '', cantidad: 1 }],
+      hospitalDestino: '',
+      stateNameDestino: '',
+      hospitalDisplayNameDestino: '',
+      insumos: [{ id: '', nombre: '', cantidad: 1 }],
     },
   });
 
@@ -41,9 +48,16 @@ const TraspasoForm = ({ onClose, onSubmit }: TraspasoFormProps) => {
   });
 
   const handleSubmit = (data: TraspasoFormData) => {
-    if (data.unidadOrigen === data.unidadDestino) {
+    if (!selectedHospital) {
       toast.error('Error', {
-        description: 'La unidad de origen y destino no pueden ser las mismas',
+        description: 'Debes seleccionar un hospital de origen',
+      });
+      return;
+    }
+    
+    if (data.hospitalDestino === selectedHospital.budget_code) {
+      toast.error('Error', {
+        description: 'El hospital de origen y destino no pueden ser los mismos',
       });
       return;
     }
@@ -52,7 +66,27 @@ const TraspasoForm = ({ onClose, onSubmit }: TraspasoFormProps) => {
     onClose();
   };
 
-  const unidades = ['Unidad Central', 'Unidad Norte', 'Unidad Sur', 'Unidad Este'];
+  const handleHospitalDestinoChange = (budgetCode: string) => {
+    const hospital = availableHospitals.find(h => h.budget_code === budgetCode);
+    if (hospital) {
+      form.setValue('hospitalDestino', hospital.budget_code);
+      form.setValue('stateNameDestino', hospital.state_name);
+      form.setValue('hospitalDisplayNameDestino', hospital.display_name);
+    }
+  };
+
+  if (!selectedHospital) {
+    return (
+      <div className="space-y-6">
+        <DialogHeader>
+          <DialogTitle>Solicitar Nuevo Traspaso</DialogTitle>
+        </DialogHeader>
+        <div className="text-center text-muted-foreground py-8">
+          Debes seleccionar un hospital para continuar
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -63,46 +97,39 @@ const TraspasoForm = ({ onClose, onSubmit }: TraspasoFormProps) => {
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="unidadOrigen">Unidad de Origen</Label>
-            <Select
-              onValueChange={(value) => form.setValue('unidadOrigen', value)}
-              defaultValue={form.getValues('unidadOrigen')}
-            >
-              <SelectTrigger id="unidadOrigen">
-                <SelectValue placeholder="Seleccionar unidad" />
-              </SelectTrigger>
-              <SelectContent>
-                {unidades.map((unidad) => (
-                  <SelectItem key={unidad} value={unidad}>
-                    {unidad}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {form.formState.errors.unidadOrigen && (
-              <p className="text-sm text-destructive">{form.formState.errors.unidadOrigen.message}</p>
-            )}
+            <Label htmlFor="hospitalOrigen">Hospital de Origen</Label>
+            <Input
+              id="hospitalOrigen"
+              value={selectedHospital.display_name}
+              disabled
+              className="bg-muted"
+            />
+            <p className="text-xs text-muted-foreground">
+              {selectedHospital.state_name} - {selectedHospital.budget_code}
+            </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="unidadDestino">Unidad de Destino</Label>
+            <Label htmlFor="hospitalDestino">Hospital de Destino</Label>
             <Select
-              onValueChange={(value) => form.setValue('unidadDestino', value)}
-              defaultValue={form.getValues('unidadDestino')}
+              onValueChange={handleHospitalDestinoChange}
+              defaultValue={form.getValues('hospitalDestino')}
             >
-              <SelectTrigger id="unidadDestino">
-                <SelectValue placeholder="Seleccionar unidad" />
+              <SelectTrigger id="hospitalDestino">
+                <SelectValue placeholder="Seleccionar hospital" />
               </SelectTrigger>
               <SelectContent>
-                {unidades.map((unidad) => (
-                  <SelectItem key={unidad} value={unidad}>
-                    {unidad}
-                  </SelectItem>
-                ))}
+                {availableHospitals
+                  .filter(h => h.budget_code !== selectedHospital.budget_code)
+                  .map((hospital) => (
+                    <SelectItem key={hospital.budget_code} value={hospital.budget_code}>
+                      {hospital.display_name} - {hospital.state_name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
-            {form.formState.errors.unidadDestino && (
-              <p className="text-sm text-destructive">{form.formState.errors.unidadDestino.message}</p>
+            {form.formState.errors.hospitalDestino && (
+              <p className="text-sm text-destructive">{form.formState.errors.hospitalDestino.message}</p>
             )}
           </div>
         </div>
@@ -114,7 +141,7 @@ const TraspasoForm = ({ onClose, onSubmit }: TraspasoFormProps) => {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => append({ nombre: '', cantidad: 1 })}
+              onClick={() => append({ id: '', nombre: '', cantidad: 1 })}
             >
               <Plus className="h-4 w-4 mr-2" />
               Agregar Insumo
@@ -124,13 +151,22 @@ const TraspasoForm = ({ onClose, onSubmit }: TraspasoFormProps) => {
           {fields.map((field, index) => (
             <div key={field.id} className="flex gap-2 items-start">
               <div className="flex-1 space-y-2">
-                <Input
-                  placeholder="Nombre del insumo"
-                  {...form.register(`insumos.${index}.nombre`)}
+                <InsumoCombobox
+                  value={form.watch(`insumos.${index}.id`)}
+                  onSelect={(insumo) => {
+                    if (insumo) {
+                      form.setValue(`insumos.${index}.id`, insumo.id);
+                      form.setValue(`insumos.${index}.nombre`, insumo.nombre);
+                    } else {
+                      form.setValue(`insumos.${index}.id`, '');
+                      form.setValue(`insumos.${index}.nombre`, '');
+                    }
+                  }}
+                  placeholder="Seleccionar insumo"
                 />
-                {form.formState.errors.insumos?.[index]?.nombre && (
+                {form.formState.errors.insumos?.[index]?.id && (
                   <p className="text-sm text-destructive">
-                    {form.formState.errors.insumos[index]?.nombre?.message}
+                    {form.formState.errors.insumos[index]?.id?.message}
                   </p>
                 )}
               </div>

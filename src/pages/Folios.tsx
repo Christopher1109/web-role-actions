@@ -6,11 +6,13 @@ import { Plus, Search, FileX } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import FolioForm from '@/components/forms/FolioForm';
 import FolioDetailDialog from '@/components/dialogs/FolioDetailDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useHospital } from '@/contexts/HospitalContext';
 
 interface FoliosProps {
   userRole: UserRole;
@@ -18,6 +20,7 @@ interface FoliosProps {
 
 const Folios = ({ userRole }: FoliosProps) => {
   const { user } = useAuth();
+  const { selectedHospital } = useHospital();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [folios, setFolios] = useState<any[]>([]);
@@ -29,17 +32,20 @@ const Folios = ({ userRole }: FoliosProps) => {
   const canCancel = userRole === 'supervisor' || userRole === 'gerente';
 
   useEffect(() => {
-    if (user) {
+    if (user && selectedHospital) {
       fetchFolios();
     }
-  }, [user]);
+  }, [user, selectedHospital]);
 
   const fetchFolios = async () => {
     try {
+      if (!selectedHospital) return;
+      
       setLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('folios')
         .select('*')
+        .eq('hospital_budget_code', selectedHospital.budget_code)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -55,21 +61,19 @@ const Folios = ({ userRole }: FoliosProps) => {
 
   const handleCreateFolio = async (data: any) => {
     try {
-      if (!user) return;
-
-      // Obtener el hospital_id del perfil del usuario
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('hospital_id')
-        .eq('id', user.id)
-        .single();
+      if (!user || !selectedHospital) {
+        toast.error('Debes seleccionar un hospital para continuar');
+        return;
+      }
 
       // Insertar el folio con todos los campos del T33
-      const { data: folioData, error: folioError } = await supabase
+      const { data: folioData, error: folioError } = await (supabase as any)
         .from('folios')
         .insert({
           numero_folio: data.numeroFolio,
-          hospital_id: profile?.hospital_id,
+          state_name: selectedHospital.state_name,
+          hospital_budget_code: selectedHospital.budget_code,
+          hospital_display_name: selectedHospital.display_name,
           unidad: data.unidad,
           numero_quirofano: data.numeroQuirofano,
           hora_inicio_procedimiento: data.horaInicioProcedimiento,
@@ -115,13 +119,13 @@ const Folios = ({ userRole }: FoliosProps) => {
         // Descontar insumos del inventario
         for (const insumo of data.insumos) {
           // Buscar el insumo en el inventario
-          const { data: insumoInventario, error: searchError } = await supabase
+          const { data: insumoInventario, error: searchError } = await (supabase as any)
             .from('insumos')
             .select('*')
             .eq('nombre', insumo.nombre)
             .eq('lote', insumo.lote)
-            .eq('hospital_id', profile?.hospital_id)
-            .single();
+            .eq('hospital_budget_code', selectedHospital.budget_code)
+            .maybeSingle();
 
           if (searchError || !insumoInventario) {
             console.warn(`No se encontró el insumo ${insumo.nombre} (${insumo.lote}) en el inventario`);
@@ -193,12 +197,24 @@ const Folios = ({ userRole }: FoliosProps) => {
 
   return (
     <div className="space-y-6">
+      {!selectedHospital && (
+        <Alert>
+          <AlertDescription>
+            Debes seleccionar un hospital para ver y gestionar los folios.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Folios</h1>
           <p className="text-muted-foreground">Gestión de procedimientos quirúrgicos</p>
         </div>
-        <Button className="gap-2" onClick={() => setShowForm(true)}>
+        <Button 
+          className="gap-2" 
+          onClick={() => setShowForm(true)}
+          disabled={!selectedHospital}
+        >
           <Plus className="h-4 w-4" />
           Nuevo Folio
         </Button>

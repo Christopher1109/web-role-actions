@@ -1,39 +1,45 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useHospital } from '@/contexts/HospitalContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import PaqueteForm from '@/components/forms/PaqueteForm';
 import { toast } from 'sonner';
 
 const Paquetes = () => {
   const { user } = useAuth();
+  const { selectedHospital } = useHospital();
   const [showForm, setShowForm] = useState(false);
   const [editingPaquete, setEditingPaquete] = useState<any>(null);
   const [paquetes, setPaquetes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
+    if (user && selectedHospital) {
       fetchPaquetes();
     }
-  }, [user]);
+  }, [user, selectedHospital]);
 
   const fetchPaquetes = async () => {
     try {
+      if (!selectedHospital) return;
+      
       setLoading(true);
-      const { data: paquetesData, error: paquetesError } = await supabase
+      const { data: paquetesData, error: paquetesError } = await (supabase as any)
         .from('paquetes_anestesia')
         .select('*')
+        .eq('hospital_budget_code', selectedHospital.budget_code)
         .order('created_at', { ascending: false });
 
       if (paquetesError) throw paquetesError;
 
       const paquetesConInsumos = await Promise.all(
-        (paquetesData || []).map(async (paquete) => {
+        (paquetesData || []).map(async (paquete: any) => {
           const { data: insumosData } = await supabase
             .from('paquete_insumos')
             .select('cantidad, insumo_id, insumos(nombre)')
@@ -94,12 +100,15 @@ const Paquetes = () => {
 
         toast.success('Paquete actualizado exitosamente');
       } else {
-        const { data: paqueteData, error: paqueteError } = await supabase
+        const { data: paqueteData, error: paqueteError } = await (supabase as any)
           .from('paquetes_anestesia')
           .insert({
             nombre: data.nombre || data.tipo,
             tipo: data.tipo,
             descripcion: data.descripcion,
+            state_name: selectedHospital?.state_name,
+            hospital_budget_code: selectedHospital?.budget_code,
+            hospital_display_name: selectedHospital?.display_name,
           })
           .select()
           .single();
@@ -146,15 +155,27 @@ const Paquetes = () => {
 
   return (
     <div className="space-y-6">
+      {!selectedHospital && (
+        <Alert>
+          <AlertDescription>
+            Debes seleccionar un hospital para ver y gestionar los paquetes de anestesia.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Paquetes de Anestesia</h1>
           <p className="text-muted-foreground">Configuración de insumos por tipo de procedimiento</p>
         </div>
-        <Button className="gap-2" onClick={() => {
-          setEditingPaquete(null);
-          setShowForm(true);
-        }}>
+        <Button 
+          className="gap-2" 
+          onClick={() => {
+            setEditingPaquete(null);
+            setShowForm(true);
+          }}
+          disabled={!selectedHospital}
+        >
           <Plus className="h-4 w-4" />
           Nuevo Paquete
         </Button>

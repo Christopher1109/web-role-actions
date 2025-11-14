@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useHospital } from '@/contexts/HospitalContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, ArrowRight, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import TraspasoForm from '@/components/forms/TraspasoForm';
 import { toast } from 'sonner';
 
 const Traspasos = () => {
   const { user } = useAuth();
+  const { selectedHospital } = useHospital();
   const [showForm, setShowForm] = useState(false);
   const [selectedTraspaso, setSelectedTraspaso] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -18,17 +21,20 @@ const Traspasos = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
+    if (user && selectedHospital) {
       fetchTraspasos();
     }
-  }, [user]);
+  }, [user, selectedHospital]);
 
   const fetchTraspasos = async () => {
     try {
+      if (!selectedHospital) return;
+      
       setLoading(true);
       const { data: traspasosData, error: traspasosError } = await supabase
         .from('traspasos')
         .select('*')
+        .or(`hospital_budget_code_origen.eq.${selectedHospital.budget_code},hospital_budget_code_destino.eq.${selectedHospital.budget_code}`)
         .order('created_at', { ascending: false });
 
       if (traspasosError) throw traspasosError;
@@ -63,15 +69,24 @@ const Traspasos = () => {
 
   const handleCreateTraspaso = async (data: any) => {
     try {
-      if (!user) return;
+      if (!user || !selectedHospital) {
+        toast.error('Debes seleccionar un hospital para continuar');
+        return;
+      }
 
-      const { data: traspasoData, error: traspasoError } = await supabase
+      const { data: traspasoData, error: traspasoError } = await (supabase as any)
         .from('traspasos')
         .insert([{
           numero_traspaso: `TR-${Date.now()}`,
           unidad_origen: data.unidadOrigen,
           unidad_destino: data.unidadDestino,
-        }] as any)
+          state_name_origen: selectedHospital.state_name,
+          hospital_budget_code_origen: selectedHospital.budget_code,
+          hospital_display_name_origen: selectedHospital.display_name,
+          state_name_destino: data.stateNameDestino || selectedHospital.state_name,
+          hospital_budget_code_destino: data.hospitalDestino,
+          hospital_display_name_destino: data.hospitalDisplayNameDestino,
+        }])
         .select()
         .single();
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useHospital } from '@/contexts/HospitalContext';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, User } from 'lucide-react';
@@ -8,11 +9,13 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import MedicoForm from '@/components/forms/MedicoForm';
 import { toast } from 'sonner';
 
 const Medicos = () => {
   const { user } = useAuth();
+  const { selectedHospital } = useHospital();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingMedico, setEditingMedico] = useState<any>(null);
@@ -20,18 +23,21 @@ const Medicos = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
+    if (user && selectedHospital) {
       fetchMedicos();
     }
-  }, [user]);
+  }, [user, selectedHospital]);
 
   const fetchMedicos = async () => {
     try {
+      if (!selectedHospital) return;
+      
       setLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('medicos')
         .select('*')
         .eq('activo', true)
+        .eq('hospital_budget_code', selectedHospital.budget_code)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -62,7 +68,7 @@ const Medicos = () => {
         if (error) throw error;
         toast.success('Médico actualizado exitosamente');
       } else {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('medicos')
           .insert({
             nombre: data.nombre,
@@ -70,6 +76,9 @@ const Medicos = () => {
             subespecialidad: data.subespecialidad,
             unidad: data.unidad,
             telefono: data.telefono,
+            state_name: selectedHospital?.state_name,
+            hospital_budget_code: selectedHospital?.budget_code,
+            hospital_display_name: selectedHospital?.display_name,
           });
 
         if (error) throw error;

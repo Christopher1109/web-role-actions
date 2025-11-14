@@ -1,6 +1,7 @@
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,7 @@ import { toast } from 'sonner';
 import { Plus, X } from 'lucide-react';
 import { useHospital } from '@/contexts/HospitalContext';
 import { InsumoCombobox } from './InsumoCombobox';
+import { supabase } from '@/integrations/supabase/client';
 
 const traspasoSchema = z.object({
   hospitalDestino: z.string().min(1, 'El hospital de destino es requerido'),
@@ -31,6 +33,7 @@ interface TraspasoFormProps {
 
 const TraspasoForm = ({ onClose, onSubmit }: TraspasoFormProps) => {
   const { selectedHospital, availableHospitals } = useHospital();
+  const [insumosDisponibles, setInsumosDisponibles] = useState<any[]>([]);
   
   const form = useForm<TraspasoFormData>({
     resolver: zodResolver(traspasoSchema),
@@ -46,6 +49,15 @@ const TraspasoForm = ({ onClose, onSubmit }: TraspasoFormProps) => {
     control: form.control,
     name: 'insumos',
   });
+
+  useEffect(() => {
+    const loadInsumos = async () => {
+      if (!selectedHospital?.budget_code) return;
+      const { data } = await (supabase as any).from('insumos').select('*').eq('hospital_budget_code', selectedHospital.budget_code).gt('cantidad', 0);
+      setInsumosDisponibles(data || []);
+    };
+    loadInsumos();
+  }, [selectedHospital]);
 
   const handleSubmit = (data: TraspasoFormData) => {
     if (!selectedHospital) {
@@ -153,6 +165,7 @@ const TraspasoForm = ({ onClose, onSubmit }: TraspasoFormProps) => {
               <div className="flex-1 space-y-2">
                 <InsumoCombobox
                   value={form.watch(`insumos.${index}.id`)}
+                  insumosDisponibles={insumosDisponibles}
                   onSelect={(insumo) => {
                     if (insumo) {
                       form.setValue(`insumos.${index}.id`, insumo.id);

@@ -28,79 +28,19 @@ interface Insumo {
 interface InsumoComboboxProps {
   value?: string;
   onSelect: (insumo: Insumo | null) => void;
-  tipoAnestesia?: string;
+  insumosDisponibles: Insumo[];
   placeholder?: string;
 }
 
 export function InsumoCombobox({ 
   value, 
   onSelect, 
-  tipoAnestesia,
+  insumosDisponibles,
   placeholder = "Buscar insumo..." 
 }: InsumoComboboxProps) {
   const [open, setOpen] = useState(false);
-  const [insumos, setInsumos] = useState<Insumo[]>([]);
-  const [insumosPermitidos, setInsumosPermitidos] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const { selectedHospital } = useHospital();
 
-  // Cargar insumos disponibles y los permitidos para este tipo de anestesia
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!selectedHospital) return;
-      
-      setLoading(true);
-      try {
-        // Obtener insumos disponibles con stock > 0
-        const { data: insumosData, error: insumosError } = await (supabase as any)
-          .from('insumos')
-          .select('id, nombre, lote, cantidad')
-          .eq('hospital_budget_code', selectedHospital.budget_code)
-          .gt('cantidad', 0)
-          .order('nombre');
-
-        if (insumosError) throw insumosError;
-
-        setInsumos(insumosData || []);
-
-        // Si hay un tipo de anestesia seleccionado, obtener insumos permitidos
-        if (tipoAnestesia) {
-          const { data: permitidosData, error: permitidosError } = await supabase
-            .from('insumo_tipo_anestesia' as any)
-            .select('nombre_insumo')
-            .eq('tipo_anestesia', tipoAnestesia);
-
-          if (permitidosError) throw permitidosError;
-
-          setInsumosPermitidos(
-            permitidosData?.map((item: any) => item.nombre_insumo) || []
-          );
-        } else {
-          // Si no hay tipo de anestesia, todos están permitidos
-          setInsumosPermitidos([]);
-        }
-      } catch (error) {
-        console.error('Error al cargar insumos:', error);
-        toast.error('Error al cargar insumos disponibles');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [selectedHospital, tipoAnestesia]);
-
-  // Filtrar insumos según permisos de tipo de anestesia
-  const insumosFiltrados = tipoAnestesia && insumosPermitidos.length > 0
-    ? insumos.filter((insumo) => 
-        insumosPermitidos.some((permitido) => 
-          insumo.nombre.toLowerCase().includes(permitido.toLowerCase()) ||
-          permitido.toLowerCase().includes(insumo.nombre.toLowerCase())
-        )
-      )
-    : insumos;
-
-  const selectedInsumo = insumos.find((insumo) => insumo.id === value);
+  const selectedInsumo = insumosDisponibles.find((insumo) => insumo.id === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -119,10 +59,13 @@ export function InsumoCombobox({
         <Command>
           <CommandInput placeholder="Buscar insumo..." />
           <CommandEmpty>
-            {loading ? 'Cargando...' : 'No se encontraron insumos.'}
+            {insumosDisponibles.length === 0 
+              ? "No hay insumos disponibles para agregar"
+              : "No se encontró el insumo"
+            }
           </CommandEmpty>
           <CommandGroup className="max-h-64 overflow-auto">
-            {insumosFiltrados.map((insumo) => (
+            {insumosDisponibles.map((insumo) => (
               <CommandItem
                 key={insumo.id}
                 value={`${insumo.nombre} ${insumo.lote}`}

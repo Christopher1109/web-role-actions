@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { InsumoCombobox } from './InsumoCombobox';
 import { toast } from 'sonner';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -186,15 +187,16 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   }, []);
 
   const loadInsumosForTipo = async (tipo: string): Promise<Insumo[]> => {
-    if (!tipo || !selectedHospital?.id) return [];
+    if (!tipo || !selectedHospital?.budget_code) return [];
 
     try {
-      const { data: anestesiaInsumos, error } = await supabase
+      const { data: anestesiaInsumos, error } = await (supabase as any)
         .from('anestesia_insumos')
         .select(`
           cantidad_default,
           orden,
-          insumo:insumos (
+          insumo_id,
+          insumos (
             id,
             nombre,
             lote
@@ -206,11 +208,11 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       if (error) throw error;
 
       return (anestesiaInsumos || [])
-        .filter(ai => ai.insumo)
-        .map(ai => ({
-          id: ai.insumo.id,
-          nombre: ai.insumo.nombre,
-          lote: ai.insumo.lote || '',
+        .filter((ai: any) => ai.insumos)
+        .map((ai: any) => ({
+          id: ai.insumos.id,
+          nombre: ai.insumos.nombre,
+          lote: ai.insumos.lote || '',
           cantidad: ai.cantidad_default || 1
         }));
     } catch (error) {

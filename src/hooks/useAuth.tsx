@@ -7,6 +7,7 @@ export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,6 +52,17 @@ export const useAuth = () => {
         .select('role')
         .eq('user_id', userId);
 
+      // Obtener username del perfil
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('nombre')
+        .eq('id', userId)
+        .single();
+
+      if (profileData?.nombre) {
+        setUsername(profileData.nombre);
+      }
+
       if (error) {
         console.error('Error fetching user role:', error);
         setUserRole('auxiliar'); // Rol por defecto
@@ -80,12 +92,14 @@ export const useAuth = () => {
     setUser(null);
     setSession(null);
     setUserRole(null);
+    setUsername(null);
   };
 
   return {
     user,
     session,
     userRole,
+    username,
     loading,
     signOut,
   };

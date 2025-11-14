@@ -1,0 +1,157 @@
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+
+export interface Hospital {
+  state_name: string;
+  budget_code: string;
+  hospital_type: string;
+  clinic_number: string;
+  locality: string;
+  display_name: string;
+}
+
+interface HospitalContextType {
+  selectedHospital: Hospital | null;
+  availableHospitals: Hospital[];
+  setSelectedHospital: (hospital: Hospital | null) => void;
+  loading: boolean;
+  userRole: string | null;
+  canSelectHospital: boolean;
+}
+
+const HospitalContext = createContext<HospitalContextType | undefined>(undefined);
+
+export const useHospital = () => {
+  const context = useContext(HospitalContext);
+  if (!context) {
+    throw new Error('useHospital must be used within HospitalProvider');
+  }
+  return context;
+};
+
+interface HospitalProviderProps {
+  children: ReactNode;
+  userId: string | null;
+  userRole: string | null;
+}
+
+export const HospitalProvider = ({ children, userId, userRole }: HospitalProviderProps) => {
+  const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
+  const [availableHospitals, setAvailableHospitals] = useState<Hospital[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Determinar si el usuario puede seleccionar hospital
+  const canSelectHospital = userRole === 'gerente' || userRole === 'supervisor';
+
+  useEffect(() => {
+    if (!userId || !userRole) {
+      setLoading(false);
+      return;
+    }
+
+    const loadHospitals = async () => {
+      try {
+        setLoading(true);
+
+        // Obtener información del usuario desde la tabla users
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('username', userId)
+          .single();
+
+        if (userError) {
+          console.error('Error loading user data:', userError);
+          setLoading(false);
+          return;
+        }
+
+        if (userRole === 'gerente') {
+          // Gerente puede ver TODOS los hospitales
+          const { data: allHospitals, error: hospitalsError } = await supabase
+            .from('hospitales')
+            .select('state_name:estados(name), budget_code, hospital_type, clinic_number, locality, display_name')
+            .order('display_name');
+
+          if (hospitalsError) {
+            console.error('Error loading hospitals:', hospitalsError);
+          } else {
+            const hospitals = (allHospitals || []).map((h: any) => ({
+              state_name: h.state_name?.name || '',
+              budget_code: h.budget_code || '',
+              hospital_type: h.hospital_type || '',
+              clinic_number: h.clinic_number || '',
+              locality: h.locality || '',
+              display_name: h.display_name || '',
+            }));
+            setAvailableHospitals(hospitals);
+          }
+
+        } else if (userRole === 'supervisor') {
+          // Supervisor: obtener sus hospitales asignados
+          if (userData.assigned_hospitals) {
+            // Parsear la lista de hospitales asignados
+            const hospitalNames = userData.assigned_hospitals.split(',').map((h: string) => h.trim());
+            
+            const { data: supervisorHospitals, error: hospitalsError } = await supabase
+              .from('hospitales')
+              .select('state_name:estados(name), budget_code, hospital_type, clinic_number, locality, display_name')
+              .in('display_name', hospitalNames)
+              .order('display_name');
+
+            if (hospitalsError) {
+              console.error('Error loading supervisor hospitals:', hospitalsError);
+            } else {
+              const hospitals = (supervisorHospitals || []).map((h: any) => ({
+                state_name: h.state_name?.name || '',
+                budget_code: h.budget_code || '',
+                hospital_type: h.hospital_type || '',
+                clinic_number: h.clinic_number || '',
+                locality: h.locality || '',
+                display_name: h.display_name || '',
+              }));
+              setAvailableHospitals(hospitals);
+            }
+          }
+
+        } else {
+          // Usuario de un solo hospital (almacenista, lider, auxiliar)
+          if (userData.hospital_budget_code && userData.hospital_display_name) {
+            const singleHospital: Hospital = {
+              state_name: userData.state_name || '',
+              budget_code: userData.hospital_budget_code,
+              hospital_type: '',
+              clinic_number: '',
+              locality: '',
+              display_name: userData.hospital_display_name,
+            };
+            setAvailableHospitals([singleHospital]);
+            setSelectedHospital(singleHospital); // Auto-seleccionar para usuarios de un solo hospital
+          }
+        }
+
+      } catch (error) {
+        console.error('Error in loadHospitals:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadHospitals();
+  }, [userId, userRole]);
+
+  return (
+    <HospitalContext.Provider
+      value={{
+        selectedHospital,
+        availableHospitals,
+        setSelectedHospital,
+        loading,
+        userRole,
+        canSelectHospital,
+      }}
+    >
+      {children}
+    </HospitalContext.Provider>
+  );
+};

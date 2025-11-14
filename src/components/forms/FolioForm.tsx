@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -28,18 +28,45 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { toast } from 'sonner';
+import { Plus, Trash2 } from 'lucide-react';
 
 type Insumo = {
   id: string;
-  clave: string;
-  descripcion: string;
+  nombre: string;
+  lote: string;
+  cantidad: number;
 };
 
 type FolioInsumo = {
-  insumo: Insumo;
+  insumo: {
+    id: string;
+    nombre: string;
+    lote: string;
+  };
   cantidad: number;
 };
+
+const tiposAnestesia = [
+  { value: 'sedacion', label: 'Sedación / Cuidados anestésicos monitoreados' },
+  { value: 'loco_regional', label: 'Loco regional' },
+  { value: 'general_balanceada_adulto', label: 'General balanceada adulto' },
+  { value: 'general_balanceada_pediatrica', label: 'General balanceada pediátrica' },
+  { value: 'general_endovenosa', label: 'General endovenosa' },
+  { value: 'alta_especialidad', label: 'Alta especialidad' },
+  { value: 'alta_especialidad_trasplante', label: 'Alta especialidad trasplante renal' },
+  { value: 'anestesia_mixta', label: 'Anestesia mixta' },
+];
+
+const tiposAnestesiaNormales = tiposAnestesia.filter(t => t.value !== 'anestesia_mixta');
 
 const folioSchema = z.object({
   numeroFolio: z.string().nonempty('El número de folio es obligatorio'),
@@ -82,12 +109,16 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   const { selectedHospital, availableHospitals, canSelectHospital, setSelectedHospital } = useHospital();
   
   const [tipoAnestesia, setTipoAnestesia] = useState<string>('');
+  const [anestesiaPrincipal, setAnestesiaPrincipal] = useState<string>('');
+  const [anestesiaSecundaria, setAnestesiaSecundaria] = useState<string>('');
   const [insumosDisponibles, setInsumosDisponibles] = useState<Insumo[]>([]);
+  const [insumosDisponiblesPrincipal, setInsumosDisponiblesPrincipal] = useState<Insumo[]>([]);
+  const [insumosDisponiblesSecundaria, setInsumosDisponiblesSecundaria] = useState<Insumo[]>([]);
   const [insumosFolio, setInsumosFolio] = useState<FolioInsumo[]>([]);
-  const [showAgregarInsumo, setShowAgregarInsumo] = useState(false);
-  const [selectedInsumoId, setSelectedInsumoId] = useState<string>('');
   const [cirujanos, setCirujanos] = useState<Medico[]>([]);
   const [anestesiologos, setAnestesiologos] = useState<Medico[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedInsumoId, setSelectedInsumoId] = useState<string>('');
 
   const form = useForm<FolioFormValues>({
     resolver: zodResolver(folioSchema),
@@ -122,494 +153,414 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     }
   }, [selectedHospital, form]);
 
-  // Cargar médicos activos
   useEffect(() => {
     const loadMedicos = async () => {
-      const { data: medicosData, error } = await (supabase as any)
-        .from('medicos')
-        .select('id, nombre, especialidad')
-        .eq('activo', true)
-        .order('nombre');
+      try {
+        const { data: medicosData, error } = await supabase
+          .from('medicos')
+          .select('*')
+          .eq('activo', true)
+          .order('nombre');
 
-      if (error) {
-        console.error('Error cargando médicos', error);
-        toast.error('Error al cargar médicos');
-        return;
-      }
+        if (error) throw error;
 
-      if (medicosData) {
-        // Separar por especialidad
-        const cirujanosData = medicosData.filter((m: any) => 
-          m.especialidad && (
-            m.especialidad.toLowerCase().includes('cirujano') || 
-            m.especialidad.toLowerCase().includes('cirugía') ||
-            m.especialidad.toLowerCase().includes('cirugia')
-          )
-        );
-        
-        const anestesiologosData = medicosData.filter((m: any) => 
-          m.especialidad && (
-            m.especialidad.toLowerCase().includes('anestesia') ||
-            m.especialidad.toLowerCase().includes('anestesiología') ||
-            m.especialidad.toLowerCase().includes('anestesiologia')
-          )
-        );
+        if (medicosData) {
+          const cirujanosList = medicosData.filter(m => 
+            m.especialidad.toLowerCase().includes('ciruj') || 
+            m.especialidad.toLowerCase().includes('cirugía')
+          );
+          const anestesiologosList = medicosData.filter(m => 
+            m.especialidad.toLowerCase().includes('anestesia') || 
+            m.especialidad.toLowerCase().includes('anestesiología')
+          );
 
-        setCirujanos(cirujanosData.length > 0 ? cirujanosData : medicosData);
-        setAnestesiologos(anestesiologosData.length > 0 ? anestesiologosData : medicosData);
+          setCirujanos(cirujanosList.length > 0 ? cirujanosList : medicosData);
+          setAnestesiologos(anestesiologosList.length > 0 ? anestesiologosList : medicosData);
+        }
+      } catch (error) {
+        console.error('Error loading médicos:', error);
       }
     };
 
     loadMedicos();
   }, []);
 
-  // Cargar insumos cuando cambia el tipo de anestesia
+  const loadInsumosForTipo = async (tipo: string): Promise<Insumo[]> => {
+    if (!tipo || !selectedHospital?.id) return [];
+
+    try {
+      const { data: anestesiaInsumos, error } = await supabase
+        .from('anestesia_insumos')
+        .select(`
+          cantidad_default,
+          orden,
+          insumo:insumos (
+            id,
+            nombre,
+            lote
+          )
+        `)
+        .eq('tipo_anestesia', tipo)
+        .order('orden', { ascending: true });
+
+      if (error) throw error;
+
+      return (anestesiaInsumos || [])
+        .filter(ai => ai.insumo)
+        .map(ai => ({
+          id: ai.insumo.id,
+          nombre: ai.insumo.nombre,
+          lote: ai.insumo.lote || '',
+          cantidad: ai.cantidad_default || 1
+        }));
+    } catch (error) {
+      console.error('Error loading insumos:', error);
+      return [];
+    }
+  };
+
   useEffect(() => {
     const loadInsumosForAnestesia = async () => {
-      if (!tipoAnestesia) {
-        setInsumosDisponibles([]);
-        setInsumosFolio([]);
-        return;
-      }
+      if (!tipoAnestesia || tipoAnestesia === 'anestesia_mixta' || !selectedHospital?.id) return;
 
-      const { data, error } = await (supabase as any)
-        .from('anestesia_insumos')
-        .select('cantidad_default, insumos:insumo_id ( id, clave, descripcion )')
-        .eq('tipo_anestesia', tipoAnestesia);
+      const insumosData = await loadInsumosForTipo(tipoAnestesia);
+      setInsumosDisponibles(insumosData);
 
-      if (error) {
-        console.error('Error cargando insumos para anestesia', error);
-        toast.error('Error al cargar insumos');
-        return;
-      }
+      const preselected = insumosData.slice(0, 5).map(insumo => ({
+        insumo: {
+          id: insumo.id,
+          nombre: insumo.nombre,
+          lote: insumo.lote
+        },
+        cantidad: insumo.cantidad
+      }));
 
-      const disponibles: Insumo[] = (data || [])
-        .filter((row: any) => row.insumos)
-        .map((row: any) => ({
-          id: row.insumos.id,
-          clave: row.insumos.clave || '',
-          descripcion: row.insumos.descripcion || row.insumos.nombre || '',
-        }));
-
-      setInsumosDisponibles(disponibles);
-
-      // Preseleccionados con cantidad default
-      const preseleccionados: FolioInsumo[] = (data || [])
-        .filter((row: any) => row.insumos && row.cantidad_default && row.cantidad_default > 0)
-        .map((row: any) => ({
-          insumo: {
-            id: row.insumos.id,
-            clave: row.insumos.clave || '',
-            descripcion: row.insumos.descripcion || row.insumos.nombre || '',
-          },
-          cantidad: row.cantidad_default,
-        }));
-
-      setInsumosFolio(preseleccionados);
+      setInsumosFolio(preselected);
     };
 
     loadInsumosForAnestesia();
-  }, [tipoAnestesia]);
+  }, [tipoAnestesia, selectedHospital]);
+
+  useEffect(() => {
+    const loadInsumosPrincipal = async () => {
+      if (!anestesiaPrincipal || tipoAnestesia !== 'anestesia_mixta') return;
+
+      const insumosData = await loadInsumosForTipo(anestesiaPrincipal);
+      setInsumosDisponiblesPrincipal(insumosData);
+
+      const preselected = insumosData.slice(0, 5).map(insumo => ({
+        insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
+        cantidad: insumo.cantidad
+      }));
+
+      setInsumosFolio(prev => {
+        const existingIds = new Set(prev.map(i => i.insumo.id));
+        const newInsumos = preselected.filter(i => !existingIds.has(i.insumo.id));
+        return [...prev, ...newInsumos];
+      });
+    };
+
+    loadInsumosPrincipal();
+  }, [anestesiaPrincipal, tipoAnestesia]);
+
+  useEffect(() => {
+    const loadInsumosSecundaria = async () => {
+      if (!anestesiaSecundaria || tipoAnestesia !== 'anestesia_mixta') return;
+
+      const insumosData = await loadInsumosForTipo(anestesiaSecundaria);
+      setInsumosDisponiblesSecundaria(insumosData);
+
+      const preselected = insumosData.slice(0, 5).map(insumo => ({
+        insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
+        cantidad: insumo.cantidad
+      }));
+
+      setInsumosFolio(prev => {
+        const existingIds = new Set(prev.map(i => i.insumo.id));
+        const newInsumos = preselected.filter(i => !existingIds.has(i.insumo.id));
+        return [...prev, ...newInsumos];
+      });
+    };
+
+    loadInsumosSecundaria();
+  }, [anestesiaSecundaria, tipoAnestesia]);
+
+  const insumosParaAgregar = React.useMemo(() => {
+    let availableInsumos: Insumo[] = [];
+    
+    if (tipoAnestesia === 'anestesia_mixta') {
+      const unionMap = new Map<string, Insumo>();
+      [...insumosDisponiblesPrincipal, ...insumosDisponiblesSecundaria].forEach(insumo => {
+        unionMap.set(insumo.id, insumo);
+      });
+      availableInsumos = Array.from(unionMap.values());
+    } else {
+      availableInsumos = insumosDisponibles;
+    }
+
+    return availableInsumos.filter(
+      insumo => !insumosFolio.some(fi => fi.insumo.id === insumo.id)
+    );
+  }, [tipoAnestesia, insumosDisponibles, insumosDisponiblesPrincipal, insumosDisponiblesSecundaria, insumosFolio]);
 
   const handleAgregarInsumo = () => {
-    if (!selectedInsumoId) return;
-
-    const insumo = insumosDisponibles.find((i) => i.id === selectedInsumoId);
+    const insumo = insumosParaAgregar.find(i => i.id === selectedInsumoId);
     if (!insumo) return;
 
-    setInsumosFolio((prev) => {
-      // Si ya existe, no lo dupliques
-      if (prev.some((r) => r.insumo.id === selectedInsumoId)) {
-        toast.error('Este insumo ya está agregado');
-        return prev;
-      }
-      return [...prev, { insumo, cantidad: 1 }];
-    });
+    setInsumosFolio([...insumosFolio, {
+      insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
+      cantidad: 1
+    }]);
 
     setSelectedInsumoId('');
-    setShowAgregarInsumo(false);
-    toast.success('Insumo agregado');
+    setIsModalOpen(false);
+  };
+
+  const handleRemoveInsumo = (insumoId: string) => {
+    setInsumosFolio(insumosFolio.filter(fi => fi.insumo.id !== insumoId));
+  };
+
+  const handleUpdateCantidad = (insumoId: string, cantidad: number) => {
+    setInsumosFolio(insumosFolio.map(fi => 
+      fi.insumo.id === insumoId ? { ...fi, cantidad } : fi
+    ));
   };
 
   const handleSubmitForm = (values: FolioFormValues) => {
-    const hospital = selectedHospital;
-    onSubmit({
+    const submitData = {
       ...values,
-      state_name: hospital?.state_name,
-      hospital_budget_code: hospital?.budget_code,
-      hospital_display_name: hospital?.display_name,
-      insumos: insumosFolio.filter(r => r.cantidad > 0),
-    });
+      insumosFolio,
+      hospital_id: selectedHospital?.id,
+      hospital_display_name: selectedHospital?.display_name,
+      hospital_budget_code: selectedHospital?.budget_code,
+      state_name: selectedHospital?.state_name,
+      ...(tipoAnestesia === 'anestesia_mixta' && {
+        anestesia_principal: anestesiaPrincipal,
+        anestesia_secundaria: anestesiaSecundaria
+      })
+    };
+
+    onSubmit(submitData);
   };
 
-  // Filtrar insumos disponibles que aún no están en el folio
-  const insumosParaAgregar = insumosDisponibles.filter(
-    (insumo) => !insumosFolio.some((f) => f.insumo.id === insumo.id)
-  );
-
   return (
-    <>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmitForm)} className="space-y-6">
-          {/* Primera fila: Número de Folio, Unidad Médica, Número de Quirófano */}
-          <div className="grid grid-cols-3 gap-4">
-            <FormField
-              control={form.control}
-              name="numeroFolio"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Número de Folio *</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="F-2025-976" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="unidad"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Unidad Médica *</FormLabel>
-                  {canSelectHospital ? (
-                    <Select
-                      value={field.value}
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        const hospital = availableHospitals.find((h) => h.display_name === value);
-                        if (hospital) setSelectedHospital(hospital);
-                      }}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona hospital" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {availableHospitals.map((h) => (
-                          <SelectItem key={h.budget_code} value={h.display_name}>
-                            {h.display_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <FormControl>
-                      <Input value={selectedHospital?.display_name || ''} readOnly className="bg-muted" />
-                    </FormControl>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="numeroQuirofano"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Número de Quirófano *</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="Q-01" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          {/* Sección Horarios */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-base">Horarios</h3>
-            <div className="grid grid-cols-4 gap-4">
-              <FormField
-                control={form.control}
-                name="inicioProcedimiento"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Inicio Procedimiento *</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="finProcedimiento"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fin Procedimiento *</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="inicioAnestesia"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Inicio Anestesia *</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="finAnestesia"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fin Anestesia *</FormLabel>
-                    <FormControl>
-                      <Input type="time" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </div>
-
-          {/* Datos del Paciente */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-base">Datos del Paciente</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <FormField
-                control={form.control}
-                name="pacienteApellidoPaterno"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Apellido Paterno *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Pérez" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="pacienteApellidoMaterno"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Apellido Materno *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="García" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="pacienteNombre"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre(s) *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Juan" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <FormField
-                control={form.control}
-                name="pacienteNSS"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>NSS *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="12345678901" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="pacienteEdad"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Edad *</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        {...field}
-                        placeholder="35"
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="pacienteGenero"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Género *</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="M">Masculino</SelectItem>
-                        <SelectItem value="F">Femenino</SelectItem>
-                        <SelectItem value="Otro">Otro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </div>
-
-          {/* Procedimiento Quirúrgico */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-base">Procedimiento Quirúrgico</h3>
-            <FormField
-              control={form.control}
-              name="procedimientoQuirurgico"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Procedimiento Quirúrgico *</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="Apendicectomía" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-3 gap-4">
-              <FormField
-                control={form.control}
-                name="especialidadQuirurgica"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Especialidad Quirúrgica *</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Cirugía General" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="tipoCirugia"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tipo de Cirugía *</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Electiva">Electiva</SelectItem>
-                        <SelectItem value="Urgencia">Urgencia</SelectItem>
-                        <SelectItem value="Emergencia">Emergencia</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="tipoEvento"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tipo de Evento *</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Programado">Programado</SelectItem>
-                        <SelectItem value="No Programado">No Programado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </div>
-
-          {/* Tipo de Anestesia */}
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmitForm)} className="space-y-6">
+        <div className="grid grid-cols-3 gap-4">
           <FormField
             control={form.control}
-            name="tipo_anestesia"
+            name="numeroFolio"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Tipo de Anestesia *</FormLabel>
-                <Select
-                  value={field.value}
-                  onValueChange={(value) => {
-                    field.onChange(value);
-                    setTipoAnestesia(value);
-                  }}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="Sedación">Sedación</SelectItem>
-                    <SelectItem value="General Balanceada Adulto">
-                      General Balanceada Adulto
-                    </SelectItem>
-                    <SelectItem value="General Balanceada Pediátrica">
-                      General Balanceada Pediátrica
-                    </SelectItem>
-                    <SelectItem value="Regional">Regional</SelectItem>
-                  </SelectContent>
-                </Select>
+                <FormLabel>Número de Folio *</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="F-2025-976" />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
 
-          {/* Cirujano y Anestesiólogo */}
-          <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="unidad"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Unidad Médica *</FormLabel>
+                {canSelectHospital ? (
+                  <Select
+                    value={field.value}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      const hospital = availableHospitals.find((h) => h.display_name === value);
+                      if (hospital) setSelectedHospital(hospital);
+                    }}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona hospital" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {availableHospitals.map((h) => (
+                        <SelectItem key={h.budget_code} value={h.display_name}>
+                          {h.display_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <FormControl>
+                    <Input value={selectedHospital?.display_name || ''} readOnly className="bg-muted" />
+                  </FormControl>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="numeroQuirofano"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Número de Quirófano *</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Q-01" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="font-semibold text-base">Horarios</h3>
+          <div className="grid grid-cols-4 gap-4">
             <FormField
               control={form.control}
-              name="cirujano"
+              name="inicioProcedimiento"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Cirujano *</FormLabel>
+                  <FormLabel>Inicio Procedimiento *</FormLabel>
+                  <FormControl>
+                    <Input type="time" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="finProcedimiento"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fin Procedimiento *</FormLabel>
+                  <FormControl>
+                    <Input type="time" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="inicioAnestesia"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Inicio Anestesia *</FormLabel>
+                  <FormControl>
+                    <Input type="time" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="finAnestesia"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fin Anestesia *</FormLabel>
+                  <FormControl>
+                    <Input type="time" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="font-semibold text-base">Datos del Paciente</h3>
+          <div className="grid grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="pacienteApellidoPaterno"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Apellido Paterno *</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Pérez" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="pacienteApellidoMaterno"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Apellido Materno *</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="García" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="pacienteNombre"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre(s) *</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Juan" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="pacienteNSS"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>NSS *</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="12345678901" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="pacienteEdad"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Edad *</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      {...field}
+                      placeholder="35"
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="pacienteGenero"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Género *</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
@@ -617,17 +568,191 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {cirujanos.length === 0 ? (
-                        <div className="p-2 text-sm text-muted-foreground">
-                          No hay cirujanos disponibles
-                        </div>
-                      ) : (
-                        cirujanos.map((medico) => (
-                          <SelectItem key={medico.id} value={medico.nombre}>
-                            {medico.nombre}
-                          </SelectItem>
-                        ))
-                      )}
+                      <SelectItem value="M">Masculino</SelectItem>
+                      <SelectItem value="F">Femenino</SelectItem>
+                      <SelectItem value="Otro">Otro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="font-semibold text-base">Procedimiento Quirúrgico</h3>
+          <FormField
+            control={form.control}
+            name="procedimientoQuirurgico"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Procedimiento Quirúrgico *</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Apendicectomía" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="especialidadQuirurgica"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Especialidad Quirúrgica</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Cirugía General" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="tipoCirugia"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo de Cirugía</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="electiva">Electiva</SelectItem>
+                      <SelectItem value="urgencia">Urgencia</SelectItem>
+                      <SelectItem value="emergencia">Emergencia</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="tipoEvento"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo de Evento</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="programado">Programado</SelectItem>
+                      <SelectItem value="no_programado">No Programado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="font-semibold text-base">Tipo de Anestesia</h3>
+          <FormField
+            control={form.control}
+            name="tipo_anestesia"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tipo de Anestesia *</FormLabel>
+                <Select 
+                  value={field.value} 
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    setTipoAnestesia(value);
+                    if (value !== 'anestesia_mixta') {
+                      setAnestesiaPrincipal('');
+                      setAnestesiaSecundaria('');
+                    }
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar tipo de anestesia" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {tiposAnestesia.map(tipo => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {tipoAnestesia === 'anestesia_mixta' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Anestesia Principal *</Label>
+                <Select value={anestesiaPrincipal} onValueChange={setAnestesiaPrincipal}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tiposAnestesiaNormales.map(tipo => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Anestesia Secundaria *</Label>
+                <Select value={anestesiaSecundaria} onValueChange={setAnestesiaSecundaria}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tiposAnestesiaNormales.map(tipo => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="font-semibold text-base">Personal Médico</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="cirujano"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cirujano</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar cirujano" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {cirujanos.map(medico => (
+                        <SelectItem key={medico.id} value={medico.id}>
+                          {medico.nombre}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -640,25 +765,19 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
               name="anestesiologo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Anestesiólogo *</FormLabel>
+                  <FormLabel>Anestesiólogo</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar" />
+                        <SelectValue placeholder="Seleccionar anestesiólogo" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {anestesiologos.length === 0 ? (
-                        <div className="p-2 text-sm text-muted-foreground">
-                          No hay anestesiólogos disponibles
-                        </div>
-                      ) : (
-                        anestesiologos.map((medico) => (
-                          <SelectItem key={medico.id} value={medico.nombre}>
-                            {medico.nombre}
-                          </SelectItem>
-                        ))
-                      )}
+                      {anestesiologos.map(medico => (
+                        <SelectItem key={medico.id} value={medico.id}>
+                          {medico.nombre}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -666,142 +785,102 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
               )}
             />
           </div>
+        </div>
 
-          {/* Tabla de Bienes de Consumo y Medicamentos */}
-          <div className="mt-6 border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Bienes de Consumo y Medicamentos</h3>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAgregarInsumo(true)}
-                disabled={!tipoAnestesia}
-              >
-                + Agregar insumo
-              </Button>
-            </div>
-
-            {!tipoAnestesia ? (
-              <p className="text-sm text-muted-foreground">
-                Selecciona un tipo de anestesia para cargar los insumos disponibles.
-              </p>
-            ) : insumosFolio.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No hay insumos agregados. Haz clic en "Agregar insumo" para comenzar.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 px-2">Clave</th>
-                      <th className="text-left py-2 px-2">Descripción</th>
-                      <th className="text-left py-2 px-2">Cantidad</th>
-                      <th className="py-2 px-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {insumosFolio.map((row, idx) => (
-                      <tr key={row.insumo.id} className="border-b">
-                        <td className="py-2 px-2">{row.insumo.clave}</td>
-                        <td className="py-2 px-2">{row.insumo.descripcion}</td>
-                        <td className="py-2 px-2">
-                          <Input
-                            type="number"
-                            min={0}
-                            className="w-20"
-                            value={row.cantidad}
-                            onChange={(e) => {
-                              const value = Number(e.target.value) || 0;
-                              setInsumosFolio((prev) =>
-                                prev.map((r, i) =>
-                                  i === idx ? { ...r, cantidad: value } : r
-                                )
-                              );
-                            }}
-                          />
-                        </td>
-                        <td className="py-2 px-2 text-right">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setInsumosFolio((prev) => prev.filter((_, i) => i !== idx))
-                            }
-                          >
-                            Quitar
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Botones */}
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <h3 className="font-semibold text-base">Bienes de Consumo y Medicamentos</h3>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsModalOpen(true)}
+              disabled={!tipoAnestesia || (tipoAnestesia === 'anestesia_mixta' && (!anestesiaPrincipal || !anestesiaSecundaria))}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Agregar Insumo
             </Button>
-            <Button type="submit">Registrar folio</Button>
           </div>
-        </form>
-      </Form>
 
-      {/* Modal para agregar insumo */}
-      <Dialog open={showAgregarInsumo} onOpenChange={setShowAgregarInsumo}>
+          {insumosFolio.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No hay insumos agregados. Haz clic en "Agregar insumo" para comenzar.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Lote</TableHead>
+                  <TableHead className="w-32">Cantidad</TableHead>
+                  <TableHead className="w-20"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {insumosFolio.map((fi) => (
+                  <TableRow key={fi.insumo.id}>
+                    <TableCell>{fi.insumo.nombre}</TableCell>
+                    <TableCell>{fi.insumo.lote}</TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={fi.cantidad}
+                        onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
+                        className="w-20"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveInsumo(fi.insumo.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button type="submit">Crear Folio</Button>
+        </div>
+      </form>
+
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Agregar Insumo</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
+          <div className="space-y-4">
+            <div>
               <Label>Seleccionar Insumo</Label>
               <Select value={selectedInsumoId} onValueChange={setSelectedInsumoId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un insumo" />
+                  <SelectValue placeholder="Seleccionar" />
                 </SelectTrigger>
                 <SelectContent>
-                  {insumosParaAgregar.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground">
-                      No hay más insumos disponibles
-                    </div>
-                  ) : (
-                    insumosParaAgregar.map((insumo) => (
-                      <SelectItem key={insumo.id} value={insumo.id}>
-                        {insumo.clave} - {insumo.descripcion}
-                      </SelectItem>
-                    ))
-                  )}
+                  {insumosParaAgregar.map(insumo => (
+                    <SelectItem key={insumo.id} value={insumo.id}>
+                      {insumo.nombre}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShowAgregarInsumo(false);
-                  setSelectedInsumoId('');
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                onClick={handleAgregarInsumo}
-                disabled={!selectedInsumoId}
-              >
-                Agregar
-              </Button>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+              <Button onClick={handleAgregarInsumo} disabled={!selectedInsumoId}>Agregar</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-    </>
+    </Form>
   );
 }

@@ -36,13 +36,14 @@ const Paquetes = () => {
         (paquetesData || []).map(async (paquete) => {
           const { data: insumosData } = await supabase
             .from('paquete_insumos')
-            .select('*')
+            .select('cantidad, insumo_id, insumos(nombre)')
             .eq('paquete_id', paquete.id);
 
           return {
             ...paquete,
             insumos: (insumosData || []).map(i => ({
-              nombre: i.nombre_insumo,
+              id: i.insumo_id,
+              nombre: (i.insumos as any)?.nombre || '',
               cantidad: i.cantidad,
             })),
           };
@@ -80,7 +81,7 @@ const Paquetes = () => {
         if (data.insumos && data.insumos.length > 0) {
           const insumosData = data.insumos.map((insumo: any) => ({
             paquete_id: editingPaquete.id,
-            nombre_insumo: insumo.nombre,
+            insumo_id: insumo.id,
             cantidad: insumo.cantidad,
           }));
 
@@ -96,6 +97,7 @@ const Paquetes = () => {
         const { data: paqueteData, error: paqueteError } = await supabase
           .from('paquetes_anestesia')
           .insert({
+            nombre: data.nombre || data.tipo,
             tipo: data.tipo,
             descripcion: data.descripcion,
           })
@@ -107,7 +109,7 @@ const Paquetes = () => {
         if (data.insumos && data.insumos.length > 0) {
           const insumosData = data.insumos.map((insumo: any) => ({
             paquete_id: paqueteData.id,
-            nombre_insumo: insumo.nombre,
+            insumo_id: insumo.id,
             cantidad: insumo.cantidad,
           }));
 

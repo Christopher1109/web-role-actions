@@ -30,24 +30,22 @@ export function HospitalSelector({ onHospitalChange }: HospitalSelectorProps) {
 
     const fetchHospitals = async () => {
       try {
-        // Obtener hospitales asignados al líder
-        const { data: userRoles } = await supabase
-          .from('user_roles')
+        // Obtener hospital del perfil del usuario
+        const { data: profile } = await supabase
+          .from('profiles')
           .select('hospital_id')
-          .eq('user_id', user.id)
-          .eq('role', 'lider');
+          .eq('id', user.id)
+          .single();
 
-        if (!userRoles || userRoles.length === 0) {
+        if (!profile?.hospital_id) {
           setLoading(false);
           return;
         }
 
-        const hospitalIds = userRoles.map(r => r.hospital_id);
-
         const { data: hospitalsData } = await supabase
           .from('hospitales')
           .select('id, nombre, codigo')
-          .in('id', hospitalIds)
+          .eq('id', profile.hospital_id)
           .order('nombre');
 
         if (hospitalsData) {

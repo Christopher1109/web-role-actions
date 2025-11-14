@@ -42,9 +42,9 @@ const Traspasos = () => {
 
           return {
             ...traspaso,
-            insumos: (insumosData || []).map(i => ({
+            insumos: (insumosData || []).map((i: any) => ({
               id: i.insumo_id,
-              nombre: (i.insumos as any)?.nombre || '',
+              nombre: i.insumos?.nombre || '',
               cantidad: i.cantidad,
             })),
           };
@@ -67,11 +67,11 @@ const Traspasos = () => {
 
       const { data: traspasoData, error: traspasoError } = await supabase
         .from('traspasos')
-        .insert({
+        .insert([{
           numero_traspaso: `TR-${Date.now()}`,
           unidad_origen: data.unidadOrigen,
           unidad_destino: data.unidadDestino,
-        })
+        }] as any)
         .select()
         .single();
 

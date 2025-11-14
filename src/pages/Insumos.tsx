@@ -5,50 +5,39 @@ import { Plus, Search, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import InsumoForm from '@/components/forms/InsumoForm';
 import InsumoDetailDialog from '@/components/dialogs/InsumoDetailDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useHospital } from '@/contexts/HospitalContext';
 import { toast } from 'sonner';
 
 const Insumos = () => {
   const { user } = useAuth();
+  const { selectedHospital } = useHospital();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [insumos, setInsumos] = useState<any[]>([]);
   const [selectedInsumo, setSelectedInsumo] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [hospitalId, setHospitalId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
-      fetchUserHospital();
+    if (user && selectedHospital) {
       fetchInsumos();
     }
-  }, [user]);
-
-  const fetchUserHospital = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('hospital_id')
-        .eq('id', user?.id)
-        .single();
-
-      if (error) throw error;
-      setHospitalId(data?.hospital_id);
-    } catch (error: any) {
-      console.error('Error al obtener hospital del usuario:', error);
-    }
-  };
+  }, [user, selectedHospital]);
 
   const fetchInsumos = async () => {
     try {
+      if (!selectedHospital) return;
+      
       setLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('insumos')
         .select('*')
+        .eq('hospital_budget_code', selectedHospital.budget_code)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -64,7 +53,7 @@ const Insumos = () => {
 
   const handleCreateInsumo = async (data: any) => {
     try {
-      if (!user) return;
+      if (!user || !selectedHospital) return;
 
       const { error } = await supabase
         .from('insumos')
@@ -77,9 +66,10 @@ const Insumos = () => {
           unidad: data.unidad,
           origen: data.origen,
           stock_minimo: data.stockMinimo || 10,
-          created_by: user.id,
-          hospital_id: hospitalId,
-        });
+          state_name: selectedHospital.state_name,
+          hospital_budget_code: selectedHospital.budget_code,
+          hospital_display_name: selectedHospital.display_name,
+        } as any);
 
       if (error) throw error;
 
@@ -111,14 +101,26 @@ const Insumos = () => {
 
   return (
     <div className="space-y-6">
+      {!selectedHospital && (
+        <Alert>
+          <AlertDescription>
+            Debes seleccionar un hospital para ver y gestionar el inventario de insumos.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Inventario de Insumos</h1>
-          <p className="text-muted-foreground">Gestión y control de stock</p>
+          <p className="text-muted-foreground">Control y gestión de materiales</p>
         </div>
-        <Button className="gap-2" onClick={() => setShowForm(true)}>
+        <Button 
+          className="gap-2" 
+          onClick={() => setShowForm(true)}
+          disabled={!selectedHospital}
+        >
           <Plus className="h-4 w-4" />
-          Registrar Entrada
+          Registrar Insumo
         </Button>
       </div>
 

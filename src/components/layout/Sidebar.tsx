@@ -10,7 +10,8 @@ import {
   ArrowLeftRight,
   Database,
   LogOut,
-  UserCog
+  UserCog,
+  Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -39,7 +40,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente'] },
     { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente'] },
     { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente'] },
-    { path: '/setup', icon: Database, label: 'Configuración Inicial', roles: ['gerente'] },
+    { path: '/import-setup', icon: Upload, label: 'Importar Sistema', roles: ['gerente'] },
   ];
 
   const filteredMenuItems = menuItems.filter(item => 

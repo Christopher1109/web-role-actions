@@ -43,15 +43,25 @@ type FolioInsumo = {
 
 const folioSchema = z.object({
   numeroFolio: z.string().nonempty('El número de folio es obligatorio'),
-  tipo_anestesia: z.string().nonempty('El tipo de anestesia es obligatorio'),
-  pacienteNombre: z.string().nonempty('El nombre del paciente es obligatorio'),
+  unidad: z.string().nonempty('Debes seleccionar un hospital'),
+  numeroQuirofano: z.string().optional(),
+  inicioProcedimiento: z.string().optional(),
+  finProcedimiento: z.string().optional(),
+  inicioAnestesia: z.string().optional(),
+  finAnestesia: z.string().optional(),
   pacienteApellidoPaterno: z.string().nonempty('El apellido paterno es obligatorio'),
   pacienteApellidoMaterno: z.string().optional(),
+  pacienteNombre: z.string().nonempty('El nombre del paciente es obligatorio'),
   pacienteNSS: z.string().optional(),
   pacienteEdad: z.number().min(0).optional(),
   pacienteGenero: z.enum(['M', 'F', 'Otro']).optional(),
-  cirugia: z.string().nonempty('La cirugía es obligatoria'),
-  unidad: z.string().nonempty('Debes seleccionar un hospital'),
+  procedimientoQuirurgico: z.string().nonempty('El procedimiento es obligatorio'),
+  especialidadQuirurgica: z.string().optional(),
+  tipoCirugia: z.string().optional(),
+  tipoEvento: z.string().optional(),
+  tipo_anestesia: z.string().nonempty('El tipo de anestesia es obligatorio'),
+  cirujano: z.string().optional(),
+  anestesiologo: z.string().optional(),
 });
 
 type FolioFormValues = z.infer<typeof folioSchema>;
@@ -75,15 +85,25 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     resolver: zodResolver(folioSchema),
     defaultValues: {
       numeroFolio: '',
-      tipo_anestesia: '',
-      pacienteNombre: '',
+      unidad: selectedHospital?.display_name || '',
+      numeroQuirofano: '',
+      inicioProcedimiento: '',
+      finProcedimiento: '',
+      inicioAnestesia: '',
+      finAnestesia: '',
       pacienteApellidoPaterno: '',
       pacienteApellidoMaterno: '',
+      pacienteNombre: '',
       pacienteNSS: '',
       pacienteEdad: 0,
       pacienteGenero: undefined,
-      cirugia: '',
-      unidad: selectedHospital?.display_name || '',
+      procedimientoQuirurgico: '',
+      especialidadQuirurgica: '',
+      tipoCirugia: '',
+      tipoEvento: '',
+      tipo_anestesia: '',
+      cirujano: '',
+      anestesiologo: '',
       ...defaultValues,
     },
   });
@@ -181,21 +201,322 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   return (
     <>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmitForm)} className="space-y-4">
-          {/* Número de Folio */}
-          <FormField
-            control={form.control}
-            name="numeroFolio"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Número de Folio</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="Ej: F-2024-001" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        <form onSubmit={form.handleSubmit(handleSubmitForm)} className="space-y-6">
+          {/* Primera fila: Número de Folio, Unidad Médica, Número de Quirófano */}
+          <div className="grid grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="numeroFolio"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Número de Folio *</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="F-2025-976" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="unidad"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Unidad Médica *</FormLabel>
+                  {canSelectHospital ? (
+                    <Select
+                      value={field.value}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        const hospital = availableHospitals.find((h) => h.display_name === value);
+                        if (hospital) setSelectedHospital(hospital);
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona hospital" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {availableHospitals.map((h) => (
+                          <SelectItem key={h.budget_code} value={h.display_name}>
+                            {h.display_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <FormControl>
+                      <Input value={selectedHospital?.display_name || ''} readOnly className="bg-muted" />
+                    </FormControl>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="numeroQuirofano"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Número de Quirófano *</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Q-01" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          {/* Sección Horarios */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-base">Horarios</h3>
+            <div className="grid grid-cols-4 gap-4">
+              <FormField
+                control={form.control}
+                name="inicioProcedimiento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Inicio Procedimiento *</FormLabel>
+                    <FormControl>
+                      <Input type="time" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="finProcedimiento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fin Procedimiento *</FormLabel>
+                    <FormControl>
+                      <Input type="time" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="inicioAnestesia"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Inicio Anestesia *</FormLabel>
+                    <FormControl>
+                      <Input type="time" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="finAnestesia"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fin Anestesia *</FormLabel>
+                    <FormControl>
+                      <Input type="time" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Datos del Paciente */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-base">Datos del Paciente</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="pacienteApellidoPaterno"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Apellido Paterno *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Pérez" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="pacienteApellidoMaterno"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Apellido Materno *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="García" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="pacienteNombre"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre(s) *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Juan" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="pacienteNSS"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>NSS *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="12345678901" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="pacienteEdad"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Edad *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        {...field}
+                        placeholder="35"
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="pacienteGenero"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Género *</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="M">Masculino</SelectItem>
+                        <SelectItem value="F">Femenino</SelectItem>
+                        <SelectItem value="Otro">Otro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Procedimiento Quirúrgico */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-base">Procedimiento Quirúrgico</h3>
+            <FormField
+              control={form.control}
+              name="procedimientoQuirurgico"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Procedimiento Quirúrgico *</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Apendicectomía" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="especialidadQuirurgica"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Especialidad Quirúrgica *</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Cirugía General" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="tipoCirugia"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo de Cirugía *</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Electiva">Electiva</SelectItem>
+                        <SelectItem value="Urgencia">Urgencia</SelectItem>
+                        <SelectItem value="Emergencia">Emergencia</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="tipoEvento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo de Evento *</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Programado">Programado</SelectItem>
+                        <SelectItem value="No Programado">No Programado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </div>
 
           {/* Tipo de Anestesia */}
           <FormField
@@ -203,7 +524,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
             name="tipo_anestesia"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Tipo de Anestesia</FormLabel>
+                <FormLabel>Tipo de Anestesia *</FormLabel>
                 <Select
                   value={field.value}
                   onValueChange={(value) => {
@@ -224,15 +545,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                     <SelectItem value="General Balanceada Pediátrica">
                       General Balanceada Pediátrica
                     </SelectItem>
-                    <SelectItem value="General Alta Especialidad">
-                      General Alta Especialidad
-                    </SelectItem>
-                    <SelectItem value="General Endovenosa">
-                      General Endovenosa
-                    </SelectItem>
-                    <SelectItem value="Locorregional">
-                      Locorregional
-                    </SelectItem>
+                    <SelectItem value="Regional">Regional</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -240,17 +553,26 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
             )}
           />
 
-          {/* Datos del Paciente */}
+          {/* Cirujano y Anestesiólogo */}
           <div className="grid grid-cols-2 gap-4">
             <FormField
               control={form.control}
-              name="pacienteNombre"
+              name="cirujano"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nombre del Paciente</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
+                  <FormLabel>Cirujano *</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Dr. López">Dr. López</SelectItem>
+                      <SelectItem value="Dr. Martínez">Dr. Martínez</SelectItem>
+                      <SelectItem value="Dra. Hernández">Dra. Hernández</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -258,141 +580,26 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
             <FormField
               control={form.control}
-              name="pacienteApellidoPaterno"
+              name="anestesiologo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Apellido Paterno</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
+                  <FormLabel>Anestesiólogo *</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Dr. García">Dr. García</SelectItem>
+                      <SelectItem value="Dra. Rodríguez">Dra. Rodríguez</SelectItem>
+                      <SelectItem value="Dr. Sánchez">Dr. Sánchez</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
-          </div>
-
-          <FormField
-            control={form.control}
-            name="pacienteApellidoMaterno"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Apellido Materno</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="pacienteNSS"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>NSS</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="pacienteEdad"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Edad</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      {...field}
-                      onChange={(e) => field.onChange(Number(e.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <FormField
-            control={form.control}
-            name="pacienteGenero"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Género</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="M">Masculino</SelectItem>
-                    <SelectItem value="F">Femenino</SelectItem>
-                    <SelectItem value="Otro">Otro</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Cirugía */}
-          <FormField
-            control={form.control}
-            name="cirugia"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Cirugía</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Hospital */}
-          <div className="grid gap-1">
-            <Label htmlFor="unidad">Hospital</Label>
-            {canSelectHospital ? (
-              <select
-                id="unidad"
-                {...form.register('unidad')}
-                value={form.watch('unidad')}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  form.setValue('unidad', value);
-                  const hospital = availableHospitals.find((h) => h.display_name === value);
-                  if (hospital) setSelectedHospital(hospital);
-                }}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="" disabled>
-                  Selecciona hospital
-                </option>
-                {availableHospitals.map((h) => (
-                  <option key={h.budget_code} value={h.display_name}>
-                    {h.display_name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <Input
-                id="unidad"
-                readOnly
-                value={selectedHospital?.display_name || ''}
-                className="bg-muted"
-              />
-            )}
-            {form.formState.errors.unidad && (
-              <p className="text-sm text-destructive">{form.formState.errors.unidad.message}</p>
-            )}
           </div>
 
           {/* Tabla de Bienes de Consumo y Medicamentos */}

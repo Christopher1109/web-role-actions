@@ -14,133 +14,134 @@ export type Database = {
   }
   public: {
     Tables: {
-      audit_logs: {
+      anestesia_insumos: {
         Row: {
-          action: string
-          created_at: string
-          hospital_id: string | null
+          cantidad_default: number | null
+          created_at: string | null
           id: string
-          new_data: Json | null
-          old_data: Json | null
-          record_id: string | null
-          table_name: string
-          user_id: string | null
+          insumo_id: string | null
+          orden: number | null
+          tipo_anestesia: string
+          updated_at: string | null
         }
         Insert: {
-          action: string
-          created_at?: string
-          hospital_id?: string | null
+          cantidad_default?: number | null
+          created_at?: string | null
           id?: string
-          new_data?: Json | null
-          old_data?: Json | null
-          record_id?: string | null
-          table_name: string
-          user_id?: string | null
+          insumo_id?: string | null
+          orden?: number | null
+          tipo_anestesia: string
+          updated_at?: string | null
         }
         Update: {
-          action?: string
-          created_at?: string
-          hospital_id?: string | null
+          cantidad_default?: number | null
+          created_at?: string | null
           id?: string
-          new_data?: Json | null
-          old_data?: Json | null
-          record_id?: string | null
-          table_name?: string
-          user_id?: string | null
+          insumo_id?: string | null
+          orden?: number | null
+          tipo_anestesia?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "audit_logs_hospital_id_fkey"
+            foreignKeyName: "anestesia_insumos_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      folios: {
+        Row: {
+          anestesia_principal: string | null
+          anestesia_secundaria: string | null
+          created_at: string | null
+          estado: Database["public"]["Enums"]["estado_folio"] | null
+          fecha: string | null
+          hospital_budget_code: string | null
+          hospital_display_name: string | null
+          hospital_id: string | null
+          id: string
+          medico_id: string | null
+          numero_folio: string
+          observaciones: string | null
+          state_name: string | null
+          tipo_anestesia: Database["public"]["Enums"]["tipo_anestesia"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          anestesia_principal?: string | null
+          anestesia_secundaria?: string | null
+          created_at?: string | null
+          estado?: Database["public"]["Enums"]["estado_folio"] | null
+          fecha?: string | null
+          hospital_budget_code?: string | null
+          hospital_display_name?: string | null
+          hospital_id?: string | null
+          id?: string
+          medico_id?: string | null
+          numero_folio: string
+          observaciones?: string | null
+          state_name?: string | null
+          tipo_anestesia?: Database["public"]["Enums"]["tipo_anestesia"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          anestesia_principal?: string | null
+          anestesia_secundaria?: string | null
+          created_at?: string | null
+          estado?: Database["public"]["Enums"]["estado_folio"] | null
+          fecha?: string | null
+          hospital_budget_code?: string | null
+          hospital_display_name?: string | null
+          hospital_id?: string | null
+          id?: string
+          medico_id?: string | null
+          numero_folio?: string
+          observaciones?: string | null
+          state_name?: string | null
+          tipo_anestesia?: Database["public"]["Enums"]["tipo_anestesia"] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folios_hospital_id_fkey"
             columns: ["hospital_id"]
             isOneToOne: false
             referencedRelation: "hospitales"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      empresas: {
-        Row: {
-          codigo: string
-          created_at: string
-          id: string
-          nombre: string
-          updated_at: string
-        }
-        Insert: {
-          codigo: string
-          created_at?: string
-          id?: string
-          nombre: string
-          updated_at?: string
-        }
-        Update: {
-          codigo?: string
-          created_at?: string
-          id?: string
-          nombre?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      estados: {
-        Row: {
-          codigo: string
-          created_at: string
-          empresa_id: string
-          id: string
-          nombre: string
-          updated_at: string
-        }
-        Insert: {
-          codigo: string
-          created_at?: string
-          empresa_id: string
-          id?: string
-          nombre: string
-          updated_at?: string
-        }
-        Update: {
-          codigo?: string
-          created_at?: string
-          empresa_id?: string
-          id?: string
-          nombre?: string
-          updated_at?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "estados_empresa_id_fkey"
-            columns: ["empresa_id"]
+            foreignKeyName: "folios_medico_id_fkey"
+            columns: ["medico_id"]
             isOneToOne: false
-            referencedRelation: "empresas"
+            referencedRelation: "medicos"
             referencedColumns: ["id"]
           },
         ]
       }
-      folio_insumos: {
+      folios_insumos: {
         Row: {
           cantidad: number
-          created_at: string
-          folio_id: string
+          created_at: string | null
+          folio_id: string | null
           id: string
-          lote: string
-          nombre_insumo: string
+          insumo_id: string | null
         }
         Insert: {
           cantidad: number
-          created_at?: string
-          folio_id: string
+          created_at?: string | null
+          folio_id?: string | null
           id?: string
-          lote: string
-          nombre_insumo: string
+          insumo_id?: string | null
         }
         Update: {
           cantidad?: number
-          created_at?: string
-          folio_id?: string
+          created_at?: string | null
+          folio_id?: string | null
           id?: string
-          lote?: string
-          nombre_insumo?: string
+          insumo_id?: string | null
         }
         Relationships: [
           {
@@ -150,267 +151,115 @@ export type Database = {
             referencedRelation: "folios"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      folios: {
-        Row: {
-          anestesiologo_id: string | null
-          cancelado_por: string | null
-          cirugia: string
-          cirujano_id: string | null
-          created_at: string
-          created_by: string
-          especialidad_quirurgica: string | null
-          estado: Database["public"]["Enums"]["estado_folio"]
-          hora_fin_anestesia: string | null
-          hora_fin_procedimiento: string | null
-          hora_inicio_anestesia: string | null
-          hora_inicio_procedimiento: string | null
-          hospital_id: string | null
-          id: string
-          numero_folio: string
-          numero_quirofano: string | null
-          paciente_apellido_materno: string | null
-          paciente_apellido_paterno: string | null
-          paciente_edad: number
-          paciente_genero: Database["public"]["Enums"]["genero"]
-          paciente_nombre: string
-          paciente_nss: string | null
-          tipo_anestesia: Database["public"]["Enums"]["tipo_anestesia"]
-          tipo_cirugia: string | null
-          tipo_evento: string | null
-          unidad: string
-          updated_at: string
-        }
-        Insert: {
-          anestesiologo_id?: string | null
-          cancelado_por?: string | null
-          cirugia: string
-          cirujano_id?: string | null
-          created_at?: string
-          created_by: string
-          especialidad_quirurgica?: string | null
-          estado?: Database["public"]["Enums"]["estado_folio"]
-          hora_fin_anestesia?: string | null
-          hora_fin_procedimiento?: string | null
-          hora_inicio_anestesia?: string | null
-          hora_inicio_procedimiento?: string | null
-          hospital_id?: string | null
-          id?: string
-          numero_folio: string
-          numero_quirofano?: string | null
-          paciente_apellido_materno?: string | null
-          paciente_apellido_paterno?: string | null
-          paciente_edad: number
-          paciente_genero: Database["public"]["Enums"]["genero"]
-          paciente_nombre: string
-          paciente_nss?: string | null
-          tipo_anestesia: Database["public"]["Enums"]["tipo_anestesia"]
-          tipo_cirugia?: string | null
-          tipo_evento?: string | null
-          unidad: string
-          updated_at?: string
-        }
-        Update: {
-          anestesiologo_id?: string | null
-          cancelado_por?: string | null
-          cirugia?: string
-          cirujano_id?: string | null
-          created_at?: string
-          created_by?: string
-          especialidad_quirurgica?: string | null
-          estado?: Database["public"]["Enums"]["estado_folio"]
-          hora_fin_anestesia?: string | null
-          hora_fin_procedimiento?: string | null
-          hora_inicio_anestesia?: string | null
-          hora_inicio_procedimiento?: string | null
-          hospital_id?: string | null
-          id?: string
-          numero_folio?: string
-          numero_quirofano?: string | null
-          paciente_apellido_materno?: string | null
-          paciente_apellido_paterno?: string | null
-          paciente_edad?: number
-          paciente_genero?: Database["public"]["Enums"]["genero"]
-          paciente_nombre?: string
-          paciente_nss?: string | null
-          tipo_anestesia?: Database["public"]["Enums"]["tipo_anestesia"]
-          tipo_cirugia?: string | null
-          tipo_evento?: string | null
-          unidad?: string
-          updated_at?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "folios_anestesiologo_id_fkey"
-            columns: ["anestesiologo_id"]
+            foreignKeyName: "folio_insumos_insumo_id_fkey"
+            columns: ["insumo_id"]
             isOneToOne: false
-            referencedRelation: "medicos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "folios_cancelado_por_fkey"
-            columns: ["cancelado_por"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "folios_cirujano_id_fkey"
-            columns: ["cirujano_id"]
-            isOneToOne: false
-            referencedRelation: "medicos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "folios_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "folios_hospital_id_fkey"
-            columns: ["hospital_id"]
-            isOneToOne: false
-            referencedRelation: "hospitales"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      hospital_procedimientos: {
-        Row: {
-          clave_procedimiento: string
-          created_at: string
-          hospital_id: string
-          id: string
-          maximo_acumulado: number | null
-          nombre_procedimiento: string
-          precio_unitario: number | null
-        }
-        Insert: {
-          clave_procedimiento: string
-          created_at?: string
-          hospital_id: string
-          id?: string
-          maximo_acumulado?: number | null
-          nombre_procedimiento: string
-          precio_unitario?: number | null
-        }
-        Update: {
-          clave_procedimiento?: string
-          created_at?: string
-          hospital_id?: string
-          id?: string
-          maximo_acumulado?: number | null
-          nombre_procedimiento?: string
-          precio_unitario?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "hospital_procedimientos_hospital_id_fkey"
-            columns: ["hospital_id"]
-            isOneToOne: false
-            referencedRelation: "hospitales"
+            referencedRelation: "insumos"
             referencedColumns: ["id"]
           },
         ]
       }
       hospitales: {
         Row: {
-          codigo: string
-          created_at: string
-          direccion: string | null
-          estado_id: string
+          budget_code: string | null
+          clinic_number: string | null
+          codigo: string | null
+          created_at: string | null
+          display_name: string | null
+          empresa_id: string | null
+          estado_id: string | null
+          hospital_type: string | null
           id: string
+          locality: string | null
           nombre: string
-          telefono: string | null
-          updated_at: string
+          state_id: string | null
+          updated_at: string | null
         }
         Insert: {
-          codigo: string
-          created_at?: string
-          direccion?: string | null
-          estado_id: string
+          budget_code?: string | null
+          clinic_number?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          empresa_id?: string | null
+          estado_id?: string | null
+          hospital_type?: string | null
           id?: string
+          locality?: string | null
           nombre: string
-          telefono?: string | null
-          updated_at?: string
+          state_id?: string | null
+          updated_at?: string | null
         }
         Update: {
-          codigo?: string
-          created_at?: string
-          direccion?: string | null
-          estado_id?: string
+          budget_code?: string | null
+          clinic_number?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          empresa_id?: string | null
+          estado_id?: string | null
+          hospital_type?: string | null
           id?: string
+          locality?: string | null
           nombre?: string
-          telefono?: string | null
-          updated_at?: string
+          state_id?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "hospitales_estado_id_fkey"
-            columns: ["estado_id"]
+            foreignKeyName: "hospitales_state_id_fkey"
+            columns: ["state_id"]
             isOneToOne: false
-            referencedRelation: "estados"
+            referencedRelation: "states"
             referencedColumns: ["id"]
           },
         ]
       }
       insumos: {
         Row: {
-          cantidad: number
-          categoria: string
-          created_at: string
-          created_by: string | null
-          fecha_caducidad: string
+          cantidad: number | null
+          clave: string | null
+          created_at: string | null
+          descripcion: string | null
+          hospital_budget_code: string | null
+          hospital_display_name: string | null
           hospital_id: string | null
           id: string
-          lote: string
+          lote: string | null
           nombre: string
-          origen: Database["public"]["Enums"]["origen_insumo"]
-          stock_minimo: number
-          unidad: string
-          updated_at: string
+          state_name: string | null
+          updated_at: string | null
         }
         Insert: {
-          cantidad: number
-          categoria: string
-          created_at?: string
-          created_by?: string | null
-          fecha_caducidad: string
+          cantidad?: number | null
+          clave?: string | null
+          created_at?: string | null
+          descripcion?: string | null
+          hospital_budget_code?: string | null
+          hospital_display_name?: string | null
           hospital_id?: string | null
           id?: string
-          lote: string
+          lote?: string | null
           nombre: string
-          origen: Database["public"]["Enums"]["origen_insumo"]
-          stock_minimo?: number
-          unidad: string
-          updated_at?: string
+          state_name?: string | null
+          updated_at?: string | null
         }
         Update: {
-          cantidad?: number
-          categoria?: string
-          created_at?: string
-          created_by?: string | null
-          fecha_caducidad?: string
+          cantidad?: number | null
+          clave?: string | null
+          created_at?: string | null
+          descripcion?: string | null
+          hospital_budget_code?: string | null
+          hospital_display_name?: string | null
           hospital_id?: string | null
           id?: string
-          lote?: string
+          lote?: string | null
           nombre?: string
-          origen?: Database["public"]["Enums"]["origen_insumo"]
-          stock_minimo?: number
-          unidad?: string
-          updated_at?: string
+          state_name?: string | null
+          updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "insumos_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "insumos_hospital_id_fkey"
             columns: ["hospital_id"]
@@ -423,76 +272,69 @@ export type Database = {
       medicos: {
         Row: {
           activo: boolean | null
-          created_at: string
+          created_at: string | null
           especialidad: Database["public"]["Enums"]["especialidad_medica"]
-          hospital_id: string | null
+          hospital_budget_code: string | null
+          hospital_display_name: string | null
           id: string
           nombre: string
-          procedimientos_realizados: number | null
-          subespecialidad: string | null
-          telefono: string | null
-          unidad: string
-          updated_at: string
+          state_name: string | null
+          updated_at: string | null
         }
         Insert: {
           activo?: boolean | null
-          created_at?: string
+          created_at?: string | null
           especialidad: Database["public"]["Enums"]["especialidad_medica"]
-          hospital_id?: string | null
+          hospital_budget_code?: string | null
+          hospital_display_name?: string | null
           id?: string
           nombre: string
-          procedimientos_realizados?: number | null
-          subespecialidad?: string | null
-          telefono?: string | null
-          unidad: string
-          updated_at?: string
+          state_name?: string | null
+          updated_at?: string | null
         }
         Update: {
           activo?: boolean | null
-          created_at?: string
+          created_at?: string | null
           especialidad?: Database["public"]["Enums"]["especialidad_medica"]
-          hospital_id?: string | null
+          hospital_budget_code?: string | null
+          hospital_display_name?: string | null
           id?: string
           nombre?: string
-          procedimientos_realizados?: number | null
-          subespecialidad?: string | null
-          telefono?: string | null
-          unidad?: string
-          updated_at?: string
+          state_name?: string | null
+          updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "medicos_hospital_id_fkey"
-            columns: ["hospital_id"]
-            isOneToOne: false
-            referencedRelation: "hospitales"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       paquete_insumos: {
         Row: {
           cantidad: number
-          created_at: string
+          created_at: string | null
           id: string
-          nombre_insumo: string
-          paquete_id: string
+          insumo_id: string | null
+          paquete_id: string | null
         }
         Insert: {
           cantidad: number
-          created_at?: string
+          created_at?: string | null
           id?: string
-          nombre_insumo: string
-          paquete_id: string
+          insumo_id?: string | null
+          paquete_id?: string | null
         }
         Update: {
           cantidad?: number
-          created_at?: string
+          created_at?: string | null
           id?: string
-          nombre_insumo?: string
-          paquete_id?: string
+          insumo_id?: string | null
+          paquete_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "paquete_insumos_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "paquete_insumos_paquete_id_fkey"
             columns: ["paquete_id"]
@@ -504,56 +346,68 @@ export type Database = {
       }
       paquetes_anestesia: {
         Row: {
-          created_at: string
+          created_at: string | null
           descripcion: string | null
+          hospital_budget_code: string | null
+          hospital_display_name: string | null
           id: string
+          nombre: string
+          state_name: string | null
           tipo: Database["public"]["Enums"]["tipo_anestesia"]
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           descripcion?: string | null
+          hospital_budget_code?: string | null
+          hospital_display_name?: string | null
           id?: string
+          nombre: string
+          state_name?: string | null
           tipo: Database["public"]["Enums"]["tipo_anestesia"]
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           descripcion?: string | null
+          hospital_budget_code?: string | null
+          hospital_display_name?: string | null
           id?: string
+          nombre?: string
+          state_name?: string | null
           tipo?: Database["public"]["Enums"]["tipo_anestesia"]
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
-      profiles: {
+      procedimientos: {
         Row: {
-          created_at: string
+          created_at: string | null
+          descripcion: string | null
           hospital_id: string | null
           id: string
-          nombre_completo: string | null
-          unidad: string
-          updated_at: string
+          nombre: string
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
-          hospital_id?: string | null
-          id: string
-          nombre_completo?: string | null
-          unidad?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
+          created_at?: string | null
+          descripcion?: string | null
           hospital_id?: string | null
           id?: string
-          nombre_completo?: string | null
-          unidad?: string
-          updated_at?: string
+          nombre: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          descripcion?: string | null
+          hospital_id?: string | null
+          id?: string
+          nombre?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "profiles_hospital_id_fkey"
+            foreignKeyName: "procedimientos_hospital_id_fkey"
             columns: ["hospital_id"]
             isOneToOne: false
             referencedRelation: "hospitales"
@@ -561,29 +415,84 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          created_at: string | null
+          hospital_id: string | null
+          id: string
+          nombre: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          hospital_id?: string | null
+          id: string
+          nombre: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          hospital_id?: string | null
+          id?: string
+          nombre?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      states: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          slug: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          slug?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          slug?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       traspaso_insumos: {
         Row: {
           cantidad: number
-          created_at: string
+          created_at: string | null
           id: string
-          nombre_insumo: string
-          traspaso_id: string
+          insumo_id: string | null
+          traspaso_id: string | null
         }
         Insert: {
           cantidad: number
-          created_at?: string
+          created_at?: string | null
           id?: string
-          nombre_insumo: string
-          traspaso_id: string
+          insumo_id?: string | null
+          traspaso_id?: string | null
         }
         Update: {
           cantidad?: number
-          created_at?: string
+          created_at?: string | null
           id?: string
-          nombre_insumo?: string
-          traspaso_id?: string
+          insumo_id?: string | null
+          traspaso_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "traspaso_insumos_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "traspaso_insumos_traspaso_id_fkey"
             columns: ["traspaso_id"]
@@ -595,102 +504,79 @@ export type Database = {
       }
       traspasos: {
         Row: {
-          aprobado_por: string | null
-          created_at: string
-          estado: Database["public"]["Enums"]["estado_traspaso"]
-          hospital_destino_id: string | null
-          hospital_origen_id: string | null
+          created_at: string | null
+          estado: Database["public"]["Enums"]["estado_traspaso"] | null
+          fecha: string | null
+          hospital_budget_code_destino: string | null
+          hospital_budget_code_origen: string | null
+          hospital_display_name_destino: string | null
+          hospital_display_name_origen: string | null
           id: string
-          motivo_rechazo: string | null
-          solicitado_por: string
-          unidad_destino: string
-          unidad_origen: string
-          updated_at: string
+          numero_traspaso: string
+          observaciones: string | null
+          state_name_destino: string | null
+          state_name_origen: string | null
+          unidad_destino: string | null
+          unidad_origen: string | null
+          updated_at: string | null
         }
         Insert: {
-          aprobado_por?: string | null
-          created_at?: string
-          estado?: Database["public"]["Enums"]["estado_traspaso"]
-          hospital_destino_id?: string | null
-          hospital_origen_id?: string | null
+          created_at?: string | null
+          estado?: Database["public"]["Enums"]["estado_traspaso"] | null
+          fecha?: string | null
+          hospital_budget_code_destino?: string | null
+          hospital_budget_code_origen?: string | null
+          hospital_display_name_destino?: string | null
+          hospital_display_name_origen?: string | null
           id?: string
-          motivo_rechazo?: string | null
-          solicitado_por: string
-          unidad_destino: string
-          unidad_origen: string
-          updated_at?: string
+          numero_traspaso: string
+          observaciones?: string | null
+          state_name_destino?: string | null
+          state_name_origen?: string | null
+          unidad_destino?: string | null
+          unidad_origen?: string | null
+          updated_at?: string | null
         }
         Update: {
-          aprobado_por?: string | null
-          created_at?: string
-          estado?: Database["public"]["Enums"]["estado_traspaso"]
-          hospital_destino_id?: string | null
-          hospital_origen_id?: string | null
+          created_at?: string | null
+          estado?: Database["public"]["Enums"]["estado_traspaso"] | null
+          fecha?: string | null
+          hospital_budget_code_destino?: string | null
+          hospital_budget_code_origen?: string | null
+          hospital_display_name_destino?: string | null
+          hospital_display_name_origen?: string | null
           id?: string
-          motivo_rechazo?: string | null
-          solicitado_por?: string
-          unidad_destino?: string
-          unidad_origen?: string
-          updated_at?: string
+          numero_traspaso?: string
+          observaciones?: string | null
+          state_name_destino?: string | null
+          state_name_origen?: string | null
+          unidad_destino?: string | null
+          unidad_origen?: string | null
+          updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "traspasos_aprobado_por_fkey"
-            columns: ["aprobado_por"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "traspasos_hospital_destino_id_fkey"
-            columns: ["hospital_destino_id"]
-            isOneToOne: false
-            referencedRelation: "hospitales"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "traspasos_hospital_origen_id_fkey"
-            columns: ["hospital_origen_id"]
-            isOneToOne: false
-            referencedRelation: "hospitales"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "traspasos_solicitado_por_fkey"
-            columns: ["solicitado_por"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       unidades: {
         Row: {
-          codigo: string
-          created_at: string
-          hospital_id: string
+          created_at: string | null
+          hospital_id: string | null
           id: string
           nombre: string
-          tipo: string | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          codigo: string
-          created_at?: string
-          hospital_id: string
+          created_at?: string | null
+          hospital_id?: string | null
           id?: string
           nombre: string
-          tipo?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          codigo?: string
-          created_at?: string
-          hospital_id?: string
+          created_at?: string | null
+          hospital_id?: string | null
           id?: string
           nombre?: string
-          tipo?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -704,81 +590,66 @@ export type Database = {
       }
       user_roles: {
         Row: {
-          alcance: string | null
-          created_at: string
-          empresa_id: string | null
-          estado_id: string | null
-          hospital_id: string | null
           id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
-          alcance?: string | null
-          created_at?: string
-          empresa_id?: string | null
-          estado_id?: string | null
-          hospital_id?: string | null
           id?: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
-          alcance?: string | null
-          created_at?: string
-          empresa_id?: string | null
-          estado_id?: string | null
-          hospital_id?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_roles_empresa_id_fkey"
-            columns: ["empresa_id"]
-            isOneToOne: false
-            referencedRelation: "empresas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_roles_estado_id_fkey"
-            columns: ["estado_id"]
-            isOneToOne: false
-            referencedRelation: "estados"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_roles_hospital_id_fkey"
-            columns: ["hospital_id"]
-            isOneToOne: false
-            referencedRelation: "hospitales"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_roles_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
+      }
+      users: {
+        Row: {
+          assigned_hospitals: string | null
+          created_at: string | null
+          hospital_budget_code: string | null
+          hospital_display_name: string | null
+          id: number
+          role: string
+          state_name: string | null
+          supervisor_group: number | null
+          updated_at: string | null
+          username: string
+        }
+        Insert: {
+          assigned_hospitals?: string | null
+          created_at?: string | null
+          hospital_budget_code?: string | null
+          hospital_display_name?: string | null
+          id?: number
+          role: string
+          state_name?: string | null
+          supervisor_group?: number | null
+          updated_at?: string | null
+          username: string
+        }
+        Update: {
+          assigned_hospitals?: string | null
+          created_at?: string | null
+          hospital_budget_code?: string | null
+          hospital_display_name?: string | null
+          id?: number
+          role?: string
+          state_name?: string | null
+          supervisor_group?: number | null
+          updated_at?: string | null
+          username?: string
+        }
+        Relationships: []
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      get_user_empresa_id: { Args: { _user_id: string }; Returns: string }
-      get_user_estado_id: { Args: { _user_id: string }; Returns: string }
-      get_user_hospital_id: { Args: { _user_id: string }; Returns: string }
-      has_any_role: {
-        Args: {
-          _roles: Database["public"]["Enums"]["app_role"][]
-          _user_id: string
-        }
-        Returns: boolean
-      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -786,25 +657,20 @@ export type Database = {
         }
         Returns: boolean
       }
-      user_has_hospital_access: {
-        Args: { _hospital_id: string; _user_id: string }
-        Returns: boolean
-      }
     }
     Enums: {
-      app_role: "auxiliar" | "almacenista" | "lider" | "supervisor" | "gerente"
-      especialidad_medica: "anestesiologo" | "cirujano"
-      estado_folio: "activo" | "cancelado"
-      estado_traspaso: "pendiente" | "completado" | "rechazado"
-      genero: "M" | "F" | "Otro"
-      origen_insumo: "LOAD" | "Prestado"
-      tipo_anestesia:
-        | "general_balanceada_adulto"
-        | "general_balanceada_pediatrica"
-        | "general_alta_especialidad"
-        | "general_endovenosa"
-        | "locorregional"
-        | "sedacion"
+      app_role: "gerente" | "supervisor" | "lider" | "almacenista" | "auxiliar"
+      especialidad_medica:
+        | "anestesiologia"
+        | "cirugia_general"
+        | "traumatologia"
+        | "ginecologia"
+        | "urologia"
+        | "otra"
+      estado_folio: "activo" | "cancelado" | "completado"
+      estado_traspaso: "pendiente" | "aprobado" | "rechazado" | "completado"
+      genero: "masculino" | "femenino"
+      tipo_anestesia: "general" | "regional" | "local" | "sedacion"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -932,20 +798,19 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["auxiliar", "almacenista", "lider", "supervisor", "gerente"],
-      especialidad_medica: ["anestesiologo", "cirujano"],
-      estado_folio: ["activo", "cancelado"],
-      estado_traspaso: ["pendiente", "completado", "rechazado"],
-      genero: ["M", "F", "Otro"],
-      origen_insumo: ["LOAD", "Prestado"],
-      tipo_anestesia: [
-        "general_balanceada_adulto",
-        "general_balanceada_pediatrica",
-        "general_alta_especialidad",
-        "general_endovenosa",
-        "locorregional",
-        "sedacion",
+      app_role: ["gerente", "supervisor", "lider", "almacenista", "auxiliar"],
+      especialidad_medica: [
+        "anestesiologia",
+        "cirugia_general",
+        "traumatologia",
+        "ginecologia",
+        "urologia",
+        "otra",
       ],
+      estado_folio: ["activo", "cancelado", "completado"],
+      estado_traspaso: ["pendiente", "aprobado", "rechazado", "completado"],
+      genero: ["masculino", "femenino"],
+      tipo_anestesia: ["general", "regional", "local", "sedacion"],
     },
   },
 } as const

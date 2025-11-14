@@ -216,7 +216,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         `,
         )
         .eq("tipo_anestesia", tipoDb)
-        .order("orden", { ascending: true });
+        .order("orden", { ascending: true }) as { data: any[] | null; error: any };
 
       if (error) throw error;
 

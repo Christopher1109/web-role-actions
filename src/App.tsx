@@ -15,6 +15,7 @@ import Traspasos from './pages/Traspasos';
 import Usuarios from './pages/Usuarios';
 import SetupData from './pages/SetupData';
 import AutoSetup from './pages/AutoSetup';
+import ImportSetup from './pages/ImportSetup';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -72,6 +73,7 @@ const AppContent = () => {
                 <Route path="/usuarios" element={<Usuarios />} />
                 <Route path="/setup" element={<SetupData />} />
                 <Route path="/auto-setup" element={<AutoSetup />} />
+                <Route path="/import-setup" element={<ImportSetup />} />
               </>
             )}
             <Route path="/auth" element={<Navigate to="/dashboard" replace />} />

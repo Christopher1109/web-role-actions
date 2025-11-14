@@ -1,53 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useHospital } from '@/contexts/HospitalContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, FileSpreadsheet, Calendar } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { generateAnexoT29, generateAnexoT30 } from '@/utils/excelExport';
 
 const Reportes = () => {
+  const { selectedHospital } = useHospital();
   const [t29FechaInicio, setT29FechaInicio] = useState('');
   const [t29FechaFin, setT29FechaFin] = useState('');
   const [t30FechaInicio, setT30FechaInicio] = useState('');
   const [t30FechaFin, setT30FechaFin] = useState('');
+  const [folios, setFolios] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Datos de ejemplo - en producción vendrían de la BD
-  const mockFolios = [
-    {
-      numeroFolio: 'F-2024-001',
-      fechaHora: '2024-11-07',
-      paciente: { nombre: 'Juan Pérez García', edad: 45, genero: 'M' },
-      cirugia: 'Apendicectomía',
-      tipoAnestesia: 'general_balanceada_adulto',
-      cirujano: 'Dr. Martínez López',
-      anestesiologo: 'Dra. García Ruiz',
-      unidad: 'Unidad Central',
-      estado: 'activo',
-      insumosUtilizados: [
-        { nombre: 'Propofol 200mg', lote: 'LOT-2024-A123', cantidad: 2 },
-        { nombre: 'Fentanilo 500mcg', lote: 'LOT-2024-B456', cantidad: 1 },
-      ],
-    },
-    {
-      numeroFolio: 'F-2024-002',
-      fechaHora: '2024-11-07',
-      paciente: { nombre: 'María González Torres', edad: 32, genero: 'F' },
-      cirugia: 'Cesárea',
-      tipoAnestesia: 'locorregional',
-      cirujano: 'Dra. Hernández Díaz',
-      anestesiologo: 'Dr. Ramírez Castro',
-      unidad: 'Unidad Sur',
-      estado: 'activo',
-      insumosUtilizados: [
-        { nombre: 'Lidocaína 2%', lote: 'LOT-2024-D012', cantidad: 2 },
-        { nombre: 'Fentanilo 500mcg', lote: 'LOT-2024-B456', cantidad: 1 },
-      ],
-    },
-  ];
+  useEffect(() => {
+    if (selectedHospital) {
+      fetchFolios();
+    }
+  }, [selectedHospital]);
+
+  const fetchFolios = async () => {
+    if (!selectedHospital) return;
+    
+    try {
+      setLoading(true);
+      const { data, error } = await (supabase as any)
+        .from('folios')
+        .select('*')
+        .eq('hospital_budget_code', selectedHospital.budget_code)
+        .order('fecha', { ascending: false });
+
+      if (error) throw error;
+      setFolios((data as any[]) || []);
+    } catch (error: any) {
+      toast.error('Error al cargar folios', {
+        description: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDownloadT29 = () => {
+    if (!selectedHospital) {
+      toast.error('Debes seleccionar un hospital para continuar');
+      return;
+    }
+    
     if (!t29FechaInicio || !t29FechaFin) {
       toast.error('Selecciona el periodo', {
         description: 'Debes indicar fecha de inicio y fin',
@@ -63,7 +68,11 @@ const Reportes = () => {
     }
 
     try {
-      generateAnexoT29(mockFolios, t29FechaInicio, t29FechaFin);
+      const foliosFiltrados = folios.filter(f => {
+        const fecha = new Date(f.fecha);
+        return fecha >= new Date(t29FechaInicio) && fecha <= new Date(t29FechaFin);
+      });
+      generateAnexoT29(foliosFiltrados, t29FechaInicio, t29FechaFin);
       toast.success('Anexo T29 generado', {
         description: 'El archivo se descargó correctamente',
       });
@@ -73,6 +82,11 @@ const Reportes = () => {
   };
 
   const handleDownloadT30 = () => {
+    if (!selectedHospital) {
+      toast.error('Debes seleccionar un hospital para continuar');
+      return;
+    }
+    
     if (!t30FechaInicio || !t30FechaFin) {
       toast.error('Selecciona el periodo', {
         description: 'Debes indicar fecha de inicio y fin',
@@ -88,7 +102,11 @@ const Reportes = () => {
     }
 
     try {
-      generateAnexoT30(mockFolios, t30FechaInicio, t30FechaFin);
+      const foliosFiltrados = folios.filter(f => {
+        const fecha = new Date(f.fecha);
+        return fecha >= new Date(t30FechaInicio) && fecha <= new Date(t30FechaFin);
+      });
+      generateAnexoT30(foliosFiltrados, t30FechaInicio, t30FechaFin);
       toast.success('Anexo T30 generado', {
         description: 'El archivo se descargó correctamente',
       });
@@ -96,6 +114,24 @@ const Reportes = () => {
       toast.error('Error al generar reporte');
     }
   };
+
+  if (!selectedHospital) {
+    return (
+      <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-foreground">Reportes</h1>
+        <p className="text-muted-foreground">
+          Generación de anexos T29 y T30 - {selectedHospital.display_name}
+        </p>
+      </div>
+        <Alert>
+          <AlertDescription>
+            Debes seleccionar un hospital para generar reportes.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

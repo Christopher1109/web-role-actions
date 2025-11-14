@@ -15,6 +15,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { supabase } from '@/integrations/supabase/client';
+import { useHospital } from '@/contexts/HospitalContext';
 import { toast } from 'sonner';
 
 interface Insumo {
@@ -41,30 +42,20 @@ export function InsumoCombobox({
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [insumosPermitidos, setInsumosPermitidos] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const { selectedHospital } = useHospital();
 
   // Cargar insumos disponibles y los permitidos para este tipo de anestesia
   useEffect(() => {
     const fetchData = async () => {
+      if (!selectedHospital) return;
+      
       setLoading(true);
       try {
-        // Obtener insumos del hospital del usuario
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        // Obtener hospital_id del usuario
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('hospital_id')
-          .eq('id', user.id)
-          .single();
-
-        if (!profile?.hospital_id) return;
-
         // Obtener insumos disponibles con stock > 0
-        const { data: insumosData, error: insumosError } = await supabase
+        const { data: insumosData, error: insumosError } = await (supabase as any)
           .from('insumos')
           .select('id, nombre, lote, cantidad')
-          .eq('hospital_id', profile.hospital_id)
+          .eq('hospital_budget_code', selectedHospital.budget_code)
           .gt('cantidad', 0)
           .order('nombre');
 
@@ -97,7 +88,7 @@ export function InsumoCombobox({
     };
 
     fetchData();
-  }, [tipoAnestesia]);
+  }, [selectedHospital, tipoAnestesia]);
 
   // Filtrar insumos según permisos de tipo de anestesia
   const insumosFiltrados = tipoAnestesia && insumosPermitidos.length > 0

@@ -210,14 +210,35 @@ const Traspasos = () => {
   const pendientes = traspasos.filter(t => t.estado === 'pendiente').length;
   const completados = traspasos.filter(t => t.estado === 'completado').length;
 
+  if (!selectedHospital) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Traspasos entre Hospitales</h1>
+          <p className="text-muted-foreground">Gestión de movimientos de inventario</p>
+        </div>
+        <Alert>
+          <AlertDescription>
+            Debes seleccionar un hospital para ver y gestionar los traspasos.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Traspasos entre Unidades</h1>
-          <p className="text-muted-foreground">Gestión de movimientos de inventario</p>
+          <h1 className="text-3xl font-bold text-foreground">Traspasos entre Hospitales</h1>
+          <p className="text-muted-foreground">
+            Gestión de movimientos de inventario - {selectedHospital.display_name}
+          </p>
         </div>
-        <Button className="gap-2" onClick={() => setShowForm(true)}>
+        <Button 
+          className="gap-2" 
+          onClick={() => setShowForm(true)}
+        >
           <Plus className="h-4 w-4" />
           Nuevo Traspaso
         </Button>
@@ -244,11 +265,11 @@ const Traspasos = () => {
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Unidades</CardTitle>
+            <CardTitle className="text-sm font-medium">Total</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">4</div>
-            <p className="text-xs text-muted-foreground">unidades activas</p>
+            <div className="text-2xl font-bold">{traspasos.length}</div>
+            <p className="text-xs text-muted-foreground">traspasos registrados</p>
           </CardContent>
         </Card>
       </div>
@@ -283,9 +304,15 @@ const Traspasos = () => {
                             </div>
                             
                             <div className="flex items-center gap-3 text-sm">
-                              <span className="font-medium">{traspaso.unidad_origen}</span>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{traspaso.hospital_display_name_origen || traspaso.unidad_origen}</span>
+                                <span className="text-xs text-muted-foreground">{traspaso.state_name_origen}</span>
+                              </div>
                               <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                              <span className="font-medium">{traspaso.unidad_destino}</span>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{traspaso.hospital_display_name_destino || traspaso.unidad_destino}</span>
+                                <span className="text-xs text-muted-foreground">{traspaso.state_name_destino}</span>
+                              </div>
                             </div>
 
                             <div className="rounded-lg bg-muted/50 p-3">
@@ -350,30 +377,6 @@ const Traspasos = () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Unidades del Sistema</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {['Unidad Central', 'Unidad Norte', 'Unidad Sur', 'Unidad Este'].map((unidad) => (
-              <div key={unidad} className="rounded-lg border p-4">
-                <h4 className="font-semibold">{unidad}</h4>
-                <p className="text-sm text-muted-foreground">Stock disponible</p>
-                <Button 
-                  variant="link" 
-                  size="sm" 
-                  className="h-auto p-0"
-                  onClick={() => handleVerInventario(unidad)}
-                >
-                  Ver inventario →
-                </Button>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <TraspasoForm 
@@ -390,8 +393,8 @@ const Traspasos = () => {
               <h3 className="text-lg font-semibold">Detalle del Traspaso</h3>
               <div className="space-y-2 text-sm">
                 <p><span className="font-medium">Fecha:</span> {new Date(selectedTraspaso.created_at).toLocaleDateString()}</p>
-                <p><span className="font-medium">Origen:</span> {selectedTraspaso.unidad_origen}</p>
-                <p><span className="font-medium">Destino:</span> {selectedTraspaso.unidad_destino}</p>
+                <p><span className="font-medium">Origen:</span> {selectedTraspaso.hospital_display_name_origen || selectedTraspaso.unidad_origen}</p>
+                <p><span className="font-medium">Destino:</span> {selectedTraspaso.hospital_display_name_destino || selectedTraspaso.unidad_destino}</p>
                 <p><span className="font-medium">Estado:</span> {selectedTraspaso.estado}</p>
                 {selectedTraspaso.motivo_rechazo && (
                   <p><span className="font-medium">Motivo:</span> {selectedTraspaso.motivo_rechazo}</p>

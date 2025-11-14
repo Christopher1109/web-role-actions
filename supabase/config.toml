@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.import-and-setup]
 verify_jwt = false
+
+[functions.fix-users]
+verify_jwt = false

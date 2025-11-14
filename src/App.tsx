@@ -16,6 +16,7 @@ import Usuarios from './pages/Usuarios';
 import SetupData from './pages/SetupData';
 import AutoSetup from './pages/AutoSetup';
 import ImportSetup from './pages/ImportSetup';
+import FixUsers from './pages/FixUsers';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -40,6 +41,7 @@ const AppContent = () => {
     return (
       <Routes>
         <Route path="/auto-setup" element={<AutoSetup />} />
+        <Route path="/fix-users" element={<FixUsers />} />
         <Route path="*" element={<Auth />} />
       </Routes>
     );
@@ -74,6 +76,7 @@ const AppContent = () => {
                 <Route path="/setup" element={<SetupData />} />
                 <Route path="/auto-setup" element={<AutoSetup />} />
                 <Route path="/import-setup" element={<ImportSetup />} />
+                <Route path="/fix-users" element={<FixUsers />} />
               </>
             )}
             <Route path="/auth" element={<Navigate to="/dashboard" replace />} />

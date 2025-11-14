@@ -18,6 +18,22 @@ export interface Hospital {
 }
 
 /**
+ * Estructura de un registro de la tabla `users`
+ */
+interface UserRow {
+  id: number;
+  username: string;
+  role: string;
+  state_name?: string | null;
+  hospital_budget_code?: string | null;
+  hospital_display_name?: string | null;
+  assigned_hospitals?: string | null;
+  supervisor_group?: number | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
  * Valores expuestos por el contexto de hospitales
  */
 interface HospitalContextType {
@@ -108,11 +124,11 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
 
         // 2) TODOS LOS DEMÁS ROLES → obtenemos su fila en la tabla `users`
         // userId aquí debe ser el username, por ejemplo 'almacenista_baja_california_31'
-        const { data: userRow, error: userError } = await supabase
+        const { data: userRow, error: userError } = await (supabase as any)
           .from("users")
           .select("*")
           .eq("username", userId)
-          .maybeSingle();
+          .maybeSingle() as { data: UserRow | null; error: any };
 
         if (userError) {
           console.error("Error fetching user from users table:", userError);
@@ -130,7 +146,7 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
 
         // 2a) SUPERVISOR → lista de hospitales en `assigned_hospitals`
         if (userRole === "supervisor") {
-          const assigned = (userRow.assigned_hospitals || "") as string;
+          const assigned = userRow.assigned_hospitals || "";
 
           const hospitalNames = assigned
             .split(",")
@@ -144,11 +160,11 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
             return;
           }
 
-          const { data: hospitalsData, error: hospitalsError } = await supabase
+          const { data: hospitalsData, error: hospitalsError } = await (supabase as any)
             .from("hospitales")
             .select("*")
             .in("display_name", hospitalNames)
-            .order("nombre");
+            .order("nombre") as { data: any[] | null; error: any };
 
           if (hospitalsError) {
             console.error("Error fetching supervisor hospitals:", hospitalsError);
@@ -168,8 +184,8 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
         }
 
         // 2b) ROLES DE UN SOLO HOSPITAL → almacenista, lider, auxiliar
-        const budgetCode = userRow.hospital_budget_code as string | null;
-        const displayName = userRow.hospital_display_name as string | null;
+        const budgetCode = userRow.hospital_budget_code || null;
+        const displayName = userRow.hospital_display_name || null;
 
         if (!budgetCode || !displayName) {
           console.warn("Usuario de un solo hospital sin hospital_budget_code/display_name en users");
@@ -179,11 +195,11 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
         }
 
         // Buscamos el hospital por budget_code
-        const { data: hospitalData, error: hospitalError } = await supabase
+        const { data: hospitalData, error: hospitalError } = await (supabase as any)
           .from("hospitales")
           .select("*")
           .eq("budget_code", budgetCode)
-          .maybeSingle();
+          .maybeSingle() as { data: any | null; error: any };
 
         let hospital: Hospital;
 
@@ -192,13 +208,13 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
           // fallback: crear hospital "virtual" desde users
           hospital = {
             id: "",
-            nombre: displayName,
+            nombre: displayName || "",
             state_name: userRow.state_name || "",
-            budget_code: budgetCode,
+            budget_code: budgetCode || "",
             hospital_type: "",
             clinic_number: "",
             locality: "",
-            display_name: displayName,
+            display_name: displayName || "",
             codigo: "",
             estado_id: "",
           };
@@ -206,13 +222,13 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
           // Sin match exacto en hospitales → fallback igual
           hospital = {
             id: "",
-            nombre: displayName,
+            nombre: displayName || "",
             state_name: userRow.state_name || "",
-            budget_code: budgetCode,
+            budget_code: budgetCode || "",
             hospital_type: "",
             clinic_number: "",
             locality: "",
-            display_name: displayName,
+            display_name: displayName || "",
             codigo: "",
             estado_id: "",
           };

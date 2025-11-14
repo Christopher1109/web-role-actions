@@ -14,6 +14,7 @@ import {
   Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { HospitalSelector } from '@/components/HospitalSelector';
 
 interface SidebarProps {
   userRole: UserRole;
@@ -54,13 +55,14 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
       </div>
       
       <div className="flex-1 overflow-y-auto px-3 py-4">
-        <div className="mb-6 rounded-lg bg-sidebar-accent p-3">
+        <div className="mb-4 rounded-lg bg-sidebar-accent p-3">
           <p className="text-xs text-sidebar-accent-foreground/70">Usuario actual</p>
           <p className="font-semibold text-sidebar-accent-foreground">{roleLabels[userRole]}</p>
         </div>
 
-        <nav className="space-y-1">
-          {filteredMenuItems.map((item) => {
+        <HospitalSelector />
+
+        <nav className="space-y-1 mt-4">{filteredMenuItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <Link

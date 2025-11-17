@@ -19,6 +19,7 @@ import AutoSetup from './pages/AutoSetup';
 import ImportSetup from './pages/ImportSetup';
 import FixUsers from './pages/FixUsers';
 import GenerateCredentials from './pages/GenerateCredentials';
+import PopulateInsumos from './pages/PopulateInsumos';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -81,6 +82,7 @@ const AppContent = () => {
                   <Route path="/import-setup" element={<ImportSetup />} />
                   <Route path="/fix-users" element={<FixUsers />} />
                   <Route path="/generate-credentials" element={<GenerateCredentials />} />
+                  <Route path="/populate-insumos" element={<PopulateInsumos />} />
                 </>
               )}
               <Route path="/auth" element={<Navigate to="/dashboard" replace />} />

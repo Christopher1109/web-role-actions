@@ -40,13 +40,14 @@ type FolioInsumo = {
  * para reflejar el nombre exacto en la BD.
  */
 const tipoAnestesiaToDb: Record<string, string> = {
-  sedacion: "Sedación / Cuidados anestésicos monitoreados",
-  loco_regional: "Anestesia Loco Regional",
-  general_balanceada_adulto: "Anestesia General Balanceada Adulto",
-  general_balanceada_pediatrica: "Anestesia General Balanceada Pediátrica",
-  general_endovenosa: "Anestesia General Endovenosa",
-  alta_especialidad: "Anestesia General de Alta Especialidad",
-  alta_especialidad_trasplante: "Anestesia de Alta Especialidad en Trasplante Renal",
+  sedacion: "sedacion",
+  loco_regional: "locorregional",
+  general_balanceada_adulto: "general_balanceada_adulto",
+  general_balanceada_pediatrica: "general_balanceada_pediatrica",
+  general_endovenosa: "general_endovenosa",
+  alta_especialidad: "general_alta_especialidad",
+  alta_especialidad_trasplante: "general_alta_especialidad",
+  anestesia_mixta: "anestesia_mixta",
 };
 
 const tiposAnestesia = [

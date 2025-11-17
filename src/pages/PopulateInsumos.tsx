@@ -48,10 +48,15 @@ export default function PopulateInsumos() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="bg-muted p-4 rounded-lg">
-            <h3 className="font-semibold mb-2">Archivos a procesar:</h3>
+            <h3 className="font-semibold mb-2">7 Tipos de Anestesia a procesar:</h3>
             <ul className="text-sm space-y-1 ml-4 list-disc">
-              <li>sedacion.xlsx</li>
-              <li>loco regional.xlsx</li>
+              <li>Anestesia General Balanceada Adulto</li>
+              <li>Anestesia General Balanceada Pediátrica</li>
+              <li>Anestesia General Endovenosa</li>
+              <li>Anestesia General de Alta Especialidad</li>
+              <li>Anestesia de Alta Especialidad en Trasplante Renal</li>
+              <li>Sedación</li>
+              <li>Loco Regional</li>
             </ul>
             <p className="text-sm text-muted-foreground mt-3">
               El proceso creará los insumos que no existan y asociará cada uno con su tipo de anestesia correspondiente.

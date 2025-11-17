@@ -191,6 +191,40 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   }, []);
 
   /**
+   * Combina insumos de dos anestesias en modo mixta.
+   * Si un insumo está en ambas, suma las cantidades.
+   * Muestra hasta 10 insumos (5 de cada tipo).
+   */
+  const combinarInsumosAnestesiaMixta = (principal: Insumo[], secundaria: Insumo[]) => {
+    const insumosMap = new Map<string, FolioInsumo>();
+    
+    // Agregar los primeros 5 de la principal
+    principal.slice(0, 5).forEach((insumo) => {
+      insumosMap.set(insumo.id, {
+        insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
+        cantidad: insumo.cantidad,
+      });
+    });
+    
+    // Agregar los primeros 5 de la secundaria (o sumar si ya existe)
+    secundaria.slice(0, 5).forEach((insumo) => {
+      const existing = insumosMap.get(insumo.id);
+      if (existing) {
+        // Si ya existe, sumar la cantidad
+        existing.cantidad += insumo.cantidad;
+      } else {
+        // Si no existe, agregarlo
+        insumosMap.set(insumo.id, {
+          insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
+          cantidad: insumo.cantidad,
+        });
+      }
+    });
+    
+    setInsumosFolio(Array.from(insumosMap.values()));
+  };
+
+  /**
    * Carga los insumos de una anestesia específica. Utiliza el mapa
    * tipoAnestesiaToDb para traducir el slug del select al nombre real de
    * la tabla `anestesia_insumos`.  Elimina el requisito de budget_code
@@ -238,13 +272,24 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   // Efecto: cuando cambia 'tipoAnestesia' en modo normal
   useEffect(() => {
     const loadInsumosForAnestesia = async () => {
-      // No hacer nada si no hay tipo o es mixta
-      if (!tipoAnestesia || tipoAnestesia === "anestesia_mixta") return;
+      // Limpiar al cambiar o si no hay tipo
+      if (!tipoAnestesia) {
+        setInsumosDisponibles([]);
+        setInsumosFolio([]);
+        return;
+      }
+      
+      if (tipoAnestesia === "anestesia_mixta") {
+        // Si es mixta, limpiar y esperar a que se seleccionen los dos tipos
+        setInsumosDisponibles([]);
+        setInsumosFolio([]);
+        return;
+      }
 
       const insumosData = await loadInsumosForTipo(tipoAnestesia);
       setInsumosDisponibles(insumosData);
 
-      // Preseleccionar los primeros 5 insumos básicos
+      // REEMPLAZAR con los primeros 5 insumos básicos
       const preselected = insumosData.slice(0, 5).map((insumo) => ({
         insumo: {
           id: insumo.id,
@@ -267,17 +312,18 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       const insumosData = await loadInsumosForTipo(anestesiaPrincipal);
       setInsumosDisponiblesPrincipal(insumosData);
 
-      // Preselecciona 5 y los agrega si no están
-      const preselected = insumosData.slice(0, 5).map((insumo) => ({
-        insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
-        cantidad: insumo.cantidad,
-      }));
-
-      setInsumosFolio((prev) => {
-        const existingIds = new Set(prev.map((i) => i.insumo.id));
-        const newInsumos = preselected.filter((i) => !existingIds.has(i.insumo.id));
-        return [...prev, ...newInsumos];
-      });
+      // Si ya hay secundaria, recombinar ambas
+      if (anestesiaSecundaria) {
+        const secundariaData = await loadInsumosForTipo(anestesiaSecundaria);
+        combinarInsumosAnestesiaMixta(insumosData, secundariaData);
+      } else {
+        // Solo principal, mostrar sus 5 insumos
+        const preselected = insumosData.slice(0, 5).map((insumo) => ({
+          insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
+          cantidad: insumo.cantidad,
+        }));
+        setInsumosFolio(preselected);
+      }
     };
 
     loadInsumosPrincipal();
@@ -291,17 +337,18 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       const insumosData = await loadInsumosForTipo(anestesiaSecundaria);
       setInsumosDisponiblesSecundaria(insumosData);
 
-      // Preselecciona 5 y agrega si no están
-      const preselected = insumosData.slice(0, 5).map((insumo) => ({
-        insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
-        cantidad: insumo.cantidad,
-      }));
-
-      setInsumosFolio((prev) => {
-        const existingIds = new Set(prev.map((i) => i.insumo.id));
-        const newInsumos = preselected.filter((i) => !existingIds.has(i.insumo.id));
-        return [...prev, ...newInsumos];
-      });
+      // Si ya hay principal, recombinar ambas
+      if (anestesiaPrincipal) {
+        const principalData = await loadInsumosForTipo(anestesiaPrincipal);
+        combinarInsumosAnestesiaMixta(principalData, insumosData);
+      } else {
+        // Solo secundaria, mostrar sus 5 insumos
+        const preselected = insumosData.slice(0, 5).map((insumo) => ({
+          insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
+          cantidad: insumo.cantidad,
+        }));
+        setInsumosFolio(preselected);
+      }
     };
 
     loadInsumosSecundaria();
@@ -841,27 +888,27 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Lote</TableHead>
-                  <TableHead className="w-32">Cantidad</TableHead>
-                  <TableHead className="w-20"></TableHead>
+                  <TableHead className="py-2">Nombre</TableHead>
+                  <TableHead className="py-2">Lote</TableHead>
+                  <TableHead className="w-32 py-2">Cantidad</TableHead>
+                  <TableHead className="w-20 py-2"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {insumosFolio.map((fi) => (
                   <TableRow key={fi.insumo.id}>
-                    <TableCell>{fi.insumo.nombre}</TableCell>
-                    <TableCell>{fi.insumo.lote}</TableCell>
-                    <TableCell>
+                    <TableCell className="py-2">{fi.insumo.nombre}</TableCell>
+                    <TableCell className="py-2">{fi.insumo.lote}</TableCell>
+                    <TableCell className="py-2">
                       <Input
                         type="number"
                         min="1"
                         value={fi.cantidad}
                         onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
-                        className="w-20"
+                        className="w-20 h-8"
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-2">
                       <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveInsumo(fi.insumo.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>

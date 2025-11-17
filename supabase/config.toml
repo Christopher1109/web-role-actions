@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.generate-users-from-table]
 verify_jwt = false
+
+[functions.populate-all-insumos]
+verify_jwt = false

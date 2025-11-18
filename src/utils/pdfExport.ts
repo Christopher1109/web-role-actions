@@ -129,7 +129,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     [
       {
         content: "Proveedor:",
-        styles: { fillColor: headerBlue, fontStyle: "bold", halign: "left" },
+        styles: { fillColor: headerBlue, fontStyle: "bold" as const, halign: "left" as const },
       },
       {
         content: "CBH+ ESPECIALISTAS EN INNOVACIÓN MÉDICA S.A. DE C.V.",
@@ -142,15 +142,15 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     [
       {
         content: "Procedimiento Quirúrgico:",
-        styles: { fillColor: headerBlue, fontStyle: "bold", halign: "left" },
+        styles: { fillColor: headerBlue, fontStyle: "bold" as const, halign: "left" as const },
       },
       {
         content: folio.cirugia || "N/A",
-        styles: { halign: "left" },
+        styles: { halign: "left" as const },
       },
       {
         content: "Especialidad Quirúrgica:",
-        styles: { fillColor: headerBlue, fontStyle: "bold", halign: "left" },
+        styles: { fillColor: headerBlue, fontStyle: "bold" as const, halign: "left" as const },
       },
       {
         content: folio.especialidad_quirurgica || "N/A",
@@ -162,15 +162,15 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     [
       {
         content: "Tipo de Cirugía:",
-        styles: { fillColor: headerBlue, fontStyle: "bold", halign: "left" },
+        styles: { fillColor: headerBlue, fontStyle: "bold" as const, halign: "left" as const },
       },
       {
         content: folio.tipo_cirugia || "N/A",
-        styles: { halign: "left" },
+        styles: { halign: "left" as const },
       },
       {
         content: "Evento:",
-        styles: { fillColor: headerBlue, fontStyle: "bold", halign: "left" },
+        styles: { fillColor: headerBlue, fontStyle: "bold" as const, halign: "left" as const },
       },
       {
         content: folio.tipo_evento || "N/A",
@@ -182,15 +182,15 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     [
       {
         content: "Nombre del Cirujano:",
-        styles: { fillColor: headerBlue, fontStyle: "bold", halign: "left" },
+        styles: { fillColor: headerBlue, fontStyle: "bold" as const, halign: "left" as const },
       },
       {
         content: folio.cirujano_nombre || "N/A",
-        styles: { halign: "left" },
+        styles: { halign: "left" as const },
       },
       {
         content: "Nombre del Anestesiólogo:",
-        styles: { fillColor: headerBlue, fontStyle: "bold", halign: "left" },
+        styles: { fillColor: headerBlue, fontStyle: "bold" as const, halign: "left" as const },
       },
       {
         content: folio.anestesiologo_nombre || "N/A",

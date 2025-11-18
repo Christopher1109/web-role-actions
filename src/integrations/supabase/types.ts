@@ -56,55 +56,132 @@ export type Database = {
         Row: {
           anestesia_principal: string | null
           anestesia_secundaria: string | null
+          anestesiologo_id: string | null
+          anestesiologo_nombre: string | null
+          cancelado_por: string | null
+          cirugia: string | null
+          cirujano_id: string | null
+          cirujano_nombre: string | null
           created_at: string | null
+          especialidad_quirurgica: string | null
           estado: Database["public"]["Enums"]["estado_folio"] | null
           fecha: string | null
+          hora_fin_anestesia: string | null
+          hora_fin_procedimiento: string | null
+          hora_inicio_anestesia: string | null
+          hora_inicio_procedimiento: string | null
           hospital_budget_code: string | null
           hospital_display_name: string | null
           hospital_id: string | null
           id: string
           medico_id: string | null
           numero_folio: string
+          numero_quirofano: string | null
           observaciones: string | null
+          paciente_apellido_materno: string | null
+          paciente_apellido_paterno: string | null
+          paciente_edad: number | null
+          paciente_genero: string | null
+          paciente_nombre: string | null
+          paciente_nss: string | null
           state_name: string | null
           tipo_anestesia: string | null
+          tipo_cirugia: string | null
+          tipo_evento: string | null
+          unidad: string | null
           updated_at: string | null
         }
         Insert: {
           anestesia_principal?: string | null
           anestesia_secundaria?: string | null
+          anestesiologo_id?: string | null
+          anestesiologo_nombre?: string | null
+          cancelado_por?: string | null
+          cirugia?: string | null
+          cirujano_id?: string | null
+          cirujano_nombre?: string | null
           created_at?: string | null
+          especialidad_quirurgica?: string | null
           estado?: Database["public"]["Enums"]["estado_folio"] | null
           fecha?: string | null
+          hora_fin_anestesia?: string | null
+          hora_fin_procedimiento?: string | null
+          hora_inicio_anestesia?: string | null
+          hora_inicio_procedimiento?: string | null
           hospital_budget_code?: string | null
           hospital_display_name?: string | null
           hospital_id?: string | null
           id?: string
           medico_id?: string | null
           numero_folio: string
+          numero_quirofano?: string | null
           observaciones?: string | null
+          paciente_apellido_materno?: string | null
+          paciente_apellido_paterno?: string | null
+          paciente_edad?: number | null
+          paciente_genero?: string | null
+          paciente_nombre?: string | null
+          paciente_nss?: string | null
           state_name?: string | null
           tipo_anestesia?: string | null
+          tipo_cirugia?: string | null
+          tipo_evento?: string | null
+          unidad?: string | null
           updated_at?: string | null
         }
         Update: {
           anestesia_principal?: string | null
           anestesia_secundaria?: string | null
+          anestesiologo_id?: string | null
+          anestesiologo_nombre?: string | null
+          cancelado_por?: string | null
+          cirugia?: string | null
+          cirujano_id?: string | null
+          cirujano_nombre?: string | null
           created_at?: string | null
+          especialidad_quirurgica?: string | null
           estado?: Database["public"]["Enums"]["estado_folio"] | null
           fecha?: string | null
+          hora_fin_anestesia?: string | null
+          hora_fin_procedimiento?: string | null
+          hora_inicio_anestesia?: string | null
+          hora_inicio_procedimiento?: string | null
           hospital_budget_code?: string | null
           hospital_display_name?: string | null
           hospital_id?: string | null
           id?: string
           medico_id?: string | null
           numero_folio?: string
+          numero_quirofano?: string | null
           observaciones?: string | null
+          paciente_apellido_materno?: string | null
+          paciente_apellido_paterno?: string | null
+          paciente_edad?: number | null
+          paciente_genero?: string | null
+          paciente_nombre?: string | null
+          paciente_nss?: string | null
           state_name?: string | null
           tipo_anestesia?: string | null
+          tipo_cirugia?: string | null
+          tipo_evento?: string | null
+          unidad?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "folios_anestesiologo_id_fkey"
+            columns: ["anestesiologo_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folios_cirujano_id_fkey"
+            columns: ["cirujano_id"]
+            isOneToOne: false
+            referencedRelation: "medicos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "folios_hospital_id_fkey"
             columns: ["hospital_id"]

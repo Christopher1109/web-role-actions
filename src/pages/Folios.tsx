@@ -66,18 +66,48 @@ const Folios = ({ userRole }: FoliosProps) => {
         return;
       }
 
+      // Generar número de folio automático basado en conteo de folios del hospital
+      const { count, error: countError } = await supabase
+        .from('folios')
+        .select('*', { count: 'exact', head: true })
+        .eq('hospital_budget_code', selectedHospital.budget_code);
+
+      if (countError) throw countError;
+
+      const numeroFolio = `${selectedHospital.budget_code}-${String((count || 0) + 1).padStart(6, '0')}`;
+
       // Insertar el folio con todos los campos del T33
       const { data: folioData, error: folioError } = await (supabase as any)
         .from('folios')
         .insert({
-          numero_folio: data.numeroFolio,
+          numero_folio: numeroFolio,
           state_name: selectedHospital.state_name,
           hospital_budget_code: selectedHospital.budget_code,
           hospital_display_name: selectedHospital.display_name,
+          hospital_id: selectedHospital.id,
+          unidad: data.unidad,
+          numero_quirofano: data.numeroQuirofano,
+          hora_inicio_procedimiento: data.inicioProcedimiento,
+          hora_fin_procedimiento: data.finProcedimiento,
+          hora_inicio_anestesia: data.inicioAnestesia,
+          hora_fin_anestesia: data.finAnestesia,
+          paciente_apellido_paterno: data.pacienteApellidoPaterno,
+          paciente_apellido_materno: data.pacienteApellidoMaterno,
+          paciente_nombre: data.pacienteNombre,
+          paciente_nss: data.pacienteNSS,
+          paciente_edad: data.pacienteEdad,
+          paciente_genero: data.pacienteGenero,
+          cirugia: data.procedimientoQuirurgico,
+          especialidad_quirurgica: data.especialidadQuirurgica,
+          tipo_cirugia: data.tipoCirugia,
+          tipo_evento: data.tipoEvento,
           tipo_anestesia: data.tipo_anestesia,
           anestesia_principal: data.anestesiaPrincipal || null,
           anestesia_secundaria: data.anestesiaSecundaria || null,
-          medico_id: data.anestesiologo || null,
+          cirujano_id: data.cirujano || null,
+          anestesiologo_id: data.anestesiologo || null,
+          cirujano_nombre: data.cirujanoNombre || null,
+          anestesiologo_nombre: data.anestesiologoNombre || null,
           observaciones: data.observaciones || null,
           estado: 'activo',
         })

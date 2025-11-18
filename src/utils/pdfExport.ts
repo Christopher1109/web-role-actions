@@ -2,11 +2,7 @@ import jsPDF from "jspdf";
 import autoTable, { RowInput } from "jspdf-autotable";
 import cbMedicaLogo from "@/assets/cb-medica-logo.jpg";
 
-export const generateFolioPDF = (
-  folio: any,
-  insumos: any[],
-  tiposAnestesiaLabels: Record<string, string>
-) => {
+export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabels: Record<string, string>) => {
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
   const headerBlue: [number, number, number] = [210, 225, 245];
@@ -42,12 +38,9 @@ export const generateFolioPDF = (
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(
-    'Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"',
-    105,
-    33,
-    { align: "center" }
-  );
+  doc.text('Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"', 105, 33, {
+    align: "center",
+  });
 
   let yPos = 40;
 
@@ -203,7 +196,7 @@ export const generateFolioPDF = (
 
   yPos = (doc as any).lastAutoTable.finalY + 4;
 
-  // 4) TITULO "DATOS DEL PACIENTE" COMO RENGLÓN
+  // 4) TÍTULO "DATOS DEL PACIENTE"
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -240,7 +233,7 @@ export const generateFolioPDF = (
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
     tableWidth: CONTENT_WIDTH,
-    head: [["Apellido paterno", "Apellido materno", "Nombre(s)", "Género", "Edad", "NSS"]]],
+    head: [["Apellido paterno", "Apellido materno", "Nombre(s)", "Género", "Edad", "NSS"]],
     body: [
       [
         folio.paciente_apellido_paterno || "N/A",
@@ -272,7 +265,7 @@ export const generateFolioPDF = (
 
   yPos = (doc as any).lastAutoTable.finalY + 4;
 
-  // 5) TITULO "Productividad de Procedimientos" COMO RENGLÓN
+  // 5) TÍTULO "Productividad de Procedimientos"
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -349,7 +342,7 @@ export const generateFolioPDF = (
 
   yPos = (doc as any).lastAutoTable.finalY + 4;
 
-  // 6) TITULO "Bienes de consumo" COMO RENGLÓN
+  // 6) TÍTULO "Bienes de consumo"
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -449,7 +442,6 @@ export const generateFolioPDF = (
     bodyStyles: {
       textColor: [0, 0, 0],
     },
-    // <- aquí forzamos que ambos recuadros midan exactamente la mitad
     columnStyles: {
       0: { cellWidth: firmaColWidth },
       1: { cellWidth: firmaColWidth },
@@ -458,4 +450,3 @@ export const generateFolioPDF = (
 
   doc.save(`Folio_T33_${folio.numero_folio}.pdf`);
 };
-

@@ -742,7 +742,13 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "gerente" | "supervisor" | "lider" | "almacenista" | "auxiliar"
+      app_role:
+        | "gerente"
+        | "supervisor"
+        | "lider"
+        | "almacenista"
+        | "auxiliar"
+        | "gerente_operaciones"
       especialidad_medica:
         | "anestesiologia"
         | "cirugia_general"
@@ -880,7 +886,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["gerente", "supervisor", "lider", "almacenista", "auxiliar"],
+      app_role: [
+        "gerente",
+        "supervisor",
+        "lider",
+        "almacenista",
+        "auxiliar",
+        "gerente_operaciones",
+      ],
       especialidad_medica: [
         "anestesiologia",
         "cirugia_general",

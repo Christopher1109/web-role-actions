@@ -67,7 +67,7 @@ export type Database = {
           numero_folio: string
           observaciones: string | null
           state_name: string | null
-          tipo_anestesia: Database["public"]["Enums"]["tipo_anestesia"] | null
+          tipo_anestesia: string | null
           updated_at: string | null
         }
         Insert: {
@@ -84,7 +84,7 @@ export type Database = {
           numero_folio: string
           observaciones?: string | null
           state_name?: string | null
-          tipo_anestesia?: Database["public"]["Enums"]["tipo_anestesia"] | null
+          tipo_anestesia?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -101,7 +101,7 @@ export type Database = {
           numero_folio?: string
           observaciones?: string | null
           state_name?: string | null
-          tipo_anestesia?: Database["public"]["Enums"]["tipo_anestesia"] | null
+          tipo_anestesia?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -353,7 +353,7 @@ export type Database = {
           id: string
           nombre: string
           state_name: string | null
-          tipo: Database["public"]["Enums"]["tipo_anestesia"]
+          tipo: string
           updated_at: string | null
         }
         Insert: {
@@ -364,7 +364,7 @@ export type Database = {
           id?: string
           nombre: string
           state_name?: string | null
-          tipo: Database["public"]["Enums"]["tipo_anestesia"]
+          tipo: string
           updated_at?: string | null
         }
         Update: {
@@ -375,7 +375,7 @@ export type Database = {
           id?: string
           nombre?: string
           state_name?: string | null
-          tipo?: Database["public"]["Enums"]["tipo_anestesia"]
+          tipo?: string
           updated_at?: string | null
         }
         Relationships: []
@@ -670,7 +670,6 @@ export type Database = {
       estado_folio: "activo" | "cancelado" | "completado"
       estado_traspaso: "pendiente" | "aprobado" | "rechazado" | "completado"
       genero: "masculino" | "femenino"
-      tipo_anestesia: "general" | "regional" | "local" | "sedacion"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -810,7 +809,6 @@ export const Constants = {
       estado_folio: ["activo", "cancelado", "completado"],
       estado_traspaso: ["pendiente", "aprobado", "rechazado", "completado"],
       genero: ["masculino", "femenino"],
-      tipo_anestesia: ["general", "regional", "local", "sedacion"],
     },
   },
 } as const

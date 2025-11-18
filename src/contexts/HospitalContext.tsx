@@ -103,9 +103,13 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
       try {
         setLoading(true);
 
-        // 1) GERENTE DE OPERACIONES → ve todos los hospitales
+        // 1) GERENTE DE OPERACIONES → ve todos los hospitales ordenados por estado
         if (userRole === "gerente_operaciones" || userRole === "gerente") {
-          const { data: allHospitals, error } = await supabase.from("hospitales").select("*").order("nombre");
+          const { data: allHospitals, error } = await supabase
+            .from("hospitales")
+            .select("*, states(name)")
+            .order("states(name)", { ascending: true })
+            .order("nombre", { ascending: true });
 
           if (error) {
             console.error("Error loading hospitals for manager:", error);
@@ -114,7 +118,19 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
             return;
           }
 
-          const hospitals: Hospital[] = (allHospitals || []).map(mapHospital);
+          const hospitals: Hospital[] = (allHospitals || []).map((h: any) => ({
+            ...mapHospital(h),
+            state_name: h.states?.name || ""
+          }));
+          
+          // Ordenar por state_name y luego por display_name en el frontend
+          hospitals.sort((a, b) => {
+            if (a.state_name !== b.state_name) {
+              return a.state_name.localeCompare(b.state_name);
+            }
+            return a.display_name.localeCompare(b.display_name);
+          });
+          
           setAvailableHospitals(hospitals);
           if (hospitals.length > 0) {
             setSelectedHospital(hospitals[0]);

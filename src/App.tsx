@@ -61,20 +61,20 @@ const AppContent = () => {
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard userRole={userRole} />} />
-              {(userRole === 'auxiliar' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente') && (
+              {(userRole === 'auxiliar' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <Route path="/folios" element={<Folios userRole={userRole} />} />
               )}
-              {(userRole === 'almacenista' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente') && (
+              {(userRole === 'almacenista' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <Route path="/insumos" element={<Insumos />} />
               )}
-              {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente') && (
+              {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>
                   <Route path="/medicos" element={<Medicos />} />
                   <Route path="/paquetes" element={<Paquetes />} />
                   <Route path="/reportes" element={<Reportes />} />
                 </>
               )}
-              {userRole === 'gerente' && (
+              {(userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>
                   <Route path="/traspasos" element={<Traspasos />} />
                   <Route path="/usuarios" element={<Usuarios />} />

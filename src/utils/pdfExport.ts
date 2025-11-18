@@ -3,32 +3,28 @@ import autoTable, { RowInput } from "jspdf-autotable";
 import cbMedicaLogo from "@/assets/cb-medica-logo.jpg";
 
 export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabels: Record<string, string>) => {
-  // Doc A4 en mm
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-  // Colores T33
   const headerBlue: [number, number, number] = [210, 225, 245];
   const lightGray: [number, number, number] = [230, 230, 230];
 
-  // Márgenes y ancho útil (todos los cuadros usan esto)
   const MARGIN_LEFT = 14;
   const MARGIN_RIGHT = 14;
   const PAGE_WIDTH = doc.internal.pageSize.getWidth();
   const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 
-  // MISMO ancho de columnas para tabla 1 y 2
   const firstBlockColumnStyles: Record<number, any> = {
-    0: { cellWidth: 30 }, // OOAD / Número de quirófano
+    0: { cellWidth: 30 },
     1: { cellWidth: 38 },
     2: { cellWidth: 38 },
     3: { cellWidth: 38 },
-    4: { cellWidth: 38 }, // 30 + 38*4 = 182 = CONTENT_WIDTH
+    4: { cellWidth: 38 },
   };
 
-  // Logo CB Médica
+  // Logo
   doc.addImage(cbMedicaLogo, "JPEG", MARGIN_LEFT, 10, 30, 15);
 
-  // ENCABEZADO INSTITUCIONAL
+  // ENCABEZADO
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
@@ -48,9 +44,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
 
   let yPos = 40;
 
-  // =========================
   // 1) OOAD / Unidad / Contrato / Fecha / Folio
-  // =========================
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -87,9 +81,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
 
   yPos = (doc as any).lastAutoTable.finalY;
 
-  // =========================
   // 2) Quirófano + Horas
-  // =========================
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -129,15 +121,12 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
       textColor: [0, 0, 0],
       halign: "center",
     },
-    // MISMAS columnas que la tabla 1
     columnStyles: firstBlockColumnStyles,
   });
 
   yPos = (doc as any).lastAutoTable.finalY + 2;
 
-  // =========================================================
   // 3) PROVEEDOR / PROCEDIMIENTO / ESPECIALIDAD / EVENTO
-  // =========================================================
   const proveedorTableBody: RowInput[] = [
     [
       {
@@ -207,14 +196,39 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
 
   yPos = (doc as any).lastAutoTable.finalY + 4;
 
-  // =========================
-  // 4) DATOS DEL PACIENTE
-  // =========================
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.text("DATOS DEL PACIENTE", 105, yPos, { align: "center" });
-  yPos += 2;
+  // 4) TITULO "DATOS DEL PACIENTE" COMO RENGLÓN
+  autoTable(doc, {
+    startY: yPos,
+    margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
+    tableWidth: CONTENT_WIDTH,
+    body: [
+      [
+        {
+          content: "DATOS DEL PACIENTE",
+          colSpan: 6,
+          styles: {
+            fillColor: headerBlue,
+            fontStyle: "bold",
+            halign: "left",
+          },
+        },
+      ],
+    ],
+    theme: "grid",
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2,
+      fontSize: 9,
+    },
+    bodyStyles: {
+      textColor: [0, 0, 0],
+    },
+  });
 
+  yPos = (doc as any).lastAutoTable.finalY;
+
+  // 4) TABLA DE DATOS DEL PACIENTE
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -249,16 +263,41 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     },
   });
 
-  yPos = (doc as any).lastAutoTable.finalY + 6;
+  yPos = (doc as any).lastAutoTable.finalY + 4;
 
-  // =========================
-  // 5) PRODUCTIVIDAD DE PROCEDIMIENTOS
-  // =========================
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.text("Productividad de Procedimientos:", MARGIN_LEFT, yPos);
-  yPos += 2;
+  // 5) TITULO "Productividad de Procedimientos" COMO RENGLÓN
+  autoTable(doc, {
+    startY: yPos,
+    margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
+    tableWidth: CONTENT_WIDTH,
+    body: [
+      [
+        {
+          content: "Productividad de Procedimientos",
+          colSpan: 6,
+          styles: {
+            fillColor: headerBlue,
+            fontStyle: "bold",
+            halign: "left",
+          },
+        },
+      ],
+    ],
+    theme: "grid",
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2,
+      fontSize: 9,
+    },
+    bodyStyles: {
+      textColor: [0, 0, 0],
+    },
+  });
 
+  yPos = (doc as any).lastAutoTable.finalY;
+
+  // 5) TABLA PRODUCTIVIDAD
   const tipoAnestesiaDisplay = folio.tipo_anestesia
     ? tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia
     : "N/A";
@@ -303,14 +342,39 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
 
   yPos = (doc as any).lastAutoTable.finalY + 4;
 
-  // =========================
-  // 6) BIENES DE CONSUMO
-  // =========================
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.text("Bienes de consumo", MARGIN_LEFT, yPos);
-  yPos += 2;
+  // 6) TITULO "Bienes de consumo" COMO RENGLÓN
+  autoTable(doc, {
+    startY: yPos,
+    margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
+    tableWidth: CONTENT_WIDTH,
+    body: [
+      [
+        {
+          content: "Bienes de consumo",
+          colSpan: 4,
+          styles: {
+            fillColor: headerBlue,
+            fontStyle: "bold",
+            halign: "left",
+          },
+        },
+      ],
+    ],
+    theme: "grid",
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2,
+      fontSize: 9,
+    },
+    bodyStyles: {
+      textColor: [0, 0, 0],
+    },
+  });
 
+  yPos = (doc as any).lastAutoTable.finalY;
+
+  // 6) TABLA BIENES DE CONSUMO
   const insumosBody = insumos.map((insumo, index) => [
     (index + 1).toString(),
     insumo.nombre_catalogo || insumo.nombre || insumo.descripcion || "N/A",
@@ -348,9 +412,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
 
   yPos = (doc as any).lastAutoTable.finalY + 6;
 
-  // =========================
   // 7) FIRMAS
-  // =========================
   if (yPos > 240) {
     doc.addPage();
     yPos = 30;

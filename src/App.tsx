@@ -14,6 +14,7 @@ import Paquetes from './pages/Paquetes';
 import Reportes from './pages/Reportes';
 import Traspasos from './pages/Traspasos';
 import Usuarios from './pages/Usuarios';
+import ExportUsers from './pages/ExportUsers';
 import SetupData from './pages/SetupData';
 import AutoSetup from './pages/AutoSetup';
 import ImportSetup from './pages/ImportSetup';
@@ -77,6 +78,7 @@ const AppContent = () => {
                 <>
                   <Route path="/traspasos" element={<Traspasos />} />
                   <Route path="/usuarios" element={<Usuarios />} />
+                  <Route path="/export-users" element={<ExportUsers />} />
                   <Route path="/setup" element={<SetupData />} />
                   <Route path="/auto-setup" element={<AutoSetup />} />
                   <Route path="/import-setup" element={<ImportSetup />} />

@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.delete-and-recreate-users]
 verify_jwt = false
+
+[functions.create-gerente-operaciones]
+verify_jwt = false

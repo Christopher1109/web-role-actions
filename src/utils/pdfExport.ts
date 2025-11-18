@@ -3,44 +3,46 @@ import autoTable from "jspdf-autotable";
 import cbMedicaLogo from "@/assets/cb-medica-logo.jpg";
 
 export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabels: Record<string, string>) => {
-  const doc = new jsPDF();
+  const doc = new jsPDF("p", "mm", "a4");
 
-  // Colores IMSS
+  // Configuración general
+  const pageMarginLeft = 14;
+  const pageMarginRight = 14;
+  const contentWidth = doc.internal.pageSize.getWidth() - pageMarginLeft - pageMarginRight;
   const lightGray: [number, number, number] = [230, 230, 230];
-  const black: [number, number, number] = [0, 0, 0];
 
-  // Márgenes unificados para TODAS las tablas
-  const tableMargin = { top: 0, right: 14, bottom: 0, left: 14 };
+  // Logo
+  doc.addImage(cbMedicaLogo, "JPEG", pageMarginLeft, 10, 30, 15);
 
-  // Logo CB Médica
-  doc.addImage(cbMedicaLogo, "JPEG", 14, 10, 30, 15);
-
-  // ENCABEZADO
+  // Encabezado institucional
   doc.setTextColor(0, 0, 0);
-  doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text("INSTITUTO MEXICANO DEL SEGURO SOCIAL", 105, 15, { align: "center" });
+  doc.setFontSize(12);
+  doc.text("INSTITUTO MEXICANO DEL SEGURO SOCIAL", doc.internal.pageSize.getWidth() / 2, 15, { align: "center" });
 
   doc.setFontSize(11);
-  doc.text("SEGURIDAD Y SOLIDARIDAD SOCIAL", 105, 21, { align: "center" });
+  doc.text("SEGURIDAD Y SOLIDARIDAD SOCIAL", doc.internal.pageSize.getWidth() / 2, 21, { align: "center" });
 
   doc.setFontSize(10);
-  doc.text('"SERVICIO MÉDICO INTEGRAL PARA ANESTESIA"', 105, 27, { align: "center" });
+  doc.text('"SERVICIO MÉDICO INTEGRAL PARA ANESTESIA"', doc.internal.pageSize.getWidth() / 2, 27, { align: "center" });
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text('Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"', 105, 33, {
-    align: "center",
-  });
+  doc.text(
+    'Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"',
+    doc.internal.pageSize.getWidth() / 2,
+    33,
+    { align: "center" },
+  );
 
   let yPos = 40;
 
   // =========================
-  // SECCIÓN 1: OOAD / Unidad / Contrato / Fecha / Folio
+  // 1) OOAD / Unidad / Contrato / Fecha / Folio
   // =========================
   autoTable(doc, {
     startY: yPos,
-    margin: tableMargin,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
     head: [["OOAD/UMAE:", "Unidad Médica:", "No. de contrato:", "Fecha:", "No. de folio:"]],
     body: [
       [
@@ -65,39 +67,40 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
       ],
     ],
     theme: "grid",
+    tableWidth: contentWidth,
     headStyles: {
       fillColor: lightGray,
-      textColor: black,
+      textColor: [0, 0, 0],
       fontStyle: "bold",
       fontSize: 8,
       halign: "left",
     },
     bodyStyles: {
       fontSize: 8,
-      textColor: black,
+      textColor: [0, 0, 0],
     },
     styles: {
-      lineColor: black,
+      lineColor: [0, 0, 0],
       lineWidth: 0.3,
       cellPadding: 2,
     },
     columnStyles: {
-      0: { cellWidth: 35 },
-      1: { cellWidth: 45 },
-      2: { cellWidth: 35 },
-      3: { cellWidth: 35 },
-      4: { cellWidth: 32 },
+      0: { cellWidth: contentWidth * 0.18 },
+      1: { cellWidth: contentWidth * 0.24 },
+      2: { cellWidth: contentWidth * 0.18 },
+      3: { cellWidth: contentWidth * 0.2 },
+      4: { cellWidth: contentWidth * 0.2 },
     },
   });
 
   yPos = (doc as any).lastAutoTable.finalY + 1;
 
   // =========================
-  // SECCIÓN 2: Horarios y quirófano
+  // 2) Horarios y Quirófano
   // =========================
   autoTable(doc, {
     startY: yPos,
-    margin: tableMargin,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
     head: [
       [
         "Número de Quirófano",
@@ -153,125 +156,171 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
       ],
     ],
     theme: "grid",
+    tableWidth: contentWidth,
     headStyles: {
       fillColor: lightGray,
-      textColor: black,
+      textColor: [0, 0, 0],
       fontStyle: "bold",
       fontSize: 7,
       halign: "center",
     },
     bodyStyles: {
       fontSize: 7,
-      textColor: black,
+      textColor: [0, 0, 0],
       halign: "center",
     },
     styles: {
-      lineColor: black,
-      lineWidth: 0.3,
-      cellPadding: 2,
-    },
-  });
-
-  yPos = (doc as any).lastAutoTable.finalY + 3;
-
-  // =========================
-  // SECCIÓN 3: Proveedor y procedimiento (en tabla con bordes)
-  // =========================
-  autoTable(doc, {
-    startY: yPos,
-    margin: tableMargin,
-    body: [
-      ["Proveedor:", "CBH+ ESPECIALISTAS EN INNOVACIÓN MÉDICA S.A. DE C.V."],
-      ["Procedimiento Quirúrgico:", folio.cirugia || "N/A"],
-      ["Especialidad Quirúrgica:", folio.especialidad_quirurgica || "N/A"],
-      ["Tipo de Cirugía:", folio.tipo_cirugia || "N/A"],
-      ["Evento:", folio.tipo_evento || "N/A"],
-      ["Nombre del Cirujano:", folio.cirujano_nombre || "N/A"],
-      ["Nombre del Anestesiólogo:", folio.anestesiologo_nombre || "N/A"],
-    ],
-    theme: "grid",
-    bodyStyles: {
-      fontSize: 8,
-      textColor: black,
-    },
-    styles: {
-      lineColor: black,
+      lineColor: [0, 0, 0],
       lineWidth: 0.3,
       cellPadding: 2,
     },
     columnStyles: {
-      0: { cellWidth: 45, fontStyle: "bold" },
+      0: { cellWidth: contentWidth * 0.12 },
+      1: { cellWidth: contentWidth * 0.22 },
+      2: { cellWidth: contentWidth * 0.22 },
+      3: { cellWidth: contentWidth * 0.22 },
+      4: { cellWidth: contentWidth * 0.22 },
     },
   });
 
   yPos = (doc as any).lastAutoTable.finalY + 4;
 
   // =========================
-  // SECCIÓN 4: Datos del paciente
+  // 3) Proveedor / Procedimiento / Especialidad / Tipo / Evento / Nombres
   // =========================
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  doc.text("DATOS DEL PACIENTE", 14, yPos);
-  yPos += 2;
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
 
+  const drawFullWidthLabelValue = (label: string, value: string) => {
+    autoTable(doc, {
+      startY: yPos,
+      margin: { left: pageMarginLeft, right: pageMarginRight },
+      theme: "grid",
+      tableWidth: contentWidth,
+      head: [[`${label}`]],
+      body: [[value || "N/A"]],
+      headStyles: {
+        fillColor: lightGray,
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+        fontSize: 8,
+        halign: "left",
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: [0, 0, 0],
+      },
+      styles: {
+        lineColor: [0, 0, 0],
+        lineWidth: 0.3,
+        cellPadding: 2,
+      },
+      columnStyles: {
+        0: { cellWidth: contentWidth },
+      },
+    });
+    yPos = (doc as any).lastAutoTable.finalY;
+  };
+
+  drawFullWidthLabelValue("Proveedor:", "CBH+ ESPECIALISTAS EN INNOVACIÓN MÉDICA S.A. DE C.V.");
+  drawFullWidthLabelValue("Procedimiento Quirúrgico:", folio.cirugia || "N/A");
+  drawFullWidthLabelValue("Especialidad Quirúrgica:", folio.especialidad_quirurgica || "N/A");
+  drawFullWidthLabelValue("Tipo de Cirugía:", folio.tipo_cirugia || "N/A");
+  drawFullWidthLabelValue("Evento:", folio.tipo_evento || "N/A");
+  drawFullWidthLabelValue("Nombre del Cirujano:", folio.cirujano_nombre || "N/A");
+  drawFullWidthLabelValue("Nombre del Anestesiólogo:", folio.anestesiologo_nombre || "N/A");
+
+  yPos = (doc as any).lastAutoTable.finalY + 4;
+
+  // =========================
+  // 4) Datos del paciente (barra gris + fila)
+  // =========================
+
+  // Barra "DATOS DEL PACIENTE"
   autoTable(doc, {
     startY: yPos,
-    margin: tableMargin,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
+    head: [["DATOS DEL PACIENTE"]],
+    body: [],
+    theme: "grid",
+    tableWidth: contentWidth,
+    headStyles: {
+      fillColor: lightGray,
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      fontSize: 9,
+      halign: "left",
+    },
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2,
+    },
+  });
+
+  yPos = (doc as any).lastAutoTable.finalY;
+
+  // Fila con 6 columnas
+  autoTable(doc, {
+    startY: yPos,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
+    theme: "grid",
+    tableWidth: contentWidth,
     head: [["Apellido paterno", "Apellido materno", "Nombre(s)", "Género", "Edad", "NSS"]],
     body: [
       [
-        folio.paciente_apellido_paterno || "",
-        folio.paciente_apellido_materno || "",
-        folio.paciente_nombre || "",
-        folio.paciente_genero || "",
-        folio.paciente_edad?.toString() || "",
-        folio.paciente_nss || "",
+        folio.paciente_apellido_paterno || "N/A",
+        folio.paciente_apellido_materno || "N/A",
+        folio.paciente_nombre || "N/A",
+        folio.paciente_genero || "N/A",
+        folio.paciente_edad?.toString() || "N/A",
+        folio.paciente_nss || "N/A",
       ],
     ],
-    theme: "grid",
     headStyles: {
       fillColor: lightGray,
-      textColor: black,
+      textColor: [0, 0, 0],
       fontStyle: "bold",
       fontSize: 8,
       halign: "center",
     },
     bodyStyles: {
       fontSize: 8,
-      textColor: black,
-      halign: "center",
+      textColor: [0, 0, 0],
     },
     styles: {
-      lineColor: black,
+      lineColor: [0, 0, 0],
       lineWidth: 0.3,
       cellPadding: 2,
     },
     columnStyles: {
-      0: { cellWidth: 30 },
-      1: { cellWidth: 30 },
-      2: { cellWidth: 45 },
-      3: { cellWidth: 20 },
-      4: { cellWidth: 15 },
-      5: { cellWidth: 30 },
+      0: { cellWidth: contentWidth * 0.2 },
+      1: { cellWidth: contentWidth * 0.2 },
+      2: { cellWidth: contentWidth * 0.22 },
+      3: { cellWidth: contentWidth * 0.13 },
+      4: { cellWidth: contentWidth * 0.1 },
+      5: { cellWidth: contentWidth * 0.15 },
     },
   });
 
   yPos = (doc as any).lastAutoTable.finalY + 4;
 
   // =========================
-  // SECCIÓN 5: Productividad de procedimientos
+  // 5) Productividad de Procedimientos
   // =========================
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  doc.text("Productividad de Procedimientos:", 14, yPos);
-  yPos += 2;
+  const tipoAnestesiaDisplay = folio.tipo_anestesia
+    ? tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia
+    : "N/A";
 
-  const tipoAnestesiaDisplay =
-    folio.tipo_anestesia && (tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("Productividad de Procedimientos:", pageMarginLeft, yPos - 1);
 
   autoTable(doc, {
     startY: yPos,
-    margin: tableMargin,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
+    theme: "grid",
+    tableWidth: contentWidth,
     head: [
       [
         "No.",
@@ -282,125 +331,127 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
         "Importe (Con IVA)",
       ],
     ],
-    body: [["1", folio.clave_procedimiento || "N/A", tipoAnestesiaDisplay || "N/A", folio.cirugia || "N/A", "", ""]],
-    theme: "grid",
+    body: [["1", "N/A", tipoAnestesiaDisplay, folio.cirugia || "N/A", "", ""]],
     headStyles: {
       fillColor: lightGray,
-      textColor: black,
+      textColor: [0, 0, 0],
       fontStyle: "bold",
       fontSize: 7,
       halign: "center",
     },
     bodyStyles: {
       fontSize: 7,
-      textColor: black,
-    },
-    columnStyles: {
-      0: { cellWidth: 10, halign: "center" },
-      1: { cellWidth: 25 },
-      2: { cellWidth: 45 },
-      3: { cellWidth: 60 },
-      4: { cellWidth: 21, halign: "right" },
-      5: { cellWidth: 21, halign: "right" },
+      textColor: [0, 0, 0],
     },
     styles: {
-      lineColor: black,
+      lineColor: [0, 0, 0],
       lineWidth: 0.3,
       cellPadding: 2,
+    },
+    columnStyles: {
+      0: { cellWidth: contentWidth * 0.06, halign: "center" },
+      1: { cellWidth: contentWidth * 0.16 },
+      2: { cellWidth: contentWidth * 0.22 },
+      3: { cellWidth: contentWidth * 0.26 },
+      4: { cellWidth: contentWidth * 0.15, halign: "right" },
+      5: { cellWidth: contentWidth * 0.15, halign: "right" },
     },
   });
 
   yPos = (doc as any).lastAutoTable.finalY + 4;
 
   // =========================
-  // SECCIÓN 6: Bienes de consumo
+  // 6) Bienes de consumo
   // =========================
-  doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text("Bienes de Consumo:", 14, yPos);
-  yPos += 2;
+  doc.setFontSize(9);
+  doc.text("Bienes de Consumo:", pageMarginLeft, yPos - 1);
 
-  // Para cada insumo:
-  // - "Bienes de consumo" = nombre de catálogo / técnico
-  // - "Descripción" = nombre corto / comercial / común si existe
   const insumosBody = insumos.map((insumo, index) => {
-    const catalogName = insumo.nombre_catalogo || insumo.nombre || insumo.descripcion || "N/A";
+    const nombreCatalogo = insumo.descripcion || insumo.nombre || "N/A";
 
-    const shortName =
+    const nombreCorto =
+      insumo.nombre_comun ||
       insumo.nombre_corto ||
       insumo.descripcion_corta ||
-      insumo.nombre_comun ||
-      insumo.descripcion ||
-      insumo.nombre ||
-      "N/A";
+      insumo.nombre_simple ||
+      insumo.nombre_abreviado ||
+      nombreCatalogo;
 
-    return [(index + 1).toString(), catalogName, shortName, `${insumo.cantidad} (PIEZA)`];
+    return [(index + 1).toString(), nombreCatalogo, nombreCorto, `${insumo.cantidad} (PIEZA)`];
   });
 
   autoTable(doc, {
     startY: yPos,
-    margin: tableMargin,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
+    theme: "grid",
+    tableWidth: contentWidth,
     head: [["No.", "Bienes de consumo", "Descripción", "Cantidad"]],
     body: insumosBody,
-    theme: "grid",
     headStyles: {
       fillColor: lightGray,
-      textColor: black,
+      textColor: [0, 0, 0],
       fontStyle: "bold",
       fontSize: 8,
       halign: "center",
     },
     bodyStyles: {
       fontSize: 7,
-      textColor: black,
-    },
-    columnStyles: {
-      0: { cellWidth: 10, halign: "center" },
-      1: { cellWidth: 70 },
-      2: { cellWidth: 70 },
-      3: { cellWidth: 25, halign: "center" },
+      textColor: [0, 0, 0],
     },
     styles: {
-      lineColor: black,
+      lineColor: [0, 0, 0],
       lineWidth: 0.3,
       cellPadding: 2,
+    },
+    columnStyles: {
+      0: { cellWidth: contentWidth * 0.06, halign: "center" },
+      1: { cellWidth: contentWidth * 0.42 },
+      2: { cellWidth: contentWidth * 0.32 },
+      3: { cellWidth: contentWidth * 0.2, halign: "center" },
     },
   });
 
   yPos = (doc as any).lastAutoTable.finalY + 8;
 
   // =========================
-  // SECCIÓN FINAL: Firmas (tabla con recuadro y 2 columnas)
+  // 7) Cuadro de firmas (Médico / Técnico)
   // =========================
+  if (yPos > 240) {
+    doc.addPage();
+    yPos = 30;
+  }
+
   autoTable(doc, {
     startY: yPos,
-    margin: tableMargin,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
+    theme: "grid",
+    tableWidth: contentWidth,
     head: [["MÉDICO QUE REALIZÓ EL PROCEDIMIENTO (FIRMA Y MATRÍCULA)", "TÉCNICO (NOMBRE Y FIRMA)"]],
     body: [["", ""]],
-    theme: "grid",
     headStyles: {
       fillColor: lightGray,
-      textColor: black,
+      textColor: [0, 0, 0],
       fontStyle: "bold",
       fontSize: 8,
       halign: "center",
     },
     bodyStyles: {
       fontSize: 8,
-      textColor: black,
-      minCellHeight: 20,
-    },
-    columnStyles: {
-      0: { cellWidth: 91 },
-      1: { cellWidth: 91 },
+      textColor: [0, 0, 0],
+      minCellHeight: 25,
     },
     styles: {
-      lineColor: black,
+      lineColor: [0, 0, 0],
       lineWidth: 0.3,
       cellPadding: 2,
     },
+    columnStyles: {
+      0: { cellWidth: contentWidth * 0.5 },
+      1: { cellWidth: contentWidth * 0.5 },
+    },
   });
 
-  // Guardar PDF
+  // Guardar
   doc.save(`Folio_T33_${folio.numero_folio}.pdf`);
 };

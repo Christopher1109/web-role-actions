@@ -321,7 +321,17 @@ const Folios = ({ userRole }: FoliosProps) => {
                                   )
                                 `)
                                 .eq('folio_id', folio.id);
-                              generateFolioPDF(folio, insumosData || [], tiposAnestesiaLabels);
+                              
+                              // Aplanar la estructura de datos para el PDF
+                              const insumosFlat = (insumosData || []).map((item: any) => ({
+                                nombre: item.insumos?.nombre || '',
+                                descripcion: item.insumos?.descripcion || '',
+                                lote: item.insumos?.lote || '',
+                                clave: item.insumos?.clave || '',
+                                cantidad: item.cantidad
+                              }));
+                              
+                              generateFolioPDF(folio, insumosFlat, tiposAnestesiaLabels);
                             }}
                           >
                             <Download className="h-4 w-4" />

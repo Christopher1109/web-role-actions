@@ -2,7 +2,11 @@ import jsPDF from "jspdf";
 import autoTable, { RowInput } from "jspdf-autotable";
 import cbMedicaLogo from "@/assets/cb-medica-logo.jpg";
 
-export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabels: Record<string, string>) => {
+export const generateFolioPDF = (
+  folio: any,
+  insumos: any[],
+  tiposAnestesiaLabels: Record<string, string>
+) => {
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
   const headerBlue: [number, number, number] = [210, 225, 245];
@@ -38,9 +42,12 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text('Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"', 105, 33, {
-    align: "center",
-  });
+  doc.text(
+    'Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"',
+    105,
+    33,
+    { align: "center" }
+  );
 
   let yPos = 40;
 
@@ -233,7 +240,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
     tableWidth: CONTENT_WIDTH,
-    head: [["Apellido paterno", "Apellido materno", "Nombre(s)", "Género", "Edad", "NSS"]],
+    head: [["Apellido paterno", "Apellido materno", "Nombre(s)", "Género", "Edad", "NSS"]]],
     body: [
       [
         folio.paciente_apellido_paterno || "N/A",
@@ -418,6 +425,8 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     yPos = 30;
   }
 
+  const firmaColWidth = CONTENT_WIDTH / 2;
+
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -440,7 +449,13 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     bodyStyles: {
       textColor: [0, 0, 0],
     },
+    // <- aquí forzamos que ambos recuadros midan exactamente la mitad
+    columnStyles: {
+      0: { cellWidth: firmaColWidth },
+      1: { cellWidth: firmaColWidth },
+    },
   });
 
   doc.save(`Folio_T33_${folio.numero_folio}.pdf`);
 };
+

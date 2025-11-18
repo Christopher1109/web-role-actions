@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import autoTable, { RowInput } from "jspdf-autotable";
+import autoTable, { RowInput, CellDef } from "jspdf-autotable";
 import cbMedicaLogo from "@/assets/cb-medica-logo.jpg";
 
 export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabels: Record<string, string>) => {

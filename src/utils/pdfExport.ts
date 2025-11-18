@@ -11,7 +11,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   const contentWidth = doc.internal.pageSize.getWidth() - pageMarginLeft - pageMarginRight;
   const lightGray: [number, number, number] = [230, 230, 230];
 
-  // Logo
+  // Logo CB Médica
   doc.addImage(cbMedicaLogo, "JPEG", pageMarginLeft, 10, 30, 15);
 
   // Encabezado institucional
@@ -29,7 +29,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.text(
-    'Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"',
+    'Anexo T 33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"',
     doc.internal.pageSize.getWidth() / 2,
     33,
     { align: "center" },
@@ -46,24 +46,13 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     head: [["OOAD/UMAE:", "Unidad Médica:", "No. de contrato:", "Fecha:", "No. de folio:"]],
     body: [
       [
-        folio.state_name || "N/A",
-        folio.hospital_display_name || "N/A",
-        folio.hospital_budget_code || "N/A",
+        folio.state_name || "",
+        folio.hospital_display_name || "",
+        folio.hospital_budget_code || "",
         folio.fecha
-          ? new Date(
-              folio.fecha +
-                "T" +
-                (folio.created_at ? new Date(folio.created_at).toTimeString().slice(0, 8) : "00:00:00"),
-            ).toLocaleString("es-MX", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })
-          : "N/A",
-        folio.numero_folio || "N/A",
+          ? new Date(folio.fecha).toLocaleDateString("es-MX")
+          : "",
+        folio.numero_folio || "",
       ],
     ],
     theme: "grid",
@@ -84,75 +73,30 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
       lineWidth: 0.3,
       cellPadding: 2,
     },
-    columnStyles: {
-      0: { cellWidth: contentWidth * 0.18 },
-      1: { cellWidth: contentWidth * 0.24 },
-      2: { cellWidth: contentWidth * 0.18 },
-      3: { cellWidth: contentWidth * 0.2 },
-      4: { cellWidth: contentWidth * 0.2 },
-    },
   });
 
-  yPos = (doc as any).lastAutoTable.finalY + 1;
+  yPos = (doc as any).lastAutoTable.finalY;
 
   // =========================
-  // 2) Horarios y Quirófano
+  // 2) Horarios - Primera fila
   // =========================
   autoTable(doc, {
     startY: yPos,
     margin: { left: pageMarginLeft, right: pageMarginRight },
     head: [
       [
-        "Número de Quirófano",
-        "Hora de Inicio del Procedimiento Quirúrgico",
-        "Hora de la finalización del Procedimiento Quirúrgico",
+        "Hora de Inicio del Procedimiento",
+        "Hora de la finalización del Procedimiento",
         "Hora de inicio de la Anestesia",
         "Hora de finalización de la Anestesia",
       ],
     ],
     body: [
       [
-        folio.numero_quirofano || "N/A",
-        folio.hora_inicio_procedimiento && folio.fecha
-          ? new Date(`${folio.fecha}T${folio.hora_inicio_procedimiento}`).toLocaleString("es-MX", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })
-          : "N/A",
-        folio.hora_fin_procedimiento && folio.fecha
-          ? new Date(`${folio.fecha}T${folio.hora_fin_procedimiento}`).toLocaleString("es-MX", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })
-          : "N/A",
-        folio.hora_inicio_anestesia && folio.fecha
-          ? new Date(`${folio.fecha}T${folio.hora_inicio_anestesia}`).toLocaleString("es-MX", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })
-          : "N/A",
-        folio.hora_fin_anestesia && folio.fecha
-          ? new Date(`${folio.fecha}T${folio.hora_fin_anestesia}`).toLocaleString("es-MX", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })
-          : "N/A",
+        folio.hora_inicio_procedimiento || "",
+        folio.hora_fin_procedimiento || "",
+        folio.hora_inicio_anestesia || "",
+        folio.hora_fin_anestesia || "",
       ],
     ],
     theme: "grid",
@@ -174,69 +118,147 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
       lineWidth: 0.3,
       cellPadding: 2,
     },
+  });
+
+  yPos = (doc as any).lastAutoTable.finalY;
+
+  // =========================
+  // 3) Quirófano y Procedimiento - Segunda fila
+  // =========================
+  autoTable(doc, {
+    startY: yPos,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
+    head: [["Número de Quirófano", "Procedimiento Quirúrgico"]],
+    body: [[folio.numero_quirofano || "", folio.cirugia || ""]],
+    theme: "grid",
+    tableWidth: contentWidth,
+    headStyles: {
+      fillColor: lightGray,
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      fontSize: 8,
+      halign: "center",
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [0, 0, 0],
+      halign: "center",
+    },
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2,
+    },
     columnStyles: {
-      0: { cellWidth: contentWidth * 0.12 },
-      1: { cellWidth: contentWidth * 0.22 },
-      2: { cellWidth: contentWidth * 0.22 },
-      3: { cellWidth: contentWidth * 0.22 },
-      4: { cellWidth: contentWidth * 0.22 },
+      0: { cellWidth: contentWidth * 0.3 },
+      1: { cellWidth: contentWidth * 0.7 },
     },
   });
 
-  yPos = (doc as any).lastAutoTable.finalY + 4;
+  yPos = (doc as any).lastAutoTable.finalY;
 
   // =========================
-  // 3) Proveedor / Procedimiento / Especialidad / Tipo / Evento / Nombres
+  // 4) Proveedor / Procedimiento / Especialidad / Tipo
   // =========================
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
+  autoTable(doc, {
+    startY: yPos,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
+    head: [["Proveedor:", "Procedimiento Quirúrgico:", "Especialidad Quirúrgica:", "Tipo de Cirugía"]],
+    body: [
+      [
+        "CBH+ ESPECIALISTAS EN INNOVACIÓN MÉDICA S.A. DE C.V.",
+        folio.cirugia || "",
+        folio.especialidad_quirurgica || "",
+        folio.tipo_cirugia || "",
+      ],
+    ],
+    theme: "grid",
+    tableWidth: contentWidth,
+    headStyles: {
+      fillColor: lightGray,
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      fontSize: 7,
+      halign: "left",
+    },
+    bodyStyles: {
+      fontSize: 7,
+      textColor: [0, 0, 0],
+    },
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2,
+    },
+  });
 
-  const drawFullWidthLabelValue = (label: string, value: string) => {
-    autoTable(doc, {
-      startY: yPos,
-      margin: { left: pageMarginLeft, right: pageMarginRight },
-      theme: "grid",
-      tableWidth: contentWidth,
-      head: [[`${label}`]],
-      body: [[value || "N/A"]],
-      headStyles: {
-        fillColor: lightGray,
-        textColor: [0, 0, 0],
-        fontStyle: "bold",
-        fontSize: 8,
-        halign: "left",
-      },
-      bodyStyles: {
-        fontSize: 8,
-        textColor: [0, 0, 0],
-      },
-      styles: {
-        lineColor: [0, 0, 0],
-        lineWidth: 0.3,
-        cellPadding: 2,
-      },
-      columnStyles: {
-        0: { cellWidth: contentWidth },
-      },
-    });
-    yPos = (doc as any).lastAutoTable.finalY;
-  };
-
-  drawFullWidthLabelValue("Proveedor:", "CBH+ ESPECIALISTAS EN INNOVACIÓN MÉDICA S.A. DE C.V.");
-  drawFullWidthLabelValue("Procedimiento Quirúrgico:", folio.cirugia || "N/A");
-  drawFullWidthLabelValue("Especialidad Quirúrgica:", folio.especialidad_quirurgica || "N/A");
-  drawFullWidthLabelValue("Tipo de Cirugía:", folio.tipo_cirugia || "N/A");
-  drawFullWidthLabelValue("Evento:", folio.tipo_evento || "N/A");
-  drawFullWidthLabelValue("Nombre del Cirujano:", folio.cirujano_nombre || "N/A");
-  drawFullWidthLabelValue("Nombre del Anestesiólogo:", folio.anestesiologo_nombre || "N/A");
-
-  yPos = (doc as any).lastAutoTable.finalY + 4;
+  yPos = (doc as any).lastAutoTable.finalY;
 
   // =========================
-  // 4) Datos del paciente (barra gris + fila)
+  // 5) Abierta/Mínima Invasión (fila adicional)
   // =========================
+  autoTable(doc, {
+    startY: yPos,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
+    body: [["Abierta/Mínima Invasión"]],
+    theme: "grid",
+    tableWidth: contentWidth,
+    bodyStyles: {
+      fillColor: lightGray,
+      fontSize: 8,
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      halign: "left",
+    },
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2,
+    },
+  });
 
-  // Barra "DATOS DEL PACIENTE"
+  yPos = (doc as any).lastAutoTable.finalY;
+
+  // =========================
+  // 6) Evento / Cirujano / Anestesiólogo
+  // =========================
+  autoTable(doc, {
+    startY: yPos,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
+    head: [["Evento", "Programado/ Urgencia", "Nombre del Cirujano", "Nombre del Anestesiólogo"]],
+    body: [
+      [
+        folio.tipo_evento || "",
+        folio.tipo_evento || "",
+        folio.cirujano_nombre || "",
+        folio.anestesiologo_nombre || "",
+      ],
+    ],
+    theme: "grid",
+    tableWidth: contentWidth,
+    headStyles: {
+      fillColor: lightGray,
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      fontSize: 8,
+      halign: "left",
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [0, 0, 0],
+    },
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2,
+    },
+  });
+
+  yPos = (doc as any).lastAutoTable.finalY + 2;
+
+  // =========================
+  // 7) DATOS DEL PACIENTE
+  // =========================
   autoTable(doc, {
     startY: yPos,
     margin: { left: pageMarginLeft, right: pageMarginRight },
@@ -249,7 +271,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
       textColor: [0, 0, 0],
       fontStyle: "bold",
       fontSize: 9,
-      halign: "left",
+      halign: "center",
     },
     styles: {
       lineColor: [0, 0, 0],
@@ -260,32 +282,34 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
 
   yPos = (doc as any).lastAutoTable.finalY;
 
-  // Fila con 6 columnas
+  // Datos del paciente - campos
+  const generoDisplay = folio.paciente_genero === "Femenino" ? "☑ Femenino  ☐ Masculino" : "☐ Femenino  ☑ Masculino";
+  
   autoTable(doc, {
     startY: yPos,
     margin: { left: pageMarginLeft, right: pageMarginRight },
-    theme: "grid",
-    tableWidth: contentWidth,
-    head: [["Apellido paterno", "Apellido materno", "Nombre(s)", "Género", "Edad", "NSS"]],
+    head: [["Apellido paterno:", "Apellido materno:", "Nombre(s):", "Género:", "Edad:", "NSS:"]],
     body: [
       [
-        folio.paciente_apellido_paterno || "N/A",
-        folio.paciente_apellido_materno || "N/A",
-        folio.paciente_nombre || "N/A",
-        folio.paciente_genero || "N/A",
-        folio.paciente_edad?.toString() || "N/A",
-        folio.paciente_nss || "N/A",
+        folio.paciente_apellido_paterno || "",
+        folio.paciente_apellido_materno || "",
+        folio.paciente_nombre || "",
+        generoDisplay,
+        folio.paciente_edad?.toString() || "",
+        folio.paciente_nss || "",
       ],
     ],
+    theme: "grid",
+    tableWidth: contentWidth,
     headStyles: {
       fillColor: lightGray,
       textColor: [0, 0, 0],
       fontStyle: "bold",
-      fontSize: 8,
+      fontSize: 7,
       halign: "center",
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 7,
       textColor: [0, 0, 0],
     },
     styles: {
@@ -293,45 +317,38 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
       lineWidth: 0.3,
       cellPadding: 2,
     },
-    columnStyles: {
-      0: { cellWidth: contentWidth * 0.2 },
-      1: { cellWidth: contentWidth * 0.2 },
-      2: { cellWidth: contentWidth * 0.22 },
-      3: { cellWidth: contentWidth * 0.13 },
-      4: { cellWidth: contentWidth * 0.1 },
-      5: { cellWidth: contentWidth * 0.15 },
-    },
   });
 
-  yPos = (doc as any).lastAutoTable.finalY + 4;
+  yPos = (doc as any).lastAutoTable.finalY + 3;
 
   // =========================
-  // 5) Productividad de Procedimientos
+  // 8) Productividad de Procedimientos
   // =========================
-  const tipoAnestesiaDisplay = folio.tipo_anestesia
-    ? tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia
-    : "N/A";
-
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.text("Productividad de Procedimientos:", pageMarginLeft, yPos - 1);
+  doc.text("Productividad de Procedimientos:", pageMarginLeft, yPos);
+  yPos += 2;
+
+  const tipoAnestesiaDisplay = folio.tipo_anestesia
+    ? tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia
+    : "";
 
   autoTable(doc, {
     startY: yPos,
     margin: { left: pageMarginLeft, right: pageMarginRight },
-    theme: "grid",
-    tableWidth: contentWidth,
     head: [
       [
         "No.",
-        "Clave del Procedimiento",
-        "Tipo de Procedimiento",
-        "Procedimiento Quirúrgico",
+        "Clave del Procedimiento(s)",
+        "Tipo de Procedimiento Quirúrgico",
+        "Procedimiento",
         "Precio Unitario (Sin IVA)",
         "Importe (Con IVA)",
       ],
     ],
-    body: [["1", "N/A", tipoAnestesiaDisplay, folio.cirugia || "N/A", "", ""]],
+    body: [["1", "", tipoAnestesiaDisplay, folio.cirugia || "", "", ""]],
+    theme: "grid",
+    tableWidth: contentWidth,
     headStyles: {
       fillColor: lightGray,
       textColor: [0, 0, 0],
@@ -350,44 +367,37 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     },
     columnStyles: {
       0: { cellWidth: contentWidth * 0.06, halign: "center" },
-      1: { cellWidth: contentWidth * 0.16 },
+      1: { cellWidth: contentWidth * 0.15 },
       2: { cellWidth: contentWidth * 0.22 },
-      3: { cellWidth: contentWidth * 0.26 },
-      4: { cellWidth: contentWidth * 0.15, halign: "right" },
-      5: { cellWidth: contentWidth * 0.15, halign: "right" },
+      3: { cellWidth: contentWidth * 0.22 },
+      4: { cellWidth: contentWidth * 0.175, halign: "right" },
+      5: { cellWidth: contentWidth * 0.175, halign: "right" },
     },
   });
 
-  yPos = (doc as any).lastAutoTable.finalY + 4;
+  yPos = (doc as any).lastAutoTable.finalY + 3;
 
   // =========================
-  // 6) Bienes de consumo
+  // 9) Bienes de consumo
   // =========================
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.text("Bienes de Consumo:", pageMarginLeft, yPos - 1);
+  doc.text("Bienes de consumo", pageMarginLeft, yPos);
+  yPos += 2;
 
-  const insumosBody = insumos.map((insumo, index) => {
-    const nombreCatalogo = insumo.descripcion || insumo.nombre || "N/A";
-
-    const nombreCorto =
-      insumo.nombre_comun ||
-      insumo.nombre_corto ||
-      insumo.descripcion_corta ||
-      insumo.nombre_simple ||
-      insumo.nombre_abreviado ||
-      nombreCatalogo;
-
-    return [(index + 1).toString(), nombreCatalogo, nombreCorto, `${insumo.cantidad} (PIEZA)`];
-  });
+  const bienesBody = insumos.map((insumo, index) => [
+    (index + 1).toString(),
+    insumo.descripcion || insumo.nombre || "",
+    insumo.cantidad.toString(),
+  ]);
 
   autoTable(doc, {
     startY: yPos,
     margin: { left: pageMarginLeft, right: pageMarginRight },
+    head: [["No.", "Descripción", "Cantidad"]],
+    body: bienesBody,
     theme: "grid",
     tableWidth: contentWidth,
-    head: [["No.", "Bienes de consumo", "Descripción", "Cantidad"]],
-    body: insumosBody,
     headStyles: {
       fillColor: lightGray,
       textColor: [0, 0, 0],
@@ -405,17 +415,57 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
       cellPadding: 2,
     },
     columnStyles: {
-      0: { cellWidth: contentWidth * 0.06, halign: "center" },
-      1: { cellWidth: contentWidth * 0.42 },
-      2: { cellWidth: contentWidth * 0.32 },
-      3: { cellWidth: contentWidth * 0.2, halign: "center" },
+      0: { cellWidth: contentWidth * 0.08, halign: "center" },
+      1: { cellWidth: contentWidth * 0.72 },
+      2: { cellWidth: contentWidth * 0.2, halign: "center" },
     },
   });
 
-  yPos = (doc as any).lastAutoTable.finalY + 8;
+  yPos = (doc as any).lastAutoTable.finalY + 3;
 
   // =========================
-  // 7) Cuadro de firmas (Médico / Técnico)
+  // 10) Medicamentos
+  // =========================
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("Medicamentos", pageMarginLeft, yPos);
+  yPos += 2;
+
+  autoTable(doc, {
+    startY: yPos,
+    margin: { left: pageMarginLeft, right: pageMarginRight },
+    head: [["No.", "Descripción", "Cantidad"]],
+    body: [["", "", ""]],
+    theme: "grid",
+    tableWidth: contentWidth,
+    headStyles: {
+      fillColor: lightGray,
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      fontSize: 8,
+      halign: "center",
+    },
+    bodyStyles: {
+      fontSize: 7,
+      textColor: [0, 0, 0],
+      minCellHeight: 15,
+    },
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2,
+    },
+    columnStyles: {
+      0: { cellWidth: contentWidth * 0.08, halign: "center" },
+      1: { cellWidth: contentWidth * 0.72 },
+      2: { cellWidth: contentWidth * 0.2, halign: "center" },
+    },
+  });
+
+  yPos = (doc as any).lastAutoTable.finalY + 5;
+
+  // =========================
+  // 11) Firmas
   // =========================
   if (yPos > 240) {
     doc.addPage();
@@ -425,10 +475,10 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   autoTable(doc, {
     startY: yPos,
     margin: { left: pageMarginLeft, right: pageMarginRight },
+    head: [["MÉDICO QUE REALIZÓ EL PROCEDIMIENTO", "TÉCNICO (NOMBRE Y FIRMA)"]],
+    body: [["(FIRMA Y MATRÍCULA)", ""]],
     theme: "grid",
     tableWidth: contentWidth,
-    head: [["MÉDICO QUE REALIZÓ EL PROCEDIMIENTO (FIRMA Y MATRÍCULA)", "TÉCNICO (NOMBRE Y FIRMA)"]],
-    body: [["", ""]],
     headStyles: {
       fillColor: lightGray,
       textColor: [0, 0, 0],
@@ -440,6 +490,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
       fontSize: 8,
       textColor: [0, 0, 0],
       minCellHeight: 25,
+      halign: "center",
     },
     styles: {
       lineColor: [0, 0, 0],

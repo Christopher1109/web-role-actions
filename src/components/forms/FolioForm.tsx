@@ -41,12 +41,12 @@ type FolioInsumo = {
  */
 const tipoAnestesiaToDb: Record<string, string> = {
   sedacion: "sedacion",
-  loco_regional: "locorregional",
+  loco_regional: "loco_regional",
   general_balanceada_adulto: "general_balanceada_adulto",
   general_balanceada_pediatrica: "general_balanceada_pediatrica",
   general_endovenosa: "general_endovenosa",
-  alta_especialidad: "general_alta_especialidad",
-  alta_especialidad_trasplante: "general_alta_especialidad",
+  alta_especialidad: "alta_especialidad",
+  alta_especialidad_trasplante: "alta_especialidad_trasplante",
   anestesia_mixta: "anestesia_mixta",
 };
 
@@ -65,7 +65,6 @@ const tiposAnestesiaNormales = tiposAnestesia.filter((t) => t.value !== "anestes
 
 // Esquema de validación de los campos del folio T33
 const folioSchema = z.object({
-  numeroFolio: z.string().nonempty("El número de folio es obligatorio"),
   unidad: z.string().nonempty("Debes seleccionar un hospital"),
   numeroQuirofano: z.string().optional(),
   inicioProcedimiento: z.string().optional(),
@@ -126,7 +125,6 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   const form = useForm<FolioFormValues>({
     resolver: zodResolver(folioSchema),
     defaultValues: {
-      numeroFolio: "",
       unidad: selectedHospital?.display_name || "",
       numeroQuirofano: "",
       inicioProcedimiento: "",
@@ -396,16 +394,22 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
   // Envía el formulario completo
   const handleSubmitForm = (values: FolioFormValues) => {
+    // Obtener nombres de médicos seleccionados
+    const cirujanoSeleccionado = cirujanos.find((m) => m.id === values.cirujano);
+    const anestesiologoSeleccionado = anestesiologos.find((m) => m.id === values.anestesiologo);
+
     const submitData = {
       ...values,
-      insumosFolio,
+      cirujanoNombre: cirujanoSeleccionado?.nombre,
+      anestesiologoNombre: anestesiologoSeleccionado?.nombre,
+      insumos: insumosFolio,
       hospital_id: selectedHospital?.id,
       hospital_display_name: selectedHospital?.display_name,
       hospital_budget_code: selectedHospital?.budget_code,
       state_name: selectedHospital?.state_name,
       ...(tipoAnestesia === "anestesia_mixta" && {
-        anestesia_principal: anestesiaPrincipal,
-        anestesia_secundaria: anestesiaSecundaria,
+        anestesiaPrincipal: anestesiaPrincipal,
+        anestesiaSecundaria: anestesiaSecundaria,
       }),
     };
     onSubmit(submitData);
@@ -414,22 +418,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmitForm)} className="space-y-6">
-        {/* Encabezado: Folio, Unidad, Quirófano */}
-        <div className="grid grid-cols-3 gap-4">
-          <FormField
-            control={form.control}
-            name="numeroFolio"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Número de Folio *</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="F-2025-976" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
+        {/* Encabezado: Unidad y Quirófano */}
+        <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="unidad"

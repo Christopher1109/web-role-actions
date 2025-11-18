@@ -125,26 +125,26 @@ const Dashboard = ({ userRole }: DashboardProps) => {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2">
-            {(userRole === 'auxiliar' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente') && (
-              <Link to="/folios" className="rounded-lg border bg-role-auxiliar/10 p-4 transition-colors hover:bg-role-auxiliar/20">
+            {(userRole === 'auxiliar' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
+              <Link to="/folios" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20">
                 <h4 className="font-semibold">Nuevo Folio</h4>
                 <p className="text-sm text-muted-foreground">Registrar procedimiento</p>
               </Link>
             )}
-            {(userRole === 'almacenista' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente') && (
-              <Link to="/insumos" className="rounded-lg border bg-role-almacenista/10 p-4 transition-colors hover:bg-role-almacenista/20">
+            {(userRole === 'almacenista' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
+              <Link to="/insumos" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20">
                 <h4 className="font-semibold">Registrar Insumos</h4>
                 <p className="text-sm text-muted-foreground">Entrada de material</p>
               </Link>
             )}
-            {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente') && (
-              <Link to="/reportes" className="rounded-lg border bg-role-lider/10 p-4 transition-colors hover:bg-role-lider/20">
+            {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
+              <Link to="/reportes" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20">
                 <h4 className="font-semibold">Generar Reporte</h4>
                 <p className="text-sm text-muted-foreground">Anexos T29 y T30</p>
               </Link>
             )}
-            {userRole === 'gerente' && (
-              <Link to="/traspasos" className="rounded-lg border bg-role-gerente/10 p-4 transition-colors hover:bg-role-gerente/20">
+            {(userRole === 'gerente' || userRole === 'gerente_operaciones') && (
+              <Link to="/traspasos" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20">
                 <h4 className="font-semibold">Gestionar Traspasos</h4>
                 <p className="text-sm text-muted-foreground">Entre unidades</p>
               </Link>

@@ -29,7 +29,7 @@ const Folios = ({ userRole }: FoliosProps) => {
   const [showDetail, setShowDetail] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const canCancel = userRole === 'supervisor' || userRole === 'gerente';
+  const canCancel = userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones';
 
   useEffect(() => {
     if (user && selectedHospital) {

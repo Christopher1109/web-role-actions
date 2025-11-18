@@ -1,37 +1,35 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import imssLogo from '@/assets/imss-logo.jpg';
+import cbMedicaLogo from '@/assets/cb-medica-logo.jpg';
 
 export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabels: Record<string, string>) => {
   const doc = new jsPDF();
   
-  // Colores del formato T33
-  const imssBlue: [number, number, number] = [0, 83, 155]; // Azul IMSS
-  const darkGray: [number, number, number] = [52, 73, 94]; // Gris oscuro para DATOS DEL PACIENTE
-  const lightGray: [number, number, number] = [220, 220, 220]; // Gris claro para headers de tabla
+  // Colores del formato T33 IMSS
+  const lightGray: [number, number, number] = [230, 230, 230];
   
-  // Añadir logo IMSS
-  doc.addImage(imssLogo, 'JPEG', 14, 8, 25, 25);
+  // Logo CB Médica en esquina superior izquierda
+  doc.addImage(cbMedicaLogo, 'JPEG', 14, 10, 30, 15);
   
-  // HEADER - Textos en negro sin fondo
+  // ENCABEZADO INSTITUCIONAL
   doc.setTextColor(0, 0, 0);
-  doc.setFontSize(14);
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('INSTITUTO MEXICANO DEL SEGURO SOCIAL', 105, 12, { align: 'center' });
-  
-  doc.setFontSize(10);
-  doc.text('SEGURIDAD Y SOLIDARIDAD SOCIAL', 105, 18, { align: 'center' });
+  doc.text('INSTITUTO MEXICANO DEL SEGURO SOCIAL', 105, 15, { align: 'center' });
   
   doc.setFontSize(11);
-  doc.text('"SERVICIO MÉDICO INTEGRAL PARA ANESTESIA"', 105, 26, { align: 'center' });
+  doc.text('SEGURIDAD Y SOLIDARIDAD SOCIAL', 105, 21, { align: 'center' });
+  
+  doc.setFontSize(10);
+  doc.text('"SERVICIO MÉDICO INTEGRAL PARA ANESTESIA"', 105, 28, { align: 'center' });
   
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text('Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"', 105, 32, { align: 'center' });
+  doc.text('Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"', 105, 34, { align: 'center' });
   
-  let yPos = 40;
+  let yPos = 42;
   
-  // TABLA 1: OOAD/UMAE, Unidad Médica, No. de contrato, Fecha, No. de folio
+  // SECCIÓN 1: Identificación básica
   autoTable(doc, {
     startY: yPos,
     head: [['OOAD/UMAE:', 'Unidad Médica:', 'No. de contrato:', 'Fecha:', 'No. de folio:']],
@@ -39,38 +37,38 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
       folio.state_name || 'N/A',
       folio.hospital_display_name || 'N/A',
       folio.hospital_budget_code || 'N/A',
-      new Date(folio.created_at || folio.fecha).toLocaleString('es-MX', { 
+      folio.fecha ? new Date(folio.fecha + 'T' + (folio.created_at ? new Date(folio.created_at).toTimeString().slice(0, 8) : '00:00:00')).toLocaleString('es-MX', { 
         year: 'numeric', 
         month: '2-digit', 
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
-      }),
+      }) : 'N/A',
       folio.numero_folio
     ]],
     theme: 'grid',
     headStyles: {
       fillColor: lightGray,
-      textColor: 0,
+      textColor: [0, 0, 0],
       fontStyle: 'bold',
       fontSize: 8,
       halign: 'left'
     },
     bodyStyles: {
       fontSize: 8,
-      textColor: 0
+      textColor: [0, 0, 0]
     },
     styles: {
       lineColor: [0, 0, 0],
-      lineWidth: 0.1,
+      lineWidth: 0.3,
       cellPadding: 2
     }
   });
   
-  yPos = (doc as any).lastAutoTable.finalY + 2;
+  yPos = (doc as any).lastAutoTable.finalY + 1;
   
-  // TABLA 2: Horarios y Quirófano
+  // SECCIÓN 2: Horarios y Quirófano
   autoTable(doc, {
     startY: yPos,
     head: [[
@@ -82,146 +80,131 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     ]],
     body: [[
       folio.numero_quirofano || 'N/A',
-      folio.hora_inicio_procedimiento ? new Date(`${folio.fecha}T${folio.hora_inicio_procedimiento}`).toLocaleString('es-MX', { 
-        year: 'numeric', 
-        month: '2-digit', 
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }) : 'N/A',
-      folio.hora_fin_procedimiento ? new Date(`${folio.fecha}T${folio.hora_fin_procedimiento}`).toLocaleString('es-MX', { 
-        year: 'numeric', 
-        month: '2-digit', 
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }) : 'N/A',
-      folio.hora_inicio_anestesia ? new Date(`${folio.fecha}T${folio.hora_inicio_anestesia}`).toLocaleString('es-MX', { 
-        year: 'numeric', 
-        month: '2-digit', 
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }) : 'N/A',
-      folio.hora_fin_anestesia ? new Date(`${folio.fecha}T${folio.hora_fin_anestesia}`).toLocaleString('es-MX', { 
-        year: 'numeric', 
-        month: '2-digit', 
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }) : 'N/A'
+      folio.hora_inicio_procedimiento && folio.fecha ? 
+        new Date(`${folio.fecha}T${folio.hora_inicio_procedimiento}`).toLocaleString('es-MX', { 
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }) : 'N/A',
+      folio.hora_fin_procedimiento && folio.fecha ? 
+        new Date(`${folio.fecha}T${folio.hora_fin_procedimiento}`).toLocaleString('es-MX', { 
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }) : 'N/A',
+      folio.hora_inicio_anestesia && folio.fecha ? 
+        new Date(`${folio.fecha}T${folio.hora_inicio_anestesia}`).toLocaleString('es-MX', { 
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }) : 'N/A',
+      folio.hora_fin_anestesia && folio.fecha ? 
+        new Date(`${folio.fecha}T${folio.hora_fin_anestesia}`).toLocaleString('es-MX', { 
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }) : 'N/A'
     ]],
     theme: 'grid',
     headStyles: {
       fillColor: lightGray,
-      textColor: 0,
+      textColor: [0, 0, 0],
       fontStyle: 'bold',
       fontSize: 7,
       halign: 'center'
     },
     bodyStyles: {
       fontSize: 7,
-      textColor: 0,
+      textColor: [0, 0, 0],
       halign: 'center'
     },
     styles: {
       lineColor: [0, 0, 0],
-      lineWidth: 0.1,
+      lineWidth: 0.3,
       cellPadding: 2
     }
   });
   
-  yPos = (doc as any).lastAutoTable.finalY + 4;
+  yPos = (doc as any).lastAutoTable.finalY + 3;
   
-  // Información del procedimiento
-  doc.setFontSize(9);
+  // SECCIÓN 3: Datos del proveedor y procedimiento
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Proveedor: CBH+ ESPECIALISTAS EN INNOVACIÓN MÉDICA S.A. DE C.V.`, 14, yPos);
-  yPos += 6;
+  
+  doc.text('Proveedor: CBH+ ESPECIALISTAS EN INNOVACIÓN MÉDICA S.A. DE C.V.', 14, yPos);
+  yPos += 5;
   
   doc.text(`Procedimiento Quirúrgico: ${folio.cirugia || 'N/A'}`, 14, yPos);
-  yPos += 6;
+  yPos += 5;
   
   doc.text(`Especialidad Quirúrgica: ${folio.especialidad_quirurgica || 'N/A'}`, 14, yPos);
-  yPos += 6;
+  yPos += 5;
   
-  const tipoCirugiaLabels: Record<string, string> = {
-    programada: 'PROGRAMADA',
-    urgencia: 'URGENCIA',
-    abierta: 'ABIERTA',
-    minima_invasion: 'MÍNIMA INVASIÓN',
-  };
-  doc.text(`Tipo de Cirugía: ${tipoCirugiaLabels[folio.tipo_cirugia] || folio.tipo_cirugia || 'N/A'}`, 14, yPos);
-  yPos += 6;
+  doc.text(`Tipo de Cirugía: ${folio.tipo_cirugia || 'N/A'}`, 14, yPos);
+  yPos += 5;
   
-  const tipoEventoLabels: Record<string, string> = {
-    programado: 'Programado',
-    urgencia: 'Urgencia',
-  };
-  doc.text(`Evento: ${tipoEventoLabels[folio.tipo_evento] || folio.tipo_evento || 'N/A'}`, 14, yPos);
-  yPos += 6;
+  doc.text(`Evento: ${folio.tipo_evento || 'N/A'}`, 14, yPos);
+  yPos += 5;
   
   doc.text(`Nombre del Cirujano: ${folio.cirujano_nombre || 'N/A'}`, 14, yPos);
-  yPos += 6;
+  yPos += 5;
   
   doc.text(`Nombre del Anestesiólogo: ${folio.anestesiologo_nombre || 'N/A'}`, 14, yPos);
   yPos += 8;
   
-  // DATOS DEL PACIENTE - Header con fondo gris oscuro
-  doc.setFillColor(darkGray[0], darkGray[1], darkGray[2]);
-  doc.rect(14, yPos, 182, 8, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
+  // SECCIÓN 4: DATOS DEL PACIENTE
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('DATOS DEL PACIENTE', 105, yPos + 5.5, { align: 'center' });
-  
-  yPos += 10;
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  
-  // Datos del paciente en formato de texto simple
-  doc.text(`Apellido paterno: ${folio.paciente_apellido_paterno || 'N/A'}`, 14, yPos);
-  yPos += 6;
-  
-  doc.text(`Apellido materno: ${folio.paciente_apellido_materno || 'N/A'}`, 14, yPos);
-  yPos += 6;
-  
-  doc.text(`Nombre(s): ${folio.paciente_nombre || 'N/A'}`, 14, yPos);
-  yPos += 6;
-  
-  const generoLabels: Record<string, string> = {
-    masculino: 'Masculino',
-    femenino: 'Femenino',
-    M: 'Masculino',
-    F: 'Femenino',
-  };
-  doc.text(`Género: ${generoLabels[folio.paciente_genero] || folio.paciente_genero || 'N/A'}`, 14, yPos);
-  yPos += 6;
-  
-  doc.text(`Edad: ${folio.paciente_edad || 'N/A'}`, 14, yPos);
-  yPos += 6;
-  
-  doc.text(`NSS: ${folio.paciente_nss || 'N/A'}`, 14, yPos);
-  yPos += 8;
-  
-  // Productividad de Procedimientos
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Productividad de Procedimientos:', 14, yPos);
+  doc.text('DATOS DEL PACIENTE', 14, yPos);
   yPos += 2;
   
   autoTable(doc, {
     startY: yPos,
-    head: [['No.', 'Clave del Procedimiento', 'Tipo de Procedimiento', 'Procedimiento Quirúrgico', 'Precio Unitario (Con IVA)', 'Importe (Sin IVA)']],
+    body: [
+      ['Apellido paterno:', folio.paciente_apellido_paterno || 'N/A'],
+      ['Apellido materno:', folio.paciente_apellido_materno || 'N/A'],
+      ['Nombre(s):', folio.paciente_nombre || 'N/A'],
+      ['Género:', folio.paciente_genero || 'N/A'],
+      ['Edad:', folio.paciente_edad?.toString() || 'N/A'],
+      ['NSS:', folio.paciente_nss || 'N/A']
+    ],
+    theme: 'grid',
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [0, 0, 0]
+    },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 40 },
+      1: { cellWidth: 150 }
+    },
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2
+    }
+  });
+  
+  yPos = (doc as any).lastAutoTable.finalY + 6;
+  
+  // SECCIÓN 5: Productividad de Procedimientos
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Productividad de Procedimientos:', 14, yPos);
+  yPos += 2;
+  
+  const tipoAnestesiaDisplay = folio.tipo_anestesia ? 
+    tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia : 'N/A';
+  
+  autoTable(doc, {
+    startY: yPos,
+    head: [[
+      'No.',
+      'Clave del Procedimiento',
+      'Tipo de Procedimiento',
+      'Procedimiento Quirúrgico',
+      'Precio Unitario (Con IVA)',
+      'Importe (Sin IVA)'
+    ]],
     body: [[
       '1',
-      folio.tipo_anestesia || 'N/A',
-      tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia || 'N/A',
+      'N/A',
+      tipoAnestesiaDisplay,
       folio.cirugia || 'N/A',
       '',
       ''
@@ -229,150 +212,88 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     theme: 'grid',
     headStyles: {
       fillColor: lightGray,
-      textColor: 0,
+      textColor: [0, 0, 0],
       fontStyle: 'bold',
-      fontSize: 8,
+      fontSize: 7,
       halign: 'center'
     },
     bodyStyles: {
-      fontSize: 8,
-      textColor: 0,
-      halign: 'center'
+      fontSize: 7,
+      textColor: [0, 0, 0]
+    },
+    columnStyles: {
+      0: { cellWidth: 12, halign: 'center' },
+      1: { cellWidth: 25 },
+      2: { cellWidth: 45 },
+      3: { cellWidth: 50 },
+      4: { cellWidth: 30, halign: 'right' },
+      5: { cellWidth: 30, halign: 'right' }
     },
     styles: {
       lineColor: [0, 0, 0],
-      lineWidth: 0.1,
+      lineWidth: 0.3,
       cellPadding: 2
     }
   });
   
   yPos = (doc as any).lastAutoTable.finalY + 6;
   
-  // Verificar si necesitamos una nueva página
-  if (yPos > 240) {
-    doc.addPage();
-    yPos = 20;
-  }
-  
-  // Bienes de consumo
-  doc.setFontSize(11);
+  // SECCIÓN 6: Bienes de consumo
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('Bienes de consumo', 14, yPos);
   yPos += 2;
   
-  // Filtrar insumos que no son medicamentos
-  const bienesConsumo = insumos.filter(item => 
-    !item.nombre.toLowerCase().includes('mg') && 
-    !item.nombre.toLowerCase().includes('ml') &&
-    !item.nombre.toLowerCase().includes('solución') &&
-    !item.nombre.toLowerCase().includes('inyectable')
-  );
+  const insumosBody = insumos.map((insumo, index) => [
+    (index + 1).toString(),
+    insumo.descripcion || insumo.nombre || 'N/A',
+    `${insumo.cantidad} (PIEZA)`
+  ]);
   
-  if (bienesConsumo.length > 0) {
-    const bienesBody = bienesConsumo.map((item, index) => [
-      (index + 1).toString(),
-      item.nombre,
-      `${item.cantidad} (PIEZA)`
-    ]);
-    
-    autoTable(doc, {
-      startY: yPos,
-      head: [['No.', 'Descripción', 'Cantidad']],
-      body: bienesBody,
-      theme: 'grid',
-      headStyles: {
-        fillColor: lightGray,
-        textColor: 0,
-        fontStyle: 'bold',
-        fontSize: 8,
-        halign: 'center'
-      },
-      bodyStyles: {
-        fontSize: 7,
-        textColor: 0
-      },
-      columnStyles: {
-        0: { cellWidth: 15, halign: 'center' },
-        1: { cellWidth: 145 },
-        2: { cellWidth: 25, halign: 'center' }
-      },
-      styles: {
-        lineColor: [0, 0, 0],
-        lineWidth: 0.1,
-        cellPadding: 2
-      }
-    });
-    
-    yPos = (doc as any).lastAutoTable.finalY + 6;
-  }
+  autoTable(doc, {
+    startY: yPos,
+    head: [['No.', 'Descripción', 'Cantidad']],
+    body: insumosBody,
+    theme: 'grid',
+    headStyles: {
+      fillColor: lightGray,
+      textColor: [0, 0, 0],
+      fontStyle: 'bold',
+      fontSize: 8,
+      halign: 'center'
+    },
+    bodyStyles: {
+      fontSize: 7,
+      textColor: [0, 0, 0]
+    },
+    columnStyles: {
+      0: { cellWidth: 15, halign: 'center' },
+      1: { cellWidth: 145 },
+      2: { cellWidth: 25, halign: 'center' }
+    },
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: 0.3,
+      cellPadding: 2
+    }
+  });
   
-  // Verificar si necesitamos una nueva página para medicamentos
-  if (yPos > 200) {
+  yPos = (doc as any).lastAutoTable.finalY + 10;
+  
+  // SECCIÓN FINAL: Firma
+  if (yPos > 250) {
     doc.addPage();
     yPos = 20;
   }
   
-  // Medicamentos y Materiales
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Medicamentos y Materiales', 14, yPos);
-  yPos += 2;
-  
-  // Filtrar medicamentos
-  const medicamentos = insumos.filter(item => 
-    item.nombre.toLowerCase().includes('mg') || 
-    item.nombre.toLowerCase().includes('ml') ||
-    item.nombre.toLowerCase().includes('solución') ||
-    item.nombre.toLowerCase().includes('inyectable')
-  );
-  
-  if (medicamentos.length > 0) {
-    const medicamentosBody = medicamentos.map((item, index) => [
-      (index + 1).toString(),
-      item.nombre,
-      item.descripcion || item.nombre,
-      `${item.cantidad} (PIEZA)`
-    ]);
-    
-    autoTable(doc, {
-      startY: yPos,
-      head: [['No.', 'Medicamentos', 'Descripción', 'Cantidad']],
-      body: medicamentosBody,
-      theme: 'grid',
-      headStyles: {
-        fillColor: lightGray,
-        textColor: 0,
-        fontStyle: 'bold',
-        fontSize: 8,
-        halign: 'center'
-      },
-      bodyStyles: {
-        fontSize: 7,
-        textColor: 0
-      },
-      columnStyles: {
-        0: { cellWidth: 15, halign: 'center' },
-        1: { cellWidth: 90 },
-        2: { cellWidth: 60 },
-        3: { cellWidth: 25, halign: 'center' }
-      },
-      styles: {
-        lineColor: [0, 0, 0],
-        lineWidth: 0.1,
-        cellPadding: 2
-      }
-    });
-    
-    yPos = (doc as any).lastAutoTable.finalY + 10;
-  }
-  
-  // Firma del médico
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.text('MÉDICO QUE REALIZÓ EL PROCEDIMIENTO (NOMBRE Y FIRMA)', 14, yPos);
-  yPos += 15;
+  yPos += 10;
+  doc.line(14, yPos, 100, yPos);
+  yPos += 4;
   doc.text('(FIRMA Y MATRÍCULA)', 14, yPos);
   
-  // Guardar el PDF
-  doc.save(`Folio_${folio.numero_folio}.pdf`);
+  // Guardar PDF
+  doc.save(`Folio_T33_${folio.numero_folio}.pdf`);
 };

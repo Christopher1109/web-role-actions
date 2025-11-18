@@ -104,7 +104,7 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
         setLoading(true);
 
         // 1) GERENTE DE OPERACIONES → ve todos los hospitales
-        if (userRole === "gerente_operaciones") {
+        if (userRole === "gerente_operaciones" || userRole === "gerente") {
           const { data: allHospitals, error } = await supabase.from("hospitales").select("*").order("nombre");
 
           if (error) {

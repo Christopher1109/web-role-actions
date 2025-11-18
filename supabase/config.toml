@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.populate-all-insumos]
 verify_jwt = false
+
+[functions.populate-alta-especialidad]
+verify_jwt = false

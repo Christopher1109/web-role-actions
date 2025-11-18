@@ -16,13 +16,23 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('Iniciando exportación de usuarios...');
+    // Obtener el body de la petición
+    const body = await req.json().catch(() => ({}));
+    const stateName = body.state_name;
 
-    // Obtener todos los usuarios de la tabla users
-    const { data: usersData, error: usersError } = await supabase
+    console.log('Iniciando exportación de usuarios...', stateName ? `Estado: ${stateName}` : 'Todos los estados');
+
+    // Obtener usuarios filtrados por estado si se proporciona
+    let query = supabase
       .from('users')
       .select('*')
       .order('state_name', { ascending: true });
+    
+    if (stateName) {
+      query = query.eq('state_name', stateName);
+    }
+
+    const { data: usersData, error: usersError } = await query;
 
     if (usersError) {
       console.error('Error fetching users:', usersError);

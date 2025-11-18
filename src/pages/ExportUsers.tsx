@@ -1,12 +1,26 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, Loader2, Users } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download, Loader2, Users, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const ExportUsers = () => {
   const [isExporting, setIsExporting] = useState(false);
+  const [states, setStates] = useState<Array<{ name: string }>>([]);
+  const [selectedState, setSelectedState] = useState<string>("");
+
+  useEffect(() => {
+    const fetchStates = async () => {
+      const { data } = await supabase
+        .from('states')
+        .select('name')
+        .order('name');
+      if (data) setStates(data);
+    };
+    fetchStates();
+  }, []);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -28,7 +42,9 @@ const ExportUsers = () => {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Content-Type': 'application/json',
           },
+          body: JSON.stringify({ state_name: selectedState || undefined }),
         }
       );
 
@@ -43,13 +59,16 @@ const ExportUsers = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `usuarios_sistema_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const fileName = selectedState 
+        ? `usuarios_${selectedState.toLowerCase().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
+        : `usuarios_sistema_${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      toast.success("Excel descargado exitosamente");
+      toast.success(`Excel descargado exitosamente${selectedState ? ` - ${selectedState}` : ''}`);
     } catch (error) {
       console.error("Error:", error);
       toast.error("Error al exportar usuarios");
@@ -76,6 +95,26 @@ const ExportUsers = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                Filtrar por estado (opcional)
+              </label>
+              <Select value={selectedState} onValueChange={setSelectedState}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos los estados" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos los estados</SelectItem>
+                  {states.map((state) => (
+                    <SelectItem key={state.name} value={state.name}>
+                      {state.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
               <h3 className="font-semibold text-sm flex items-center gap-2">
                 <Download className="h-4 w-4" />

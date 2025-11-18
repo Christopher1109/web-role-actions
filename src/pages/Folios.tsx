@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { UserRole } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, FileX } from 'lucide-react';
+import { Plus, Search, FileX, Download } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useHospital } from '@/contexts/HospitalContext';
+import { generateFolioPDF } from '@/utils/pdfExport';
 
 interface FoliosProps {
   userRole: UserRole;
@@ -301,6 +302,30 @@ const Folios = ({ userRole }: FoliosProps) => {
                             }}
                           >
                             Ver Detalle
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="gap-2"
+                            onClick={async () => {
+                              // Fetch insumos for this folio with JOIN to get insumo details
+                              const { data: insumosData } = await (supabase as any)
+                                .from('folios_insumos')
+                                .select(`
+                                  cantidad,
+                                  insumos (
+                                    nombre,
+                                    descripcion,
+                                    lote,
+                                    clave
+                                  )
+                                `)
+                                .eq('folio_id', folio.id);
+                              generateFolioPDF(folio, insumosData || [], tiposAnestesiaLabels);
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                            PDF
                           </Button>
                           {canCancel && folio.estado === 'activo' && (
                             <Button 

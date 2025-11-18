@@ -1,9 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
-import { Download } from 'lucide-react';
-import { generateFolioPDF } from '@/utils/pdfExport';
 
 interface FolioDetailDialogProps {
   open: boolean;
@@ -15,10 +12,6 @@ interface FolioDetailDialogProps {
 
 const FolioDetailDialog = ({ open, onOpenChange, folio, tiposAnestesiaLabels, insumos }: FolioDetailDialogProps) => {
   if (!folio) return null;
-
-  const handleDownloadPDF = () => {
-    generateFolioPDF(folio, insumos, tiposAnestesiaLabels);
-  };
 
   const tipoCirugiaLabels: Record<string, string> = {
     abierta: 'Abierta',
@@ -40,18 +33,12 @@ const FolioDetailDialog = ({ open, onOpenChange, folio, tiposAnestesiaLabels, in
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-3">
-              Detalle del Folio {folio.numero_folio}
-              <Badge variant={folio.estado === 'activo' ? 'default' : 'destructive'}>
-                {folio.estado === 'activo' ? 'Activo' : 'Cancelado'}
-              </Badge>
-            </DialogTitle>
-            <Button onClick={handleDownloadPDF} size="sm" className="gap-2">
-              <Download className="h-4 w-4" />
-              Descargar PDF
-            </Button>
-          </div>
+          <DialogTitle className="flex items-center gap-3">
+            Detalle del Folio {folio.numero_folio}
+            <Badge variant={folio.estado === 'activo' ? 'default' : 'destructive'}>
+              {folio.estado === 'activo' ? 'Activo' : 'Cancelado'}
+            </Badge>
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">

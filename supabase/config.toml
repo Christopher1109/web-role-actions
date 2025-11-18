@@ -35,3 +35,21 @@ verify_jwt = false
 
 [functions.export-users-excel]
 verify_jwt = false
+
+[functions.recreate-auth-users]
+verify_jwt = false
+
+[functions.check-auth-users]
+verify_jwt = false
+
+[functions.force-create-missing-users]
+verify_jwt = false
+
+[functions.reset-user-passwords]
+verify_jwt = false
+
+[functions.list-all-auth-users]
+verify_jwt = false
+
+[functions.fix-passwords-normalized]
+verify_jwt = false

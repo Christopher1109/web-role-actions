@@ -3,7 +3,8 @@ export type UserRole =
   | 'almacenista' 
   | 'lider' 
   | 'supervisor' 
-  | 'gerente';
+  | 'gerente'
+  | 'gerente_operaciones';
 
 export interface Doctor {
   id: string;

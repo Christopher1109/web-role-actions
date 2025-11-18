@@ -68,7 +68,7 @@ export const useAuth = () => {
         setUserRole('auxiliar'); // Rol por defecto
       } else if (data && data.length > 0) {
         // Jerarquía de roles (mayor a menor)
-        const roleHierarchy: UserRole[] = ['gerente', 'supervisor', 'lider', 'almacenista', 'auxiliar'];
+        const roleHierarchy: UserRole[] = ['gerente_operaciones', 'gerente', 'supervisor', 'lider', 'almacenista', 'auxiliar'];
         
         // Encontrar el rol con mayor jerarquía
         const highestRole = roleHierarchy.find(role => 

@@ -14,6 +14,7 @@ const Dashboard = ({ userRole }: DashboardProps) => {
     lider: 'Líder Hospitalario',
     supervisor: 'Supervisor Hospitalario',
     gerente: 'Gerente de Operaciones',
+    gerente_operaciones: 'Gerente de Operaciones',
   };
 
   const stats = [
@@ -22,28 +23,28 @@ const Dashboard = ({ userRole }: DashboardProps) => {
       value: '248', 
       icon: FileText,
       trend: '+12%',
-      visible: ['auxiliar', 'lider', 'supervisor', 'gerente']
+      visible: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones']
     },
     { 
       title: 'Insumos en Stock', 
       value: '1,234', 
       icon: Package,
       trend: '-5%',
-      visible: ['almacenista', 'lider', 'supervisor', 'gerente']
+      visible: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones']
     },
     { 
       title: 'Procedimientos Hoy', 
       value: '18', 
       icon: TrendingUp,
       trend: '+8%',
-      visible: ['auxiliar', 'lider', 'supervisor', 'gerente']
+      visible: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones']
     },
     { 
       title: 'Médicos Activos', 
       value: '45', 
       icon: Users,
       trend: '+3%',
-      visible: ['lider', 'supervisor', 'gerente']
+      visible: ['lider', 'supervisor', 'gerente', 'gerente_operaciones']
     },
   ];
 
@@ -51,17 +52,17 @@ const Dashboard = ({ userRole }: DashboardProps) => {
     { 
       type: 'warning', 
       message: '5 insumos próximos a caducar',
-      visible: ['almacenista', 'lider', 'supervisor', 'gerente']
+      visible: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones']
     },
     { 
       type: 'info', 
       message: '3 traspasos pendientes',
-      visible: ['gerente']
+      visible: ['gerente', 'gerente_operaciones']
     },
     { 
       type: 'success', 
       message: 'Todos los reportes del mes completados',
-      visible: ['lider', 'supervisor', 'gerente']
+      visible: ['lider', 'supervisor', 'gerente', 'gerente_operaciones']
     },
   ];
 

@@ -84,7 +84,7 @@ export const HospitalSelector = () => {
             <ChevronDown className="h-4 w-4 opacity-50 flex-shrink-0" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-[300px]" align="start">
+        <DropdownMenuContent className="w-[300px] max-h-[400px] overflow-y-auto" align="start">
           <DropdownMenuLabel>Selecciona un hospital</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {availableHospitals.map((hospital) => (

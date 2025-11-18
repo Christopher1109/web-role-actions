@@ -194,11 +194,11 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     
     yPos += 10;
     
-    const insumosData = insumos.map((insumo, idx) => [
+    const insumosData = insumos.map((item, idx) => [
       (idx + 1).toString(),
-      insumo.nombre_insumo,
-      insumo.lote || 'N/A',
-      insumo.cantidad.toString()
+      item.insumos?.nombre || 'Sin nombre',
+      item.insumos?.lote || 'N/A',
+      item.cantidad.toString()
     ]);
     
     autoTable(doc, {

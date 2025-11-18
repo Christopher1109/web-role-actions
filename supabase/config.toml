@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.fix-passwords-normalized]
 verify_jwt = false
+
+[functions.delete-and-recreate-users]
+verify_jwt = false

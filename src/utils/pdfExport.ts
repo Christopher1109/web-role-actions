@@ -201,7 +201,6 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     },
     columnStyles: {
       0: { cellWidth: 45, fontStyle: "bold" },
-      1: { cellWidth: 0 },
     },
   });
 

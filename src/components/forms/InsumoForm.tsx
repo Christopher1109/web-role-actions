@@ -12,6 +12,10 @@ const insumoSchema = z.object({
   nombre: z.string().nonempty('El nombre es obligatorio'),
   clave: z.string().nonempty('La clave es obligatoria'),
   descripcion: z.string().optional(),
+  lote: z.string().nonempty('El lote es obligatorio'),
+  cantidad: z.number().min(1, 'La cantidad debe ser mayor a 0'),
+  fecha_entrada: z.string().nonempty('La fecha de entrada es obligatoria'),
+  fecha_caducidad: z.string().nonempty('La fecha de caducidad es obligatoria'),
   unidad: z.string().nonempty('Debes seleccionar un hospital'),
 });
 
@@ -38,6 +42,10 @@ export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoF
       nombre: '',
       clave: '',
       descripcion: '',
+      lote: '',
+      cantidad: 0,
+      fecha_entrada: new Date().toISOString().split('T')[0],
+      fecha_caducidad: '',
       unidad: selectedHospital?.display_name || '',
       ...defaultValues,
     },
@@ -104,6 +112,62 @@ export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoF
           {...form.register('descripcion')}
           className="w-full rounded-md border px-3 py-2 text-sm"
         />
+      </div>
+
+      {/* Lote */}
+      <div className="grid gap-1">
+        <label className="text-sm font-medium" htmlFor="lote">Lote</label>
+        <input
+          id="lote"
+          type="text"
+          {...form.register('lote')}
+          className="w-full rounded-md border px-3 py-2 text-sm"
+        />
+        {form.formState.errors.lote && (
+          <p className="text-sm text-red-500">{form.formState.errors.lote.message}</p>
+        )}
+      </div>
+
+      {/* Cantidad */}
+      <div className="grid gap-1">
+        <label className="text-sm font-medium" htmlFor="cantidad">Cantidad</label>
+        <input
+          id="cantidad"
+          type="number"
+          {...form.register('cantidad', { valueAsNumber: true })}
+          className="w-full rounded-md border px-3 py-2 text-sm"
+        />
+        {form.formState.errors.cantidad && (
+          <p className="text-sm text-red-500">{form.formState.errors.cantidad.message}</p>
+        )}
+      </div>
+
+      {/* Fecha de Entrada */}
+      <div className="grid gap-1">
+        <label className="text-sm font-medium" htmlFor="fecha_entrada">Fecha de Entrada</label>
+        <input
+          id="fecha_entrada"
+          type="date"
+          {...form.register('fecha_entrada')}
+          className="w-full rounded-md border px-3 py-2 text-sm"
+        />
+        {form.formState.errors.fecha_entrada && (
+          <p className="text-sm text-red-500">{form.formState.errors.fecha_entrada.message}</p>
+        )}
+      </div>
+
+      {/* Fecha de Caducidad */}
+      <div className="grid gap-1">
+        <label className="text-sm font-medium" htmlFor="fecha_caducidad">Fecha de Caducidad</label>
+        <input
+          id="fecha_caducidad"
+          type="date"
+          {...form.register('fecha_caducidad')}
+          className="w-full rounded-md border px-3 py-2 text-sm"
+        />
+        {form.formState.errors.fecha_caducidad && (
+          <p className="text-sm text-red-500">{form.formState.errors.fecha_caducidad.message}</p>
+        )}
       </div>
 
       {/* Hospital selector / display */}

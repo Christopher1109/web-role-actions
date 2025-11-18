@@ -152,20 +152,17 @@ const Medicos = () => {
                           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                             <User className="h-6 w-6 text-primary" />
                           </div>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <h3 className="font-semibold">{medico.nombre}</h3>
-                              <Badge variant={medico.especialidad === 'anestesiologo' ? 'default' : 'secondary'}>
-                                {medico.especialidad === 'anestesiologo' ? 'Anestesiólogo' : 'Cirujano'}
-                              </Badge>
-                            </div>
-                            <div className="grid gap-1 text-sm">
-                              <p><span className="font-medium">Especialidad:</span> {medico.subespecialidad}</p>
-                              <p><span className="font-medium">Unidad:</span> {medico.unidad}</p>
-                              <p><span className="font-medium">Teléfono:</span> {medico.telefono || 'No especificado'}</p>
-                              <p><span className="font-medium">Procedimientos:</span> {medico.procedimientos_realizados || 0}</p>
-                            </div>
-                          </div>
+                           <div className="space-y-2">
+                             <div className="flex items-center gap-3">
+                               <h3 className="font-semibold">{medico.nombre}</h3>
+                               <Badge variant={medico.especialidad === 'anestesiologia' ? 'default' : 'secondary'}>
+                                 {medico.especialidad === 'anestesiologia' ? 'Anestesiólogo' : 'Cirujano'}
+                               </Badge>
+                             </div>
+                             <div className="grid gap-1 text-sm">
+                               <p><span className="font-medium">Especialidad:</span> {medico.especialidad}</p>
+                             </div>
+                           </div>
                         </div>
                         <Button 
                           variant="outline" 
@@ -188,7 +185,7 @@ const Medicos = () => {
           <Card>
             <CardContent className="pt-6">
               <div className="space-y-4">
-                {medicos.filter(m => m.especialidad === 'anestesiologo').map((medico) => (
+                {medicos.filter(m => m.especialidad === 'anestesiologia').map((medico) => (
                   <Card key={medico.id} className="border-l-4 border-l-primary">
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between">
@@ -197,13 +194,9 @@ const Medicos = () => {
                             <User className="h-6 w-6 text-primary" />
                           </div>
                           <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <h3 className="font-semibold">{medico.nombre}</h3>
-                              <Badge variant="default">Anestesiólogo</Badge>
-                            </div>
+                            <h3 className="font-semibold">{medico.nombre}</h3>
                             <div className="grid gap-1 text-sm">
-                              <p><span className="font-medium">Especialidad:</span> {medico.subespecialidad}</p>
-                              <p><span className="font-medium">Unidad:</span> {medico.unidad}</p>
+                              <p><span className="font-medium">Especialidad:</span> {medico.especialidad}</p>
                             </div>
                           </div>
                         </div>
@@ -218,6 +211,11 @@ const Medicos = () => {
                     </CardContent>
                   </Card>
                 ))}
+                {medicos.filter(m => m.especialidad === 'anestesiologia').length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">
+                    No hay anestesiólogos registrados
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -227,7 +225,7 @@ const Medicos = () => {
           <Card>
             <CardContent className="pt-6">
               <div className="space-y-4">
-                {medicos.filter(m => m.especialidad === 'cirujano').map((medico) => (
+                {medicos.filter(m => ['cirugia_general', 'traumatologia', 'ginecologia', 'urologia', 'otra'].includes(m.especialidad)).map((medico) => (
                   <Card key={medico.id} className="border-l-4 border-l-secondary">
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between">
@@ -236,13 +234,9 @@ const Medicos = () => {
                             <User className="h-6 w-6 text-secondary" />
                           </div>
                           <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <h3 className="font-semibold">{medico.nombre}</h3>
-                              <Badge variant="secondary">Cirujano</Badge>
-                            </div>
+                            <h3 className="font-semibold">{medico.nombre}</h3>
                             <div className="grid gap-1 text-sm">
-                              <p><span className="font-medium">Especialidad:</span> {medico.subespecialidad}</p>
-                              <p><span className="font-medium">Unidad:</span> {medico.unidad}</p>
+                              <p><span className="font-medium">Especialidad:</span> {medico.especialidad}</p>
                             </div>
                           </div>
                         </div>
@@ -257,6 +251,11 @@ const Medicos = () => {
                     </CardContent>
                   </Card>
                 ))}
+                {medicos.filter(m => ['cirugia_general', 'traumatologia', 'ginecologia', 'urologia', 'otra'].includes(m.especialidad)).length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">
+                    No hay cirujanos registrados
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>

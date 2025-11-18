@@ -3,15 +3,18 @@ import autoTable, { RowInput } from "jspdf-autotable";
 import cbMedicaLogo from "@/assets/cb-medica-logo.jpg";
 
 export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabels: Record<string, string>) => {
-  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const doc = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" });
 
   // Colores del formato T33 IMSS
   const headerBlue: [number, number, number] = [210, 225, 245];
   const lightGray: [number, number, number] = [230, 230, 230];
 
-  // Márgenes que queremos respetar
+  // Márgenes y dimensiones globales
   const MARGIN_LEFT = 14;
   const MARGIN_RIGHT = 14;
+  const PAGE_WIDTH = doc.internal.pageSize.getWidth();
+  const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
+  const CENTER_X = PAGE_WIDTH / 2;
 
   // MISMO ancho de columnas para tabla 1 y tabla 2
   const firstBlockColumnStyles = {
@@ -29,17 +32,17 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text("INSTITUTO MEXICANO DEL SEGURO SOCIAL", 105, 15, { align: "center" });
+  doc.text("INSTITUTO MEXICANO DEL SEGURO SOCIAL", CENTER_X, 15, { align: "center" });
 
   doc.setFontSize(11);
-  doc.text("SEGURIDAD Y SOLIDARIDAD SOCIAL", 105, 21, { align: "center" });
+  doc.text("SEGURIDAD Y SOLIDARIDAD SOCIAL", CENTER_X, 21, { align: "center" });
 
   doc.setFontSize(10);
-  doc.text('"SERVICIO MÉDICO INTEGRAL PARA ANESTESIA"', 105, 27, { align: "center" });
+  doc.text('"SERVICIO MÉDICO INTEGRAL PARA ANESTESIA"', CENTER_X, 27, { align: "center" });
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text('Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"', 105, 33, {
+  doc.text('Anexo T33 "Reporte individual de procedimientos, bienes de consumo y medicamentos"', CENTER_X, 33, {
     align: "center",
   });
 
@@ -51,6 +54,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
+    tableWidth: CONTENT_WIDTH,
     head: [["OOAD/UMAE:", "Unidad Médica:", "No. de contrato:", "Fecha:", "No. de folio:"]],
     body: [
       [
@@ -90,6 +94,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
+    tableWidth: CONTENT_WIDTH,
     head: [
       [
         "Número de Quirófano",
@@ -187,6 +192,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
+    tableWidth: CONTENT_WIDTH,
     body: proveedorTableBody,
     theme: "grid",
     styles: {
@@ -211,12 +217,13 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   // =========================
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.text("DATOS DEL PACIENTE", 105, yPos, { align: "center" });
+  doc.text("DATOS DEL PACIENTE", CENTER_X, yPos, { align: "center" });
   yPos += 2;
 
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
+    tableWidth: CONTENT_WIDTH,
     head: [["Apellido paterno", "Apellido materno", "Nombre(s)", "Género", "Edad", "NSS"]],
     body: [
       [
@@ -261,6 +268,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
+    tableWidth: CONTENT_WIDTH,
     head: [
       [
         "No.",
@@ -316,6 +324,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
+    tableWidth: CONTENT_WIDTH,
     head: [["No.", "Bienes de consumo", "Descripción", "Cantidad"]],
     body: insumosBody,
     theme: "grid",
@@ -353,6 +362,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
+    tableWidth: CONTENT_WIDTH,
     head: [["MÉDICO QUE REALIZÓ EL PROCEDIMIENTO (FIRMA Y MATRÍCULA)", "TÉCNICO (NOMBRE Y FIRMA)"]],
     body: [["", ""]],
     theme: "grid",

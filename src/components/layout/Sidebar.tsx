@@ -11,7 +11,8 @@ import {
   Database,
   LogOut,
   UserCog,
-  Upload
+  Upload,
+  Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HospitalSelector } from '@/components/HospitalSelector';
@@ -41,6 +42,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente'] },
     { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente'] },
     { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente'] },
+    { path: '/export-users', icon: Download, label: 'Exportar Usuarios', roles: ['gerente'] },
     { path: '/import-setup', icon: Upload, label: 'Importar Sistema', roles: ['gerente'] },
   ];
 

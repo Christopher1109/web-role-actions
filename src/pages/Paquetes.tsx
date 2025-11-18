@@ -27,11 +27,15 @@ const Paquetes = () => {
   const [selectedTipo, setSelectedTipo] = useState<string | null>(null);
   const [tiposAnestesia, setTiposAnestesia] = useState<any[]>([]);
   const [insumosDelTipo, setInsumosDelTipo] = useState<any[]>([]);
+  const [paquetes, setPaquetes] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingPaquete, setEditingPaquete] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user && selectedHospital) {
       fetchTiposAnestesia();
+      fetchPaquetes();
     }
   }, [user, selectedHospital]);
 
@@ -57,6 +61,49 @@ const Paquetes = () => {
       
     } catch (error: any) {
       toast.error('Error al cargar tipos de anestesia', {
+        description: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPaquetes = async () => {
+    try {
+      if (!selectedHospital) return;
+      
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('paquetes_anestesia')
+        .select(`
+          *,
+          paquete_insumos (
+            cantidad,
+            insumos (
+              id,
+              nombre,
+              clave
+            )
+          )
+        `)
+        .eq('hospital_budget_code', selectedHospital.budget_code)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedPaquetes = (data || []).map((paquete: any) => ({
+        ...paquete,
+        insumos: paquete.paquete_insumos?.map((pi: any) => ({
+          id: pi.insumos?.id,
+          nombre: pi.insumos?.nombre,
+          clave: pi.insumos?.clave,
+          cantidad: pi.cantidad,
+        })) || [],
+      }));
+
+      setPaquetes(formattedPaquetes);
+    } catch (error: any) {
+      toast.error('Error al cargar paquetes', {
         description: error.message,
       });
     } finally {

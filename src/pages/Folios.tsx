@@ -283,10 +283,18 @@ const Folios = ({ userRole }: FoliosProps) => {
                             size="sm"
                             onClick={async () => {
                               setSelectedFolio(folio);
-                              // Fetch insumos for this folio
+                              // Fetch insumos for this folio with JOIN to get insumo details
                               const { data: insumosData } = await (supabase as any)
                                 .from('folios_insumos')
-                                .select('*')
+                                .select(`
+                                  cantidad,
+                                  insumos (
+                                    nombre,
+                                    descripcion,
+                                    lote,
+                                    clave
+                                  )
+                                `)
                                 .eq('folio_id', folio.id);
                               setSelectedFolioInsumos(insumosData || []);
                               setShowDetail(true);

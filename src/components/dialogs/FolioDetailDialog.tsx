@@ -173,11 +173,11 @@ const FolioDetailDialog = ({ open, onOpenChange, folio, tiposAnestesiaLabels, in
             <div className="grid gap-3 text-sm">
               <div className="grid grid-cols-3 gap-2">
                 <span className="text-muted-foreground">Cirujano:</span>
-                <span className="col-span-2 font-medium">{folio.cirujano_id || 'No especificado'}</span>
+                <span className="col-span-2 font-medium">{folio.cirujano_nombre || 'No especificado'}</span>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <span className="text-muted-foreground">Anestesiólogo:</span>
-                <span className="col-span-2 font-medium">{folio.anestesiologo_id || 'No especificado'}</span>
+                <span className="col-span-2 font-medium">{folio.anestesiologo_nombre || 'No especificado'}</span>
               </div>
             </div>
           </div>
@@ -188,15 +188,23 @@ const FolioDetailDialog = ({ open, onOpenChange, folio, tiposAnestesiaLabels, in
               <div>
                 <h3 className="font-semibold mb-3 text-primary">Bienes de Consumo y Medicamentos</h3>
                 <div className="space-y-2">
-                  {insumos.map((insumo: any, idx: number) => (
+                  {insumos.map((item: any, idx: number) => (
                     <div key={idx} className="rounded-lg border bg-muted/50 p-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="font-medium">{insumo.nombre_insumo}</span>
-                        <span className="text-muted-foreground">Cantidad: {insumo.cantidad}</span>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <span className="font-medium">{item.insumos?.nombre || 'Sin nombre'}</span>
+                          {item.insumos?.descripcion && (
+                            <div className="text-muted-foreground text-xs mt-1">{item.insumos.descripcion}</div>
+                          )}
+                          {item.insumos?.clave && (
+                            <div className="text-muted-foreground text-xs">Clave: {item.insumos.clave}</div>
+                          )}
+                          {item.insumos?.lote && (
+                            <div className="text-muted-foreground text-xs">Lote: {item.insumos.lote}</div>
+                          )}
+                        </div>
+                        <span className="text-muted-foreground whitespace-nowrap ml-4">Cantidad: {item.cantidad}</span>
                       </div>
-                      {insumo.lote && (
-                        <div className="text-muted-foreground text-xs mt-1">Lote: {insumo.lote}</div>
-                      )}
                     </div>
                   ))}
                 </div>

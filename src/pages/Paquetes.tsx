@@ -11,59 +11,94 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import PaqueteForm from '@/components/forms/PaqueteForm';
 import { toast } from 'sonner';
 
+const tiposAnestesiaLabels: Record<string, string> = {
+  'general_balanceada_adulto': 'General Balanceada Adulto',
+  'general_balanceada_pediatrica': 'General Balanceada Pediátrica',
+  'alta_especialidad': 'Alta Especialidad',
+  'alta_especialidad_trasplante': 'Alta Especialidad Trasplante Renal',
+  'general_endovenosa': 'General Endovenosa',
+  'loco_regional': 'Locorregional',
+  'sedacion': 'Sedación',
+};
+
 const Paquetes = () => {
   const { user } = useAuth();
   const { selectedHospital } = useHospital();
-  const [showForm, setShowForm] = useState(false);
-  const [editingPaquete, setEditingPaquete] = useState<any>(null);
-  const [paquetes, setPaquetes] = useState<any[]>([]);
+  const [selectedTipo, setSelectedTipo] = useState<string | null>(null);
+  const [tiposAnestesia, setTiposAnestesia] = useState<any[]>([]);
+  const [insumosDelTipo, setInsumosDelTipo] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user && selectedHospital) {
-      fetchPaquetes();
+      fetchTiposAnestesia();
     }
   }, [user, selectedHospital]);
 
-  const fetchPaquetes = async () => {
+  const fetchTiposAnestesia = async () => {
     try {
       if (!selectedHospital) return;
       
       setLoading(true);
-      const { data: paquetesData, error: paquetesError } = await (supabase as any)
-        .from('paquetes_anestesia')
-        .select('*')
-        .eq('hospital_budget_code', selectedHospital.budget_code)
-        .order('created_at', { ascending: false });
+      // Obtener los tipos de anestesia únicos
+      const { data, error } = await supabase
+        .from('anestesia_insumos')
+        .select('tipo_anestesia')
+        .order('tipo_anestesia');
 
-      if (paquetesError) throw paquetesError;
+      if (error) throw error;
 
-      const paquetesConInsumos = await Promise.all(
-        (paquetesData || []).map(async (paquete: any) => {
-          const { data: insumosData } = await supabase
-            .from('paquete_insumos')
-            .select('cantidad, insumo_id, insumos(nombre)')
-            .eq('paquete_id', paquete.id);
-
-          return {
-            ...paquete,
-            insumos: (insumosData || []).map((i: any) => ({
-              id: i.insumo_id,
-              nombre: i.insumos?.nombre || '',
-              cantidad: i.cantidad,
-            })),
-          };
-        })
-      );
-
-      setPaquetes(paquetesConInsumos);
+      // Obtener tipos únicos
+      const tiposUnicos = [...new Set((data || []).map((d: any) => d.tipo_anestesia))];
+      setTiposAnestesia(tiposUnicos.map(tipo => ({
+        tipo,
+        label: tiposAnestesiaLabels[tipo] || tipo
+      })));
+      
     } catch (error: any) {
-      toast.error('Error al cargar paquetes', {
+      toast.error('Error al cargar tipos de anestesia', {
         description: error.message,
       });
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchInsumosDelTipo = async (tipo: string) => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('anestesia_insumos')
+        .select(`
+          cantidad_default,
+          orden,
+          insumo_id,
+          insumos (
+            id,
+            nombre,
+            descripcion,
+            clave,
+            cantidad
+          )
+        `)
+        .eq('tipo_anestesia', tipo)
+        .order('orden', { ascending: true });
+
+      if (error) throw error;
+
+      setInsumosDelTipo(data || []);
+    } catch (error: any) {
+      toast.error('Error al cargar insumos', {
+        description: error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectTipo = (tipo: string) => {
+    setSelectedTipo(tipo);
+    fetchInsumosDelTipo(tipo);
   };
 
   const handleCreateOrUpdate = async (data: any) => {

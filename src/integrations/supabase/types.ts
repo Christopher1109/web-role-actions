@@ -299,6 +299,8 @@ export type Database = {
           clave: string | null
           created_at: string | null
           descripcion: string | null
+          fecha_caducidad: string | null
+          fecha_entrada: string | null
           hospital_budget_code: string | null
           hospital_display_name: string | null
           hospital_id: string | null
@@ -313,6 +315,8 @@ export type Database = {
           clave?: string | null
           created_at?: string | null
           descripcion?: string | null
+          fecha_caducidad?: string | null
+          fecha_entrada?: string | null
           hospital_budget_code?: string | null
           hospital_display_name?: string | null
           hospital_id?: string | null
@@ -327,6 +331,8 @@ export type Database = {
           clave?: string | null
           created_at?: string | null
           descripcion?: string | null
+          fecha_caducidad?: string | null
+          fecha_entrada?: string | null
           hospital_budget_code?: string | null
           hospital_display_name?: string | null
           hospital_id?: string | null

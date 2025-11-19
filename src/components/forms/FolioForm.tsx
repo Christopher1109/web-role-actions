@@ -20,6 +20,8 @@ type Insumo = {
   nombre: string;
   lote: string;
   cantidad: number;
+  cantidad_minima?: number;
+  cantidad_maxima?: number;
 };
 
 type FolioInsumo = {
@@ -29,6 +31,8 @@ type FolioInsumo = {
     lote: string;
   };
   cantidad: number;
+  cantidad_minima?: number;
+  cantidad_maxima?: number;
 };
 
 /*
@@ -254,6 +258,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       insumosMap.set(insumo.id, {
         insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
         cantidad: insumo.cantidad,
+        cantidad_minima: insumo.cantidad_minima,
+        cantidad_maxima: insumo.cantidad_maxima,
       });
     });
     
@@ -261,13 +267,22 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     secundaria.slice(0, 5).forEach((insumo) => {
       const existing = insumosMap.get(insumo.id);
       if (existing) {
-        // Si ya existe, sumar la cantidad
+        // Si ya existe, usar el máximo de los mínimos y el mínimo de los máximos
+        const minCombined = Math.max(existing.cantidad_minima || 0, insumo.cantidad_minima || 0);
+        const maxCombined = existing.cantidad_maxima && insumo.cantidad_maxima 
+          ? Math.min(existing.cantidad_maxima, insumo.cantidad_maxima)
+          : existing.cantidad_maxima || insumo.cantidad_maxima;
+        
         existing.cantidad += insumo.cantidad;
+        existing.cantidad_minima = minCombined;
+        existing.cantidad_maxima = maxCombined;
       } else {
         // Si no existe, agregarlo
         insumosMap.set(insumo.id, {
           insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
           cantidad: insumo.cantidad,
+          cantidad_minima: insumo.cantidad_minima,
+          cantidad_maxima: insumo.cantidad_maxima,
         });
       }
     });
@@ -291,8 +306,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         .from("anestesia_insumos")
         .select(
           `
-          cantidad_default,
-          orden,
+          cantidad_minima,
+          cantidad_maxima,
           insumo_id,
           insumos (
             id,
@@ -302,7 +317,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         `,
         )
         .eq("tipo_anestesia", tipoDb)
-        .order("orden", { ascending: true }) as { data: any[] | null; error: any };
+        .order("cantidad_minima", { ascending: false }) as { data: any[] | null; error: any };
 
       if (error) throw error;
 
@@ -312,7 +327,9 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           id: ai.insumos.id,
           nombre: ai.insumos.nombre,
           lote: ai.insumos.lote || "",
-          cantidad: ai.cantidad_default || 1,
+          cantidad: ai.cantidad_minima || 1,
+          cantidad_minima: ai.cantidad_minima || 0,
+          cantidad_maxima: ai.cantidad_maxima || null,
         }));
     } catch (error) {
       console.error("Error loading insumos:", error);
@@ -348,6 +365,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           lote: insumo.lote,
         },
         cantidad: insumo.cantidad,
+        cantidad_minima: insumo.cantidad_minima,
+        cantidad_maxima: insumo.cantidad_maxima,
       }));
       setInsumosFolio(preselected);
     };
@@ -372,6 +391,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         const preselected = insumosData.slice(0, 5).map((insumo) => ({
           insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
           cantidad: insumo.cantidad,
+          cantidad_minima: insumo.cantidad_minima,
+          cantidad_maxima: insumo.cantidad_maxima,
         }));
         setInsumosFolio(preselected);
       }
@@ -397,6 +418,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         const preselected = insumosData.slice(0, 5).map((insumo) => ({
           insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
           cantidad: insumo.cantidad,
+          cantidad_minima: insumo.cantidad_minima,
+          cantidad_maxima: insumo.cantidad_maxima,
         }));
         setInsumosFolio(preselected);
       }
@@ -424,11 +447,17 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   const handleAgregarInsumo = () => {
     const insumo = insumosParaAgregar.find((i) => i.id === selectedInsumoId);
     if (!insumo) return;
+    
+    // Usar cantidad mínima como valor por defecto
+    const cantidadDefault = insumo.cantidad_minima || 1;
+    
     setInsumosFolio([
       ...insumosFolio,
       {
         insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
-        cantidad: 1,
+        cantidad: cantidadDefault,
+        cantidad_minima: insumo.cantidad_minima,
+        cantidad_maxima: insumo.cantidad_maxima,
       },
     ]);
     setSelectedInsumoId("");
@@ -440,9 +469,27 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     setInsumosFolio(insumosFolio.filter((fi) => fi.insumo.id !== insumoId));
   };
 
-  // Actualiza la cantidad de un insumo del folio
-  const handleUpdateCantidad = (insumoId: string, cantidad: number) => {
-    setInsumosFolio(insumosFolio.map((fi) => (fi.insumo.id === insumoId ? { ...fi, cantidad } : fi)));
+  // Actualiza la cantidad de un insumo del folio con validaciones de min/max
+  const handleUpdateCantidad = (insumoId: string, nuevaCantidad: number) => {
+    const folioInsumo = insumosFolio.find((fi) => fi.insumo.id === insumoId);
+    if (!folioInsumo) return;
+
+    const minima = folioInsumo.cantidad_minima || 1;
+    const maxima = folioInsumo.cantidad_maxima;
+
+    // Validar mínimo
+    if (nuevaCantidad < minima) {
+      toast.error(`La cantidad mínima para este insumo es ${minima}`);
+      return;
+    }
+
+    // Validar máximo
+    if (maxima && nuevaCantidad > maxima) {
+      toast.error(`La cantidad máxima para este insumo es ${maxima}`);
+      return;
+    }
+
+    setInsumosFolio(insumosFolio.map((fi) => (fi.insumo.id === insumoId ? { ...fi, cantidad: nuevaCantidad } : fi)));
   };
 
   // Envía el formulario completo

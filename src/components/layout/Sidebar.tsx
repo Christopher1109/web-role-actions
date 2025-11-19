@@ -45,6 +45,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/export-users', icon: Download, label: 'Exportar Usuarios', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/import-setup', icon: Upload, label: 'Importar Sistema', roles: ['gerente', 'gerente_operaciones'] },
+    { path: '/import-medicamentos-limites', icon: Upload, label: 'Importar Medicamentos', roles: ['gerente', 'gerente_operaciones'] },
   ];
 
   const filteredMenuItems = menuItems.filter(item => 

@@ -22,6 +22,7 @@ import FixUsers from './pages/FixUsers';
 import GenerateCredentials from './pages/GenerateCredentials';
 import PopulateInsumos from './pages/PopulateInsumos';
 import ImportProcedimientos from './pages/ImportProcedimientos';
+import ImportMedicamentosLimites from './pages/ImportMedicamentosLimites';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -87,6 +88,7 @@ const AppContent = () => {
                   <Route path="/generate-credentials" element={<GenerateCredentials />} />
                   <Route path="/populate-insumos" element={<PopulateInsumos />} />
                   <Route path="/import-procedimientos" element={<ImportProcedimientos />} />
+                  <Route path="/import-medicamentos-limites" element={<ImportMedicamentosLimites />} />
                 </>
               )}
               <Route path="/auth" element={<Navigate to="/dashboard" replace />} />

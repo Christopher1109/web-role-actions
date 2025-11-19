@@ -32,34 +32,31 @@ type FolioInsumo = {
 };
 
 /*
- * Mapeo de los valores de tipo de anestesia (usados en el select) a los
- * nombres reales de la base de datos (`tipo_anestesia` en la tabla
- * anestesia_insumos`). Este mapa permite que podamos usar slugs en la
- * interfaz mientras que las consultas a Supabase utilizan los nombres
- * correctos.  Si agregas nuevos tipos en la UI, actualiza este mapa
- * para reflejar el nombre exacto en la BD.
+ * Mapeo de nombres de procedimientos (como vienen de la tabla procedimientos)
+ * a los valores snake_case usados en anestesia_insumos
  */
-const tipoAnestesiaToDb: Record<string, string> = {
-  sedacion: "sedacion",
-  loco_regional: "loco_regional",
-  general_balanceada_adulto: "general_balanceada_adulto",
-  general_balanceada_pediatrica: "general_balanceada_pediatrica",
-  general_endovenosa: "general_endovenosa",
-  alta_especialidad: "alta_especialidad",
-  alta_especialidad_trasplante: "alta_especialidad_trasplante",
-  anestesia_mixta: "anestesia_mixta",
+const procedimientoToTipoAnestesia: Record<string, string> = {
+  "Sedación": "sedacion",
+  "Anestesia Loco Regional": "loco_regional",
+  "Anestesia General Loco Regional": "loco_regional",
+  "Anestesia General Balanceada Adulto": "general_balanceada_adulto",
+  "Anestesia General Balanceada Pediátrica": "general_balanceada_pediatrica",
+  "Anestesia General Endovenosa": "general_endovenosa",
+  "Anestesia General de Alta Especialidad": "alta_especialidad",
+  "Alta Especialidad Trasplante Renal": "alta_especialidad_trasplante",
 };
 
 // Mapeo de labels para mostrar nombres amigables
 const tipoAnestesiaLabels: Record<string, string> = {
-  sedacion: "Sedación / Cuidados anestésicos monitoreados",
-  loco_regional: "Loco regional",
-  general_balanceada_adulto: "General balanceada adulto",
-  general_balanceada_pediatrica: "General balanceada pediátrica",
-  general_endovenosa: "General endovenosa",
-  alta_especialidad: "Alta especialidad",
-  alta_especialidad_trasplante: "Alta especialidad trasplante renal",
-  anestesia_mixta: "Anestesia mixta",
+  "Sedación": "Sedación / Cuidados anestésicos monitoreados",
+  "Anestesia Loco Regional": "Loco regional",
+  "Anestesia General Loco Regional": "Loco regional",
+  "Anestesia General Balanceada Adulto": "General balanceada adulto",
+  "Anestesia General Balanceada Pediátrica": "General balanceada pediátrica",
+  "Anestesia General Endovenosa": "General endovenosa",
+  "Anestesia General de Alta Especialidad": "Alta especialidad",
+  "Alta Especialidad Trasplante Renal": "Alta especialidad trasplante renal",
+  "anestesia_mixta": "Anestesia mixta",
 };
 
 // Esquema de validación de los campos del folio T33
@@ -285,7 +282,10 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     if (!tipo) return [];
 
     try {
-      const tipoDb = tipoAnestesiaToDb[tipo] ?? tipo;
+      // Convertir el nombre del procedimiento al valor snake_case
+      const tipoDb = procedimientoToTipoAnestesia[tipo] ?? tipo;
+      
+      console.log(`🔍 Buscando insumos para tipo: "${tipo}" → "${tipoDb}"`);
 
       const { data: anestesiaInsumos, error } = await supabase
         .from("anestesia_insumos")
@@ -306,7 +306,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
       if (error) throw error;
 
-      return (anestesiaInsumos || [])
+      const insumos = (anestesiaInsumos || [])
         .filter((ai: any) => ai.insumos)
         .map((ai: any) => ({
           id: ai.insumos.id,
@@ -314,6 +314,9 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           lote: ai.insumos.lote || "",
           cantidad: ai.cantidad_default || 1,
         }));
+      
+      console.log(`✅ Insumos cargados: ${insumos.length}`);
+      return insumos;
     } catch (error) {
       console.error("Error loading insumos:", error);
       return [];

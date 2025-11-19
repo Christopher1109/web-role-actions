@@ -20,6 +20,10 @@ type Insumo = {
   nombre: string;
   lote: string;
   cantidad: number;
+  cantidad_minima?: number;
+  cantidad_maxima?: number;
+  tipo_limite?: string;
+  nota?: string;
 };
 
 type FolioInsumo = {
@@ -29,6 +33,10 @@ type FolioInsumo = {
     lote: string;
   };
   cantidad: number;
+  cantidad_minima?: number;
+  cantidad_maxima?: number;
+  tipo_limite?: string;
+  nota?: string;
 };
 
 /*
@@ -254,6 +262,10 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       insumosMap.set(insumo.id, {
         insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
         cantidad: insumo.cantidad,
+        cantidad_minima: insumo.cantidad_minima,
+        cantidad_maxima: insumo.cantidad_maxima,
+        tipo_limite: insumo.tipo_limite,
+        nota: insumo.nota,
       });
     });
     
@@ -268,6 +280,10 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         insumosMap.set(insumo.id, {
           insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
           cantidad: insumo.cantidad,
+          cantidad_minima: insumo.cantidad_minima,
+          cantidad_maxima: insumo.cantidad_maxima,
+          tipo_limite: insumo.tipo_limite,
+          nota: insumo.nota,
         });
       }
     });
@@ -292,6 +308,11 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         .select(
           `
           cantidad_default,
+          cantidad_minima,
+          cantidad_maxima,
+          tipo_limite,
+          nota,
+          activo,
           orden,
           insumo_id,
           insumos (
@@ -302,6 +323,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         `,
         )
         .eq("tipo_anestesia", tipoDb)
+        .eq("activo", true)
         .order("orden", { ascending: true }) as { data: any[] | null; error: any };
 
       if (error) throw error;
@@ -313,6 +335,10 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           nombre: ai.insumos.nombre,
           lote: ai.insumos.lote || "",
           cantidad: ai.cantidad_default || 1,
+          cantidad_minima: ai.cantidad_minima || 0,
+          cantidad_maxima: ai.cantidad_maxima || 999,
+          tipo_limite: ai.tipo_limite || 'rango',
+          nota: ai.nota || '',
         }));
     } catch (error) {
       console.error("Error loading insumos:", error);
@@ -348,6 +374,10 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           lote: insumo.lote,
         },
         cantidad: insumo.cantidad,
+        cantidad_minima: insumo.cantidad_minima,
+        cantidad_maxima: insumo.cantidad_maxima,
+        tipo_limite: insumo.tipo_limite,
+        nota: insumo.nota,
       }));
       setInsumosFolio(preselected);
     };
@@ -372,6 +402,10 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         const preselected = insumosData.slice(0, 5).map((insumo) => ({
           insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
           cantidad: insumo.cantidad,
+          cantidad_minima: insumo.cantidad_minima,
+          cantidad_maxima: insumo.cantidad_maxima,
+          tipo_limite: insumo.tipo_limite,
+          nota: insumo.nota,
         }));
         setInsumosFolio(preselected);
       }
@@ -397,6 +431,10 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         const preselected = insumosData.slice(0, 5).map((insumo) => ({
           insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
           cantidad: insumo.cantidad,
+          cantidad_minima: insumo.cantidad_minima,
+          cantidad_maxima: insumo.cantidad_maxima,
+          tipo_limite: insumo.tipo_limite,
+          nota: insumo.nota,
         }));
         setInsumosFolio(preselected);
       }
@@ -424,11 +462,20 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   const handleAgregarInsumo = () => {
     const insumo = insumosParaAgregar.find((i) => i.id === selectedInsumoId);
     if (!insumo) return;
+    
+    const cantidadInicial = insumo.cantidad_minima && insumo.cantidad_minima > 0 
+      ? insumo.cantidad_minima 
+      : insumo.cantidad || 1;
+
     setInsumosFolio([
       ...insumosFolio,
       {
         insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
-        cantidad: 1,
+        cantidad: cantidadInicial,
+        cantidad_minima: insumo.cantidad_minima,
+        cantidad_maxima: insumo.cantidad_maxima,
+        tipo_limite: insumo.tipo_limite,
+        nota: insumo.nota,
       },
     ]);
     setSelectedInsumoId("");
@@ -442,6 +489,25 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
   // Actualiza la cantidad de un insumo del folio
   const handleUpdateCantidad = (insumoId: string, cantidad: number) => {
+    const insumo = insumosFolio.find((fi) => fi.insumo.id === insumoId);
+    
+    if (!insumo) return;
+
+    // Validar máximo
+    if (insumo.cantidad_maxima && cantidad > insumo.cantidad_maxima) {
+      toast.error(
+        `No puedes usar más de ${insumo.cantidad_maxima} unidades de "${insumo.insumo.nombre}". ${insumo.nota || ''}`
+      );
+      return;
+    }
+
+    // Validar mínimo (solo advertir, no bloquear)
+    if (insumo.cantidad_minima && cantidad < insumo.cantidad_minima) {
+      toast.warning(
+        `La cantidad mínima recomendada es ${insumo.cantidad_minima} unidades. ${insumo.nota || ''}`
+      );
+    }
+
     setInsumosFolio(insumosFolio.map((fi) => (fi.insumo.id === insumoId ? { ...fi, cantidad } : fi)));
   };
 
@@ -450,6 +516,26 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     // Validar que el tipo de anestesia sea válido para el hospital
     if (!selectedHospital?.id) {
       toast.error("Debe seleccionar un hospital");
+      return;
+    }
+
+    // Validar cantidades mínimas de insumos
+    const erroresMinimos = insumosFolio
+      .filter((fi) => fi.cantidad_minima && fi.cantidad < fi.cantidad_minima)
+      .map((fi) => `${fi.insumo.nombre}: mínimo ${fi.cantidad_minima} unidades (tienes ${fi.cantidad})`);
+
+    if (erroresMinimos.length > 0) {
+      toast.error(
+        <div>
+          <p className="font-semibold">No se cumplen las cantidades mínimas:</p>
+          <ul className="list-disc pl-4 mt-1">
+            {erroresMinimos.map((error, i) => (
+              <li key={i} className="text-sm">{error}</li>
+            ))}
+          </ul>
+        </div>,
+        { duration: 6000 }
+      );
       return;
     }
 
@@ -988,13 +1074,23 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                     <TableCell className="py-2">{fi.insumo.nombre}</TableCell>
                     <TableCell className="py-2">{fi.insumo.lote}</TableCell>
                     <TableCell className="py-2">
-                      <Input
-                        type="number"
-                        min="1"
-                        value={fi.cantidad}
-                        onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
-                        className="w-20 h-8"
-                      />
+                      <div className="space-y-1">
+                        <Input
+                          type="number"
+                          min={fi.cantidad_minima || 1}
+                          max={fi.cantidad_maxima}
+                          value={fi.cantidad}
+                          onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
+                          className="w-20 h-8"
+                        />
+                        {(fi.cantidad_minima || fi.cantidad_maxima) && (
+                          <p className="text-xs text-muted-foreground">
+                            {fi.tipo_limite === 'fijo' && `Fijo: ${fi.cantidad_minima}`}
+                            {fi.tipo_limite === 'rango' && `${fi.cantidad_minima}-${fi.cantidad_maxima}`}
+                            {fi.tipo_limite === 'a_eleccion' && `A elección (máx: ${fi.cantidad_maxima})`}
+                          </p>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="py-2">
                       <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveInsumo(fi.insumo.id)}>

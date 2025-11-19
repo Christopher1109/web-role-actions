@@ -5,230 +5,108 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface InsumoConfig {
-  nombre: string;
-  cantidad_minima: number;
-  cantidad_maxima: number;
-  tipo_limite: 'fijo' | 'rango' | 'a_eleccion' | 'desactivado';
-  nota?: string;
-  cantidad_default: number;
-  activo: boolean;
-  orden: number;
-}
-
-const insumosGeneralBalanceadaAdulto: InsumoConfig[] = [
-  {
-    nombre: 'CIRCUITO CIRCULAR CERRADO EXPANDIBLE CON BOLSA Y MASCARILLA',
-    cantidad_minima: 1,
-    cantidad_maxima: 1,
-    tipo_limite: 'fijo',
-    cantidad_default: 1,
-    activo: true,
-    orden: 1
-  },
-  {
-    nombre: 'TUBO ENDOTRAQUEAL DE PLÁSTICO',
-    cantidad_minima: 1,
-    cantidad_maxima: 2,
-    tipo_limite: 'a_eleccion',
-    nota: 'El anestesiólogo elige la medida',
-    cantidad_default: 1,
-    activo: true,
-    orden: 2
-  },
-  {
-    nombre: 'TUBO ENDOTRAQUEAL PREFORMADO CON GLOBO',
-    cantidad_minima: 0,
-    cantidad_maxima: 0,
-    tipo_limite: 'desactivado',
-    nota: 'No aplica para esta categoría',
-    cantidad_default: 0,
-    activo: false,
-    orden: 3
-  },
-  {
-    nombre: 'TUBO ENDOBRONQUIAL',
-    cantidad_minima: 0,
-    cantidad_maxima: 0,
-    tipo_limite: 'desactivado',
-    nota: 'No aplica para esta categoría',
-    cantidad_default: 0,
-    activo: false,
-    orden: 4
-  },
-  {
-    nombre: 'CÁNULA OROFARÍNGEA TIPO GUEDEL',
-    cantidad_minima: 1,
-    cantidad_maxima: 1,
-    tipo_limite: 'fijo',
-    cantidad_default: 1,
-    activo: true,
-    orden: 5
-  },
-  {
-    nombre: 'LLAVE DE 3 VÍAS CON EXTENSIÓN',
-    cantidad_minima: 1,
-    cantidad_maxima: 3,
-    tipo_limite: 'a_eleccion',
-    nota: 'A elección del anestesiólogo',
-    cantidad_default: 1,
-    activo: true,
-    orden: 6
-  },
-  {
-    nombre: 'LLAVE DE 3 O 4 VÍAS SIN EXTENSIÓN',
-    cantidad_minima: 0,
-    cantidad_maxima: 0,
-    tipo_limite: 'desactivado',
-    cantidad_default: 0,
-    activo: false,
-    orden: 7
-  },
-  {
-    nombre: 'EQUIPO DE VENOCLISIS PARA BOMBA DE INFUSIÓN',
-    cantidad_minima: 1,
-    cantidad_maxima: 1,
-    tipo_limite: 'fijo',
-    cantidad_default: 1,
-    activo: true,
-    orden: 8
-  },
-  {
-    nombre: 'MEDIAS DE COMPRESIÓN ANTITROMBÓTICAS',
-    cantidad_minima: 1,
-    cantidad_maxima: 1,
-    tipo_limite: 'fijo',
-    cantidad_default: 1,
-    activo: true,
-    orden: 9
-  },
-  {
-    nombre: 'ELECTRODOS PARA ELECTROCARDIOGRAMA',
-    cantidad_minima: 3,
-    cantidad_maxima: 5,
-    tipo_limite: 'rango',
-    cantidad_default: 3,
-    activo: true,
-    orden: 10
-  },
-  {
-    nombre: 'CATÉTER PARA VENOCLISIS',
-    cantidad_minima: 2,
-    cantidad_maxima: 3,
-    tipo_limite: 'rango',
-    cantidad_default: 2,
-    activo: true,
-    orden: 11
-  },
-  {
-    nombre: 'EQUIPO PARA VENOCLISIS MICROGOTERO Y NORMOGOTERO',
-    cantidad_minima: 1,
-    cantidad_maxima: 3,
-    tipo_limite: 'rango',
-    cantidad_default: 1,
-    activo: true,
-    orden: 12
-  },
-  {
-    nombre: 'JERINGA DE PLÁSTICO CON CAPACIDAD DE 10ML CON AGUJA DE 21G',
-    cantidad_minima: 3,
-    cantidad_maxima: 6,
-    tipo_limite: 'rango',
-    cantidad_default: 3,
-    activo: true,
-    orden: 13
-  },
-  {
-    nombre: 'JERINGA DE PLÁSTICO CON CAPACIDAD DE 20ML SIN AGUJA',
-    cantidad_minima: 1,
-    cantidad_maxima: 2,
-    tipo_limite: 'rango',
-    cantidad_default: 1,
-    activo: true,
-    orden: 14
-  },
-  {
-    nombre: 'JERINGA DE PLÁSTICO CON CAPACIDAD DE 50ML SIN AGUJA',
-    cantidad_minima: 1,
-    cantidad_maxima: 3,
-    tipo_limite: 'rango',
-    cantidad_default: 1,
-    activo: true,
-    orden: 15
-  },
-  {
-    nombre: 'GUANTES PARA EXPLORACIÓN AMBIDIESTRO ESTÉRILES DE LATEX',
-    cantidad_minima: 1,
-    cantidad_maxima: 2,
-    tipo_limite: 'a_eleccion',
-    nota: 'Talla a elección del anestesiólogo',
-    cantidad_default: 1,
-    activo: true,
-    orden: 16
-  },
-  {
-    nombre: 'JERINGA DE PLÁSTICO CON CAPACIDAD DE 5ML CON AGUJA 20G',
-    cantidad_minima: 3,
-    cantidad_maxima: 4,
-    tipo_limite: 'rango',
-    cantidad_default: 3,
-    activo: true,
-    orden: 17
-  },
-  {
-    nombre: 'JERINGA DE INSULINA',
-    cantidad_minima: 1,
-    cantidad_maxima: 4,
-    tipo_limite: 'rango',
-    cantidad_default: 1,
-    activo: true,
-    orden: 18
-  },
-  {
-    nombre: 'AGUJA HIPODÉRMICA DESECHABLE CALIBRES: 20G, 21G, 22G, 25G',
-    cantidad_minima: 5,
-    cantidad_maxima: 8,
-    tipo_limite: 'rango',
-    cantidad_default: 5,
-    activo: true,
-    orden: 19
-  },
-  {
-    nombre: 'CAL SODADA: ABSORBEDOR PARA UNIDAD DE ANESTESIA, DE DIÓXIDO DE CARBONO',
-    cantidad_minima: 2,
-    cantidad_maxima: 3,
-    tipo_limite: 'rango',
-    cantidad_default: 2,
-    activo: true,
-    orden: 20
-  },
-  {
-    nombre: 'EQUIPO DE APLICACIÓN DE VOLUMEN MEDIDO CON CAPACIDAD DE 100ML',
-    cantidad_minima: 1,
-    cantidad_maxima: 3,
-    tipo_limite: 'rango',
-    cantidad_default: 1,
-    activo: true,
-    orden: 21
-  },
-  {
-    nombre: 'ELECTRODOS PARA MONITOREO DE PROFUNDIDAD ANESTÉSICA',
-    cantidad_minima: 1,
-    cantidad_maxima: 1,
-    tipo_limite: 'fijo',
-    cantidad_default: 1,
-    activo: true,
-    orden: 22
-  },
-  {
-    nombre: 'MASCARILLA FACIAL PARA ADMINISTRACIÓN DE OXÍGENO',
-    cantidad_minima: 1,
-    cantidad_maxima: 1,
-    tipo_limite: 'fijo',
-    cantidad_default: 1,
-    activo: true,
-    orden: 23
-  }
+const insumosLista = [
+  "CIRCUITO CIRCULAR CERRADO EXPANDIBLE (ADULTO)",
+  "CIRCUITO CIRCULAR CERRADO EXPANDIBLE: (NEONATAL)",
+  "CIRCUITO CIRCULAR CERRADO EXPANDIBLE CON : (PEDIÁTRICO)",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 3.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 3.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 4.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 4-0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 5.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 5.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 6.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 6.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 7.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 7.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 8.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 8.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 9.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO CON GLOBO TAMAÑO: 9.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO SIN GLOBO TAMAÑO: 2.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO SIN GLOBO TAMAÑO: 2.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO SIN GLOBO TAMAÑO: 3.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO SIN GLOBO TAMAÑO: 3.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO SIN GLOBO TAMAÑO: 4.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO SIN GLOBO TAMAÑO: 4.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO SIN GLOBO TAMAÑO: 5.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO SIN GLOBO TAMAÑO: 5.5",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO SIN GLOBO TAMAÑO: 6.0",
+  "TUBO ENDOTRAQUEAL DE PLASTICO GRADO MEDICO SIN GLOBO TAMAÑO: 6.5",
+  "CANULA OROFARINGEA TIPO GUEDEL DE PLASTICO TRANSPARENTE DE LAS SIGUIENTES MEDIDAS: 0 LONGITUD 50MM",
+  "CANULA OROFARINGEA TIPO GUEDEL DE PLASTICO TRANSPARENTE DE LAS SIGUIENTES MEDIDAS: 1 LONGITUD 60MM",
+  "CANULA OROFARINGEA TIPO GUEDEL DE PLASTICO TRANSPARENTE DE LAS SIGUIENTES MEDIDAS: 2 LONGITUD 70MM",
+  "CANULA OROFARINGEA TIPO GUEDEL DE PLASTICO TRANSPARENTE DE LAS SIGUIENTES MEDIDAS: 3 LONGITUD 80MM",
+  "CANULA OROFARINGEA TIPO GUEDEL DE PLASTICO TRANSPARENTE DE LAS SIGUIENTES MEDIDAS: 4 LONGITUD 90MM",
+  "CANULA OROFARINGEA TIPO GUEDEL DE PLASTICO TRANSPARENTE DE LAS SIGUIENTES MEDIDAS: 5 LONGITUD 100MM",
+  "CANULA OROFARINGEA TIPO GUEDEL DE PLASTICO TRANSPARENTE DE LAS SIGUIENTES MEDIDAS: 6 LONGITUD 110MM",
+  "LLAVE DE 3 VÍAS CON EXTENSIÓN",
+  "LLAVE DE TRES VIAS SIN TUBO DE EXTENSIÓN",
+  "EQUIPO DE VENOCLISIS PARA BOMBA DE INFUSIÓN, COMPATIBLE CON EL EQUIPO OFERTADO",
+  "MEDIAS DE COMPRESIÓN ANTI- TROMBÓTICAS HASTA LA RODILLA, TALLAS: CHICA",
+  "MEDIAS DE COMPRESIÓN ANTI- TROMBÓTICAS HASTA LA RODILLA, TALLAS: GRANDE",
+  "MEDIAS DE COMPRESIÓN ANTI- TROMBÓTICAS HASTA LA RODILLA, TALLAS: MEDIANA",
+  "ELECTRODOS PARA ELECTROCARDIOGRAMA CON SOPORTE ADHESIVO RECUBIERTOS DE AG E HIDROGEL CONDUCTOR",
+  "CATETER PARA VENOCLISIS MEDIDAS: 14G",
+  "CATETER PARA VENOCLISIS MEDIDAS: 16G",
+  "CATETER PARA VENOCLISIS MEDIDAS: 18G",
+  "CATETER PARA VENOCLISIS MEDIDAS: 20G",
+  "CATETER PARA VENOCLISIS MEDIDAS: 22G",
+  "CATETER PARA VENOCLISIS MEDIDAS: 24G",
+  "EQUIPO PARA VENOCLISIS MICROGOTERO",
+  "EQUIPO PARA VENOCLISIS NORMOGOTERO",
+  "JERINGA DE PLASTICO CON CAPACIDAD DE 10ML CON AGUJA DE 21G",
+  "JERINGA DE PLASTICO CON CAPACIDAD DE 20ML SIN AGUJA",
+  "JERINGA DE PLASTICO CON CAPACIDAD DE 50ML SIN AGUJA",
+  "GUANTES PARA EXPLORACIÓN AMBIDIESTRO ESTÉRILES DE LATEX DESECHABLES TAMAÑO CHICO",
+  "GUANTES PARA EXPLORACIÓN AMBIDIESTRO ESTÉRILES DE LATEX DESECHABLES TAMAÑO GRANDE",
+  "GUANTES PARA EXPLORACIÓN AMBIDIESTRO ESTÉRILES DE LATEX DESECHABLES TAMAÑO MEDIANO",
+  "JERINGA DE PLASTICO CON CAPACIDAD DE 5ML CON AGUJA 20G",
+  "JERINGA DE INSULINA",
+  "AGUJA HIPODÉRMICA DESECHABLE CALIBRES: 20G",
+  "AGUJA HIPODÉRMICA DESECHABLE CALIBRES: 21G",
+  "AGUJA HIPODÉRMICA DESECHABLE CALIBRES: 22G",
+  "AGUJA HIPODÉRMICA DESECHABLE CALIBRES: 25G",
+  "CAL SODADA: ABSORBEDOR PARA UNIDAD DE ANESTESIA, DE DIOXIDO DE CARBONO",
+  "EQUIPO PARA APLICACIÓN DE VOLUMEN MEDIDO CON CAPACIDAD DE 100ML, PARA LA ADMINISTRACIÓN DE MEDICAMENTOS, CONSTA DE BAYONETA, FILTRO DE AIRE, CAMARA BURETA FLEXIBLE, GRADUADA EN MILIMETROS.",
+  "ELECTRODOS PARA MONITOREO DE PROFUNDIDAD ANESTESICA COMPATIBLE CON LA TECNOLOGÍA OFERTADA",
+  "MASCARILLA FACIAL PARA ADMINISTRACIÓN DE OXÍGENO CON ALMOHADILLA Y VALVULA PARA INFLADO TAMAÑOS 1",
+  "MASCARILLA FACIAL PARA ADMINISTRACIÓN DE OXÍGENO CON ALMOHADILLA Y VALVULA PARA INFLADO TAMAÑOS 2",
+  "MASCARILLA FACIAL PARA ADMINISTRACIÓN DE OXÍGENO CON ALMOHADILLA Y VALVULA PARA INFLADO TAMAÑOS 3",
+  "MASCARILLA FACIAL PARA ADMINISTRACIÓN DE OXÍGENO CON ALMOHADILLA Y VALVULA PARA INFLADO TAMAÑOS 4",
+  "MASCARILLA FACIAL PARA ADMINISTRACIÓN DE OXÍGENO CON ALMOHADILLA Y VALVULA PARA INFLADO TAMAÑOS 5",
+  "MASCARILLA FACIAL PARA ADMINISTRACIÓN DE OXÍGENO CON ALMOHADILLA Y VALVULA PARA INFLADO TAMAÑOS 6",
+  "MASCARILLA LARINGEA SUPRAGLOTICA CLASICA TAMAÑOS: 1.0",
+  "MASCARILLA LARINGEA SUPRAGLOTICA CLASICA TAMAÑOS: 1.5",
+  "MASCARILLA LARINGEA SUPRAGLOTICA CLASICA TAMAÑOS: 2.0",
+  "MASCARILLA LARINGEA SUPRAGLOTICA CLASICA TAMAÑOS: 2.5",
+  "MASCARILLA LARINGEA SUPRAGLOTICA CLASICA TAMAÑOS: 3.0",
+  "MASCARILLA LARINGEA SUPRAGLOTICA CLASICA TAMAÑOS: 4.0",
+  "MASCARILLA LARINGEA SUPRAGLOTICA CLASICA TAMAÑOS: 5.0",
+  "DOMO TRANSDUCTOR PARA MEDICIÓN DE PRESION INVASIVA COMPATIBLE CON LOS MONITORES OFERTADOS",
+  "TUBO ENDOTRAQUEAL CON GLOBO Y ESPIRAL DE ALAMBRE CALIBRES: 32FR",
+  "TUBO ENDOTRAQUEAL CON GLOBO Y ESPIRAL DE ALAMBRE CALIBRES: 34FR",
+  "TUBO ENDOTRAQUEAL CON GLOBO Y ESPIRAL DE ALAMBRE CALIBRES: 36FR",
+  "TUBO ENDOTRAQUEAL CON GLOBO Y ESPIRAL DE ALAMBRE CALIBRES: 38FR",
+  "TUBO ENDOTRAQUEAL CON GLOBO Y ESPIRAL DE ALAMBRE CALIBRES: 40FR",
+  "SEVOFLURANO. LIQUIDO O SOLUCION CADA ENVASE CONTIENE: SEVOFLURANO 250 ML. ENVASE CON 250 ML DE LÍQUIDO O SOLUCIÓN.",
+  "DESFLURANO. LIQUIDO CADA ENVASE CONTIENE: DESFLURANO 240 ML. ENVASE CON 240 ML.",
+  "PROPOFOL. EMULSIÓN INYECTABLE CADA AMPOLLETA O FRASCO ÁMPULA CONTIENE: PROPOFOL  200 MG. EN EMULSIÓN CON O SIN EDETATO DISÓDICO (DIHIDRATADO). ENVASE CON 5 AMPOLLETAS O FRASCOS ÁMPULA DE 20 ML.",
+  "TIOPENTAL SÓDICO. SOLUCIÓN INYECTABLE CADA FRASCO ÁMPULA CON POLVO CONTIENE: TIOPENTAL SÓDICO 0.5 G ENVASE CON FRASCO ÁMPULA Y DILUYENTE CON 20 ML.",
+  "ETOMIDATO. SOLUCIÓN INYECTABLE CADA AMPOLLETA CONTIENE: ETOMIDATO 20 MG ENVASE CON 5 AMPOLLETAS CON 10 ML.",
+  "CISATRACURIO BESILATO DE. SOLUCIÓN INYECTABLECADA ML CONTIENE:BESILATO DE CISATRACURIOEQUIVALENTE A 2 MGDE CISATRACURIOENVASE CON 1 AMPOLLETA CON 5 ML.",
+  "VECURONIO. SOLUCIÓN INYECTABLE CADA FRASCO ÁMPULA CON LIOFILIZADO CONTIENE: BROMURO DE VECURONIO 4 MG ENVASE CON 50 FRASCOS ÁMPULA Y 50 AMPOLLETAS CON 1 ML DE DILUYENTE (4 MG/ML)",
+  "ROCURONIO BROMURO DE. SOLUCIÓN INYECTABLE CADA AMPOLLETA O FRASCO ÁMPULA CONTIENE: BROMURO DE ROCURONIO 50 MG ENVASE CON 12 AMPOLLETAS O FRASCOS ÁMPULA DE 5 ML.",
+  "MIDAZOLAM. SOLUCIÓN INYECTABLE CADA AMPOLLETA CONTIENE: CLORHIDRATO DE MIDAZOLAM EQUIVALENTE A 5 MG DE MIDAZOLAM O MIDAZOLAM 5 MG ENVASE CON 5 A",
+  "FENTANILO. SOLUCIÓN INYECTABLE CADA AMPOLLETA O FRASCO ÁMPULA CONTIENE: CITRATO DE FENTANILO EQUIVALENTE A 0.5 MG DE FENTANILO. ENVASE CON 6 AMPOLLETAS O FRASCOS ÁMPULA CON 10 ML.",
+  "ONDANSETRÓN. SOLUCIÓN INYECTABLE CADA AMPOLLETA O FRASCO AMPULA CONTIENE: CLORHIDRATO DIHIDRATADO DE ONDANSETRÓN EQUIVALENTE A 8 MG DE ONDANSETRÓN ENVASE CON 3 AMPOLLETAS O FRASCOS ÁMPULA CON 4 ML.",
+  "METOCLOPRAMIDA. SOLUCIÓN INYECTABLE CADA AMPOLLETA CONTIENE: CLORHIDRATO DE METOCLOPRAMIDA 10 MG ENVASE CON 6 AMPOLLETAS DE 2 ML.",
+  "METAMIZOL SODICO. SOLUCION INYECTABLE CADA AMPOLLETA CONTIENE: METAMIZOL SÓDICO 1 G. ENVASE CON 3 AMPOLLETAS CON 2 ML.",
+  "KETOROLACO SOLUCION INYECTABLE CADA FRASCO ÁMPULA O AMPOLLETA CONTIENE: KETOROLACO-TROMETAMINA 30 MG ENVASE CON 3 FRASCOS ÁMPULA O 3 AMPOLLETAS DE 1 ML.",
+  "PARACETAMOL SOLUCIÓN INYECTABLE CADA FRASCO CONTIENE: PARACETAMOL 1 G. ENVASE CON UN FRASCO CON 100",
+  "ATROPINA. SOLUCION INYECTABLE CADA AMPOLLETA CONTIENE: SULFATO DE ATROPINA 1 MG. ENVASE CON 50 AMPOLLETAS CON 1 ML.",
+  "NEOSTIGMINA. SOLUCIÓN INYECTABLE CADA AMPOLLETA CONTIENE: METILSULFATO DE NEOSTIGMINA 0.5 MG ENVASE CON 6 AMPOLLETAS CON 1 ML.",
+  "BUPRENORFINA SOLUCIÓN INYECTABLE CADA AMPOLLETA O FRASCO ÁMPULA CONTIENE: CLORHIDRATO DE BUPRENORFINA EQUIVALENTE A 0.3 MG DE BUPRENORFINA. ENVASE CON 6 AMPOLLETAS O FRASCOS ÁMPULA CON 1 ML."
 ];
 
 Deno.serve(async (req) => {
@@ -238,144 +116,130 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('Iniciando población de insumos para Anestesia General Balanceada Adulto...');
+    console.log('Iniciando configuración de alta_especialidad con', insumosLista.length, 'insumos');
 
-    const tipoAnestesia = 'general_balanceada_adulto';
-    let insumosCreados = 0;
-    let insumosActualizados = 0;
-    const errores: string[] = [];
+    // Obtener todos los insumos existentes
+    const { data: existingInsumos, error: fetchError } = await supabase
+      .from('insumos')
+      .select('id, nombre');
 
-    for (const insumoConfig of insumosGeneralBalanceadaAdulto) {
-      try {
-        // Buscar si el insumo ya existe en la tabla insumos
-        const { data: insumoExistente, error: searchError } = await supabase
+    if (fetchError) {
+      console.error('Error fetching insumos:', fetchError);
+      throw fetchError;
+    }
+
+    const insumoMap = new Map(existingInsumos?.map(i => [i.nombre, i.id]) || []);
+    console.log('Insumos existentes en BD:', insumoMap.size);
+
+    // Identificar insumos que necesitan ser creados
+    const insumosToCreate = insumosLista.filter(nombre => !insumoMap.has(nombre));
+    console.log('Insumos nuevos a crear:', insumosToCreate.length);
+
+    // Crear nuevos insumos en lotes
+    if (insumosToCreate.length > 0) {
+      const batchSize = 100;
+      for (let i = 0; i < insumosToCreate.length; i += batchSize) {
+        const batch = insumosToCreate.slice(i, i + batchSize);
+        const { data: newInsumos, error: insertError } = await supabase
           .from('insumos')
-          .select('id')
-          .ilike('nombre', `%${insumoConfig.nombre}%`)
-          .limit(1)
-          .maybeSingle();
+          .insert(batch.map(nombre => ({ nombre, cantidad: 0 })))
+          .select('id, nombre');
 
-        if (searchError) {
-          console.error(`Error buscando insumo ${insumoConfig.nombre}:`, searchError);
-          errores.push(`Error buscando ${insumoConfig.nombre}: ${searchError.message}`);
-          continue;
+        if (insertError) {
+          console.error('Error inserting insumos batch:', insertError);
+          throw insertError;
         }
 
-        let insumoId: string;
+        newInsumos?.forEach(insumo => {
+          insumoMap.set(insumo.nombre, insumo.id);
+        });
 
-        if (!insumoExistente) {
-          // Crear el insumo si no existe
-          const { data: nuevoInsumo, error: createError } = await supabase
-            .from('insumos')
-            .insert({
-              nombre: insumoConfig.nombre,
-              descripcion: insumoConfig.nota || '',
-              cantidad: insumoConfig.cantidad_default,
-            })
-            .select('id')
-            .single();
-
-          if (createError || !nuevoInsumo) {
-            console.error(`Error creando insumo ${insumoConfig.nombre}:`, createError);
-            errores.push(`Error creando ${insumoConfig.nombre}: ${createError?.message}`);
-            continue;
-          }
-
-          insumoId = nuevoInsumo.id;
-          console.log(`Insumo creado: ${insumoConfig.nombre}`);
-        } else {
-          insumoId = insumoExistente.id;
-        }
-
-        // Verificar si ya existe la relación anestesia_insumos
-        const { data: relacionExistente } = await supabase
-          .from('anestesia_insumos')
-          .select('id')
-          .eq('insumo_id', insumoId)
-          .eq('tipo_anestesia', tipoAnestesia)
-          .maybeSingle();
-
-        if (relacionExistente) {
-          // Actualizar la relación existente
-          const { error: updateError } = await supabase
-            .from('anestesia_insumos')
-            .update({
-              cantidad_minima: insumoConfig.cantidad_minima,
-              cantidad_maxima: insumoConfig.cantidad_maxima,
-              tipo_limite: insumoConfig.tipo_limite,
-              nota: insumoConfig.nota,
-              cantidad_default: insumoConfig.cantidad_default,
-              activo: insumoConfig.activo,
-              orden: insumoConfig.orden,
-            })
-            .eq('id', relacionExistente.id);
-
-          if (updateError) {
-            console.error(`Error actualizando relación para ${insumoConfig.nombre}:`, updateError);
-            errores.push(`Error actualizando relación ${insumoConfig.nombre}: ${updateError.message}`);
-          } else {
-            insumosActualizados++;
-            console.log(`Relación actualizada: ${insumoConfig.nombre}`);
-          }
-        } else {
-          // Crear nueva relación
-          const { error: insertError } = await supabase
-            .from('anestesia_insumos')
-            .insert({
-              insumo_id: insumoId,
-              tipo_anestesia: tipoAnestesia,
-              cantidad_minima: insumoConfig.cantidad_minima,
-              cantidad_maxima: insumoConfig.cantidad_maxima,
-              tipo_limite: insumoConfig.tipo_limite,
-              nota: insumoConfig.nota,
-              cantidad_default: insumoConfig.cantidad_default,
-              activo: insumoConfig.activo,
-              orden: insumoConfig.orden,
-            });
-
-          if (insertError) {
-            console.error(`Error creando relación para ${insumoConfig.nombre}:`, insertError);
-            errores.push(`Error creando relación ${insumoConfig.nombre}: ${insertError.message}`);
-          } else {
-            insumosCreados++;
-            console.log(`Relación creada: ${insumoConfig.nombre}`);
-          }
-        }
-      } catch (error: any) {
-        console.error(`Error procesando ${insumoConfig.nombre}:`, error);
-        errores.push(`Error procesando ${insumoConfig.nombre}: ${error.message}`);
+        console.log(`Creados ${newInsumos?.length || 0} insumos nuevos (lote ${i / batchSize + 1})`);
       }
     }
 
-    const resultado = {
-      success: true,
-      mensaje: 'Población de insumos completada',
-      tipo_anestesia: tipoAnestesia,
-      total_insumos: insumosGeneralBalanceadaAdulto.length,
-      insumos_creados: insumosCreados,
-      insumos_actualizados: insumosActualizados,
-      errores: errores.length > 0 ? errores : null,
-    };
+    // Crear relaciones en anestesia_insumos
+    const anestesiaInsumos = insumosLista.map((nombre, index) => ({
+      tipo_anestesia: 'alta_especialidad',
+      insumo_id: insumoMap.get(nombre),
+      orden: index + 1,
+      cantidad_default: 1
+    }));
 
-    console.log('Resultado final:', resultado);
+    // Insertar en lotes
+    const batchSize = 100;
+    let totalInserted = 0;
 
-    return new Response(JSON.stringify(resultado), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  } catch (error: any) {
-    console.error('Error general:', error);
+    for (let i = 0; i < anestesiaInsumos.length; i += batchSize) {
+      const batch = anestesiaInsumos.slice(i, i + batchSize);
+      const { error: insertError } = await supabase
+        .from('anestesia_insumos')
+        .insert(batch);
+
+      if (insertError) {
+        console.error('Error inserting anestesia_insumos batch:', insertError);
+        throw insertError;
+      }
+
+      totalInserted += batch.length;
+      console.log(`Insertadas ${totalInserted} relaciones de ${anestesiaInsumos.length}`);
+    }
+
+    // Validación final
+    const { data: validacion, error: validError } = await supabase
+      .from('anestesia_insumos')
+      .select(`
+        orden,
+        insumo_id,
+        insumos!inner(nombre)
+      `)
+      .eq('tipo_anestesia', 'alta_especialidad')
+      .order('orden', { ascending: true })
+      .limit(5);
+
+    if (validError) {
+      console.error('Error en validación:', validError);
+      throw validError;
+    }
+
+    const { count, error: countError } = await supabase
+      .from('anestesia_insumos')
+      .select('*', { count: 'exact', head: true })
+      .eq('tipo_anestesia', 'alta_especialidad');
+
+    if (countError) {
+      console.error('Error counting:', countError);
+      throw countError;
+    }
+
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message,
-        details: error.toString()
+      JSON.stringify({
+        success: true,
+        total_configurados: count,
+        insumos_creados: insumosToCreate.length,
+        insumos_reutilizados: insumosLista.length - insumosToCreate.length,
+        primeros_5: validacion?.map(v => ({
+          orden: v.orden,
+          nombre: (v.insumos as any).nombre
+        }))
       }),
-      {
-        status: 500,
+      { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 
+      }
+    );
+
+  } catch (error) {
+    console.error('Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(
+      JSON.stringify({ error: errorMessage }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500 
       }
     );
   }

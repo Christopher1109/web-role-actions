@@ -1,87 +1,66 @@
-import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { toast } from 'sonner';
-import { Package, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2, CheckCircle2, XCircle, FileSpreadsheet } from "lucide-react";
 
-const PopulateInsumos = () => {
+export default function PopulateInsumos() {
   const [loading, setLoading] = useState(false);
-  const [resultado, setResultado] = useState<any>(null);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handlePopulate = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
     try {
-      setLoading(true);
-      setResultado(null);
-      
-      toast.info('Iniciando población de insumos...', {
-        description: 'Este proceso puede tomar unos segundos',
+      const { data, error: fnError } = await supabase.functions.invoke("populate-all-insumos", {
+        body: {}
       });
 
-      const { data, error } = await supabase.functions.invoke('populate-alta-especialidad');
-
-      if (error) throw error;
-
-      setResultado(data);
-
-      if (data.success) {
-        toast.success('Insumos poblados correctamente', {
-          description: `${data.insumos_creados} creados, ${data.insumos_actualizados} actualizados`,
-        });
-      } else {
-        toast.error('Error al poblar insumos', {
-          description: data.error || 'Error desconocido',
-        });
+      if (fnError) {
+        throw fnError;
       }
-    } catch (error: any) {
-      console.error('Error:', error);
-      toast.error('Error al poblar insumos', {
-        description: error.message,
-      });
-      setResultado({ success: false, error: error.message });
+
+      setResult(data);
+    } catch (err) {
+      console.error("Error al poblar insumos:", err);
+      setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Configurar Insumos por Tipo de Anestesia</h1>
-        <p className="text-muted-foreground">
-          Poblar la base de datos con los insumos predefinidos para Anestesia General Balanceada Adulto
-        </p>
-      </div>
-
+    <div className="container mx-auto p-6 max-w-4xl">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Anestesia General Balanceada Adulto
+            <FileSpreadsheet className="h-6 w-6" />
+            Poblar Catálogo de Insumos desde Excel
           </CardTitle>
           <CardDescription>
-            Este proceso creará o actualizará 23 insumos con sus cantidades mínimas, máximas y reglas especiales
+            Este proceso poblará el catálogo completo de insumos y sus relaciones por tipo de anestesia
+            usando los datos de los archivos Excel.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Alert>
-            <AlertDescription>
-              <strong>Nota:</strong> Este proceso es seguro y puede ejecutarse múltiples veces. 
-              Si los insumos ya existen, se actualizarán con los valores correctos.
-            </AlertDescription>
-          </Alert>
-
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Se configurarán los siguientes tipos de insumos:
-            </p>
-            <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-              <li>Insumos con cantidad fija (8 insumos)</li>
-              <li>Insumos con rango de cantidad (11 insumos)</li>
-              <li>Insumos a elección del anestesiólogo (3 insumos)</li>
-              <li>Insumos desactivados (1 insumo)</li>
+          <div className="bg-muted p-4 rounded-lg">
+            <h3 className="font-semibold mb-2">7 Tipos de Anestesia a procesar:</h3>
+            <ul className="text-sm space-y-1 ml-4 list-disc">
+              <li>Anestesia General Balanceada Adulto</li>
+              <li>Anestesia General Balanceada Pediátrica</li>
+              <li>Anestesia General Endovenosa</li>
+              <li>Anestesia General de Alta Especialidad</li>
+              <li>Anestesia de Alta Especialidad en Trasplante Renal</li>
+              <li>Sedación</li>
+              <li>Loco Regional</li>
             </ul>
+            <p className="text-sm text-muted-foreground mt-3">
+              El proceso creará los insumos que no existan y asociará cada uno con su tipo de anestesia correspondiente.
+            </p>
           </div>
 
           <Button
@@ -92,99 +71,77 @@ const PopulateInsumos = () => {
           >
             {loading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Poblando insumos...
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Procesando...
               </>
             ) : (
-              <>
-                <Package className="mr-2 h-4 w-4" />
-                Poblar Insumos
-              </>
+              "Iniciar Poblado"
             )}
           </Button>
 
-          {resultado && (
-            <Card className={resultado.success ? 'border-green-500' : 'border-red-500'}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  {resultado.success ? (
-                    <>
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      Población Exitosa
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="h-5 w-5 text-red-500" />
-                      Error en la Población
-                    </>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {resultado.success ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Total de insumos:</p>
-                        <p className="font-semibold">{resultado.total_insumos}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Insumos creados:</p>
-                        <p className="font-semibold text-green-600">{resultado.insumos_creados}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Insumos actualizados:</p>
-                        <p className="font-semibold text-blue-600">{resultado.insumos_actualizados}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Tipo de anestesia:</p>
-                        <p className="font-semibold">{resultado.tipo_anestesia}</p>
+          {error && (
+            <Alert variant="destructive">
+              <XCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Error:</strong> {error}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {result && (
+            <Alert className="border-green-500 bg-green-50">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-semibold text-green-800">¡Proceso completado exitosamente!</p>
+                  
+                  <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
+                    <div className="bg-white p-3 rounded border">
+                      <p className="text-muted-foreground">Total Insumos en BD</p>
+                      <p className="text-2xl font-bold text-green-600">{result.totalInsumosEnBD}</p>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                      <p className="text-muted-foreground">Total Relaciones</p>
+                      <p className="text-2xl font-bold text-green-600">{result.totalRelacionesEnBD}</p>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                      <p className="text-muted-foreground">Insumos Creados</p>
+                      <p className="text-2xl font-bold text-blue-600">{result.insumosCreados}</p>
+                    </div>
+                    <div className="bg-white p-3 rounded border">
+                      <p className="text-muted-foreground">Relaciones Creadas</p>
+                      <p className="text-2xl font-bold text-blue-600">{result.relacionesCreadas}</p>
+                    </div>
+                  </div>
+
+                  {result.porTipoAnestesia && (
+                    <div className="mt-4 bg-white p-4 rounded border">
+                      <p className="font-semibold mb-2">Por Tipo de Anestesia:</p>
+                      <div className="space-y-2">
+                        {Object.entries(result.porTipoAnestesia).map(([tipo, data]: [string, any]) => (
+                          <div key={tipo} className="flex justify-between items-start border-b pb-2">
+                            <div>
+                              <p className="font-medium capitalize">{tipo.replace(/_/g, " ")}</p>
+                              {data.ejemplos && data.ejemplos.length > 0 && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Ejemplos: {data.ejemplos.slice(0, 2).join(", ")}...
+                                </p>
+                              )}
+                            </div>
+                            <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-semibold">
+                              {data.total} insumos
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    {resultado.errores && resultado.errores.length > 0 && (
-                      <Alert variant="destructive" className="mt-4">
-                        <AlertDescription>
-                          <p className="font-semibold mb-2">Se encontraron algunos errores:</p>
-                          <ul className="list-disc list-inside space-y-1 text-xs">
-                            {resultado.errores.map((error: string, idx: number) => (
-                              <li key={idx}>{error}</li>
-                            ))}
-                          </ul>
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </>
-                ) : (
-                  <Alert variant="destructive">
-                    <AlertDescription>
-                      <p className="font-semibold">Error:</p>
-                      <p className="text-sm">{resultado.error}</p>
-                      {resultado.details && (
-                        <p className="text-xs mt-2 opacity-75">{resultado.details}</p>
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </CardContent>
-            </Card>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Siguiente paso</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Una vez poblados los insumos, dirígete a la página de <strong>Paquetes</strong> para 
-            visualizar la configuración completa de "Anestesia General Balanceada Adulto" con 
-            todas las cantidades mínimas, máximas y notas.
-          </p>
         </CardContent>
       </Card>
     </div>
   );
-};
-
-export default PopulateInsumos;
+}

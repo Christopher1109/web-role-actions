@@ -16,30 +16,39 @@ export type Database = {
     Tables: {
       anestesia_insumos: {
         Row: {
-          cantidad_default: number | null
+          cantidad_maxima: number | null
+          cantidad_minima: number | null
+          categoria: string | null
           created_at: string | null
           id: string
+          id_bcb: string | null
           insumo_id: string | null
-          orden: number | null
           tipo_anestesia: string
+          unidad: string | null
           updated_at: string | null
         }
         Insert: {
-          cantidad_default?: number | null
+          cantidad_maxima?: number | null
+          cantidad_minima?: number | null
+          categoria?: string | null
           created_at?: string | null
           id?: string
+          id_bcb?: string | null
           insumo_id?: string | null
-          orden?: number | null
           tipo_anestesia: string
+          unidad?: string | null
           updated_at?: string | null
         }
         Update: {
-          cantidad_default?: number | null
+          cantidad_maxima?: number | null
+          cantidad_minima?: number | null
+          categoria?: string | null
           created_at?: string | null
           id?: string
+          id_bcb?: string | null
           insumo_id?: string | null
-          orden?: number | null
           tipo_anestesia?: string
+          unidad?: string | null
           updated_at?: string | null
         }
         Relationships: [

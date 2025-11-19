@@ -50,18 +50,17 @@ const tipoAnestesiaToDb: Record<string, string> = {
   anestesia_mixta: "anestesia_mixta",
 };
 
-const tiposAnestesia = [
-  { value: "sedacion", label: "Sedación / Cuidados anestésicos monitoreados" },
-  { value: "loco_regional", label: "Loco regional" },
-  { value: "general_balanceada_adulto", label: "General balanceada adulto" },
-  { value: "general_balanceada_pediatrica", label: "General balanceada pediátrica" },
-  { value: "general_endovenosa", label: "General endovenosa" },
-  { value: "alta_especialidad", label: "Alta especialidad" },
-  { value: "alta_especialidad_trasplante", label: "Alta especialidad trasplante renal" },
-  { value: "anestesia_mixta", label: "Anestesia mixta" },
-];
-
-const tiposAnestesiaNormales = tiposAnestesia.filter((t) => t.value !== "anestesia_mixta");
+// Mapeo de labels para mostrar nombres amigables
+const tipoAnestesiaLabels: Record<string, string> = {
+  sedacion: "Sedación / Cuidados anestésicos monitoreados",
+  loco_regional: "Loco regional",
+  general_balanceada_adulto: "General balanceada adulto",
+  general_balanceada_pediatrica: "General balanceada pediátrica",
+  general_endovenosa: "General endovenosa",
+  alta_especialidad: "Alta especialidad",
+  alta_especialidad_trasplante: "Alta especialidad trasplante renal",
+  anestesia_mixta: "Anestesia mixta",
+};
 
 // Esquema de validación de los campos del folio T33
 const folioSchema = z.object({
@@ -120,6 +119,9 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   // Control del modal de agregar insumo
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedInsumoId, setSelectedInsumoId] = useState<string>("");
+  // Lista de tipos de anestesia disponibles para el hospital seleccionado
+  const [tiposAnestesiaDisponibles, setTiposAnestesiaDisponibles] = useState<Array<{ value: string; label: string }>>([]);
+  const [loadingProcedimientos, setLoadingProcedimientos] = useState(false);
 
   // Configuración inicial del formulario
   const form = useForm<FolioFormValues>({
@@ -154,6 +156,57 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       form.setValue("unidad", selectedHospital.display_name);
     }
   }, [selectedHospital, form]);
+
+  // Cargar tipos de anestesia disponibles para el hospital seleccionado
+  useEffect(() => {
+    const loadProcedimientosHospital = async () => {
+      if (!selectedHospital?.id) {
+        setTiposAnestesiaDisponibles([]);
+        return;
+      }
+
+      setLoadingProcedimientos(true);
+      try {
+        const { data: procedimientos, error } = await supabase
+          .from("procedimientos")
+          .select("nombre, descripcion")
+          .eq("hospital_id", selectedHospital.id);
+
+        if (error) throw error;
+
+        if (procedimientos && procedimientos.length > 0) {
+          // Mapear los procedimientos a formato de select
+          const tiposDisponibles = procedimientos.map((proc) => ({
+            value: proc.nombre,
+            label: tipoAnestesiaLabels[proc.nombre] || proc.descripcion || proc.nombre,
+          }));
+
+          // Agregar la opción de anestesia mixta si hay más de un tipo disponible
+          if (tiposDisponibles.length > 1) {
+            tiposDisponibles.push({
+              value: "anestesia_mixta",
+              label: tipoAnestesiaLabels.anestesia_mixta,
+            });
+          }
+
+          setTiposAnestesiaDisponibles(tiposDisponibles);
+          console.log(`✅ Tipos de anestesia cargados para ${selectedHospital.display_name}:`, tiposDisponibles.length);
+        } else {
+          console.warn(`⚠️ No hay procedimientos configurados para ${selectedHospital.display_name}`);
+          setTiposAnestesiaDisponibles([]);
+          toast.error("Este hospital no tiene tipos de anestesia configurados");
+        }
+      } catch (error) {
+        console.error("Error al cargar procedimientos del hospital:", error);
+        toast.error("Error al cargar los tipos de anestesia disponibles");
+        setTiposAnestesiaDisponibles([]);
+      } finally {
+        setLoadingProcedimientos(false);
+      }
+    };
+
+    loadProcedimientosHospital();
+  }, [selectedHospital]);
 
   // Carga las listas de médicos al montar el componente
   useEffect(() => {
@@ -393,26 +446,57 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   };
 
   // Envía el formulario completo
-  const handleSubmitForm = (values: FolioFormValues) => {
-    // Obtener nombres de médicos seleccionados
-    const cirujanoSeleccionado = cirujanos.find((m) => m.id === values.cirujano);
-    const anestesiologoSeleccionado = anestesiologos.find((m) => m.id === values.anestesiologo);
+  const handleSubmitForm = async (values: FolioFormValues) => {
+    // Validar que el tipo de anestesia sea válido para el hospital
+    if (!selectedHospital?.id) {
+      toast.error("Debe seleccionar un hospital");
+      return;
+    }
 
-    const submitData = {
-      ...values,
-      cirujanoNombre: cirujanoSeleccionado?.nombre,
-      anestesiologoNombre: anestesiologoSeleccionado?.nombre,
-      insumos: insumosFolio,
-      hospital_id: selectedHospital?.id,
-      hospital_display_name: selectedHospital?.display_name,
-      hospital_budget_code: selectedHospital?.budget_code,
-      state_name: selectedHospital?.state_name,
-      ...(tipoAnestesia === "anestesia_mixta" && {
-        anestesiaPrincipal: anestesiaPrincipal,
-        anestesiaSecundaria: anestesiaSecundaria,
-      }),
-    };
-    onSubmit(submitData);
+    try {
+      // Validar tipo de anestesia con el backend
+      const { data: validationResult, error: validationError } = await supabase.functions.invoke(
+        "validate-folio",
+        {
+          body: {
+            hospital_id: selectedHospital.id,
+            tipo_anestesia: values.tipo_anestesia,
+            anestesia_principal: anestesiaPrincipal || null,
+            anestesia_secundaria: anestesiaSecundaria || null,
+          },
+        }
+      );
+
+      if (validationError) throw validationError;
+
+      if (!validationResult?.valid) {
+        toast.error(validationResult?.error || "El tipo de anestesia no es válido para este hospital");
+        return;
+      }
+
+      // Obtener nombres de médicos seleccionados
+      const cirujanoSeleccionado = cirujanos.find((m) => m.id === values.cirujano);
+      const anestesiologoSeleccionado = anestesiologos.find((m) => m.id === values.anestesiologo);
+
+      const submitData = {
+        ...values,
+        cirujanoNombre: cirujanoSeleccionado?.nombre,
+        anestesiologoNombre: anestesiologoSeleccionado?.nombre,
+        insumos: insumosFolio,
+        hospital_id: selectedHospital?.id,
+        hospital_display_name: selectedHospital?.display_name,
+        hospital_budget_code: selectedHospital?.budget_code,
+        state_name: selectedHospital?.state_name,
+        ...(tipoAnestesia === "anestesia_mixta" && {
+          anestesiaPrincipal: anestesiaPrincipal,
+          anestesiaSecundaria: anestesiaSecundaria,
+        }),
+      };
+      onSubmit(submitData);
+    } catch (error) {
+      console.error("Error al validar el tipo de anestesia:", error);
+      toast.error("Error al validar el formulario. Por favor, intente nuevamente.");
+    }
   };
 
   return (
@@ -747,11 +831,21 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {tiposAnestesia.map((tipo) => (
-                      <SelectItem key={tipo.value} value={tipo.value}>
-                        {tipo.label}
+                    {loadingProcedimientos ? (
+                      <SelectItem value="_loading" disabled>
+                        Cargando procedimientos...
                       </SelectItem>
-                    ))}
+                    ) : tiposAnestesiaDisponibles.length === 0 ? (
+                      <SelectItem value="_empty" disabled>
+                        No hay procedimientos disponibles
+                      </SelectItem>
+                    ) : (
+                      tiposAnestesiaDisponibles.map((tipo) => (
+                        <SelectItem key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -768,11 +862,13 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
                   <SelectContent>
-                    {tiposAnestesiaNormales.map((tipo) => (
-                      <SelectItem key={tipo.value} value={tipo.value}>
-                        {tipo.label}
-                      </SelectItem>
-                    ))}
+                    {tiposAnestesiaDisponibles
+                      .filter((tipo) => tipo.value !== "anestesia_mixta")
+                      .map((tipo) => (
+                        <SelectItem key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -784,11 +880,13 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
                   <SelectContent>
-                    {tiposAnestesiaNormales.map((tipo) => (
-                      <SelectItem key={tipo.value} value={tipo.value}>
-                        {tipo.label}
-                      </SelectItem>
-                    ))}
+                    {tiposAnestesiaDisponibles
+                      .filter((tipo) => tipo.value !== "anestesia_mixta")
+                      .map((tipo) => (
+                        <SelectItem key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

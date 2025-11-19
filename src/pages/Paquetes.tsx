@@ -137,15 +137,71 @@ const Paquetes = () => {
             <CardContent>
               <div className="space-y-2">
                 {insumosDelTipo.map((item: any, index: number) => (
-                  <div key={index} className="flex items-center justify-between rounded-lg border bg-muted/50 p-3">
-                    <div className="flex-1">
-                      <p className="font-medium">{item.insumos?.nombre || 'Sin nombre'}</p>
-                      <p className="text-sm text-muted-foreground">{item.insumos?.descripcion}</p>
-                      <p className="text-xs text-muted-foreground">Clave: {item.insumos?.clave}</p>
+                  <div 
+                    key={index} 
+                    className={`rounded-lg border p-4 ${
+                      !item.activo ? 'opacity-50 bg-muted/30' : 'bg-card'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-muted-foreground">
+                            {item.orden}.
+                          </span>
+                          <p className="font-medium">{item.insumos?.nombre || 'Sin nombre'}</p>
+                        </div>
+                        
+                        {item.nota && (
+                          <p className="text-sm text-muted-foreground italic">
+                            📝 {item.nota}
+                          </p>
+                        )}
+                        
+                        <div className="flex items-center gap-4 text-sm">
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">Min:</span>
+                            <Badge variant="outline" className="font-mono">
+                              {item.cantidad_minima}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">Máx:</span>
+                            <Badge variant="outline" className="font-mono">
+                              {item.cantidad_maxima}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-muted-foreground">Default:</span>
+                            <Badge variant="secondary" className="font-mono">
+                              {item.cantidad_default}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-2">
+                        <Badge 
+                          variant={
+                            item.tipo_limite === 'fijo' ? 'default' :
+                            item.tipo_limite === 'a_eleccion' ? 'secondary' :
+                            item.tipo_limite === 'desactivado' ? 'outline' :
+                            'default'
+                          }
+                        >
+                          {item.tipo_limite === 'fijo' ? '🔒 Fijo' :
+                           item.tipo_limite === 'rango' ? '📊 Rango' :
+                           item.tipo_limite === 'a_eleccion' ? '✋ A elección' :
+                           '❌ Desactivado'}
+                        </Badge>
+                        
+                        {!item.activo && (
+                          <Badge variant="outline" className="text-xs">
+                            Inactivo
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    <Badge variant="secondary">
-                      {item.cantidad_default} unidad(es)
-                    </Badge>
                   </div>
                 ))}
                 {insumosDelTipo.length === 0 && (

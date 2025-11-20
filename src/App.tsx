@@ -24,6 +24,7 @@ import PopulateInsumos from './pages/PopulateInsumos';
 import ImportProcedimientos from './pages/ImportProcedimientos';
 import SetupAlmacenes from './pages/SetupAlmacenes';
 import Kardex from './pages/Kardex';
+import DiagnosticoInsumos from './pages/DiagnosticoInsumos';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -85,6 +86,7 @@ const AppContent = () => {
                   <Route path="/traspasos" element={<Traspasos />} />
                   <Route path="/usuarios" element={<Usuarios />} />
                   <Route path="/export-users" element={<ExportUsers />} />
+                  <Route path="/diagnostico-insumos" element={<DiagnosticoInsumos />} />
                   <Route path="/setup" element={<SetupData />} />
                   <Route path="/auto-setup" element={<AutoSetup />} />
                   <Route path="/import-setup" element={<ImportSetup />} />

@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      almacenes: {
+        Row: {
+          activo: boolean | null
+          created_at: string | null
+          descripcion: string | null
+          hospital_id: string
+          id: string
+          nombre: string
+          ubicacion: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string | null
+          descripcion?: string | null
+          hospital_id: string
+          id?: string
+          nombre: string
+          ubicacion?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string | null
+          descripcion?: string | null
+          hospital_id?: string
+          id?: string
+          nombre?: string
+          ubicacion?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "almacenes_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: true
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       anestesia_insumos: {
         Row: {
           activo: boolean | null
@@ -376,6 +417,109 @@ export type Database = {
           },
         ]
       }
+      insumos_catalogo: {
+        Row: {
+          activo: boolean | null
+          categoria: string | null
+          clave: string | null
+          created_at: string | null
+          descripcion: string | null
+          id: string
+          nombre: string
+          unidad: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          categoria?: string | null
+          clave?: string | null
+          created_at?: string | null
+          descripcion?: string | null
+          id?: string
+          nombre: string
+          unidad?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          categoria?: string | null
+          clave?: string | null
+          created_at?: string | null
+          descripcion?: string | null
+          id?: string
+          nombre?: string
+          unidad?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      inventario_hospital: {
+        Row: {
+          almacen_id: string
+          cantidad_actual: number | null
+          cantidad_inicial: number | null
+          created_at: string | null
+          estatus: string | null
+          fecha_caducidad: string | null
+          hospital_id: string
+          id: string
+          insumo_catalogo_id: string
+          lote: string | null
+          ubicacion: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          almacen_id: string
+          cantidad_actual?: number | null
+          cantidad_inicial?: number | null
+          created_at?: string | null
+          estatus?: string | null
+          fecha_caducidad?: string | null
+          hospital_id: string
+          id?: string
+          insumo_catalogo_id: string
+          lote?: string | null
+          ubicacion?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          almacen_id?: string
+          cantidad_actual?: number | null
+          cantidad_inicial?: number | null
+          created_at?: string | null
+          estatus?: string | null
+          fecha_caducidad?: string | null
+          hospital_id?: string
+          id?: string
+          insumo_catalogo_id?: string
+          lote?: string | null
+          ubicacion?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventario_hospital_almacen_id_fkey"
+            columns: ["almacen_id"]
+            isOneToOne: false
+            referencedRelation: "almacenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_hospital_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_hospital_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       medicos: {
         Row: {
           activo: boolean | null
@@ -411,6 +555,80 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      movimientos_inventario: {
+        Row: {
+          cantidad: number
+          cantidad_anterior: number | null
+          cantidad_nueva: number | null
+          created_at: string | null
+          folio_id: string | null
+          hospital_id: string
+          id: string
+          inventario_id: string
+          observaciones: string | null
+          tipo_movimiento: string
+          traspaso_id: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          cantidad: number
+          cantidad_anterior?: number | null
+          cantidad_nueva?: number | null
+          created_at?: string | null
+          folio_id?: string | null
+          hospital_id: string
+          id?: string
+          inventario_id: string
+          observaciones?: string | null
+          tipo_movimiento: string
+          traspaso_id?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          cantidad?: number
+          cantidad_anterior?: number | null
+          cantidad_nueva?: number | null
+          created_at?: string | null
+          folio_id?: string | null
+          hospital_id?: string
+          id?: string
+          inventario_id?: string
+          observaciones?: string | null
+          tipo_movimiento?: string
+          traspaso_id?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movimientos_inventario_folio_id_fkey"
+            columns: ["folio_id"]
+            isOneToOne: false
+            referencedRelation: "folios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_inventario_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_inventario_inventario_id_fkey"
+            columns: ["inventario_id"]
+            isOneToOne: false
+            referencedRelation: "inventario_hospital"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_inventario_traspaso_id_fkey"
+            columns: ["traspaso_id"]
+            isOneToOne: false
+            referencedRelation: "traspasos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       paquete_insumos: {
         Row: {

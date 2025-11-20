@@ -424,8 +424,11 @@ export type Database = {
           clave: string | null
           created_at: string | null
           descripcion: string | null
+          familia_insumo: string | null
           id: string
           nombre: string
+          presentacion: string | null
+          tipo: string | null
           unidad: string | null
           updated_at: string | null
         }
@@ -435,8 +438,11 @@ export type Database = {
           clave?: string | null
           created_at?: string | null
           descripcion?: string | null
+          familia_insumo?: string | null
           id?: string
           nombre: string
+          presentacion?: string | null
+          tipo?: string | null
           unidad?: string | null
           updated_at?: string | null
         }
@@ -446,8 +452,11 @@ export type Database = {
           clave?: string | null
           created_at?: string | null
           descripcion?: string | null
+          familia_insumo?: string | null
           id?: string
           nombre?: string
+          presentacion?: string | null
+          tipo?: string | null
           unidad?: string | null
           updated_at?: string | null
         }

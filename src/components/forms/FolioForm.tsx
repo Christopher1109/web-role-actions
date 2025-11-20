@@ -20,10 +20,6 @@ type Insumo = {
   nombre: string;
   lote: string;
   cantidad: number;
-  cantidad_minima?: number;
-  cantidad_maxima?: number;
-  grupo_exclusivo?: string;
-  nota?: string;
 };
 
 type FolioInsumo = {
@@ -448,26 +444,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   };
 
   // Actualiza la cantidad de un insumo del folio
-  const handleUpdateCantidad = (insumoId: string, nuevaCantidad: number) => {
-    // Buscar las reglas del insumo
-    const insumoReglas = insumosParaAgregar.find((i) => i.id === insumoId);
-    
-    if (insumoReglas) {
-      const min = insumoReglas.cantidad_minima || 0;
-      const max = insumoReglas.cantidad_maxima;
-
-      if (nuevaCantidad < min) {
-        toast.error(`La cantidad mínima para "${insumoReglas.nombre}" es ${min}`);
-        return;
-      }
-
-      if (max && nuevaCantidad > max) {
-        toast.error(`La cantidad máxima para "${insumoReglas.nombre}" es ${max}`);
-        return;
-      }
-    }
-
-    setInsumosFolio(insumosFolio.map((fi) => (fi.insumo.id === insumoId ? { ...fi, cantidad: nuevaCantidad } : fi)));
+  const handleUpdateCantidad = (insumoId: string, cantidad: number) => {
+    setInsumosFolio(insumosFolio.map((fi) => (fi.insumo.id === insumoId ? { ...fi, cantidad } : fi)));
   };
 
   // Envía el formulario completo
@@ -476,46 +454,6 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     if (!selectedHospital?.id) {
       toast.error("Debe seleccionar un hospital");
       return;
-    }
-
-    // Validar mínimos y máximos de todos los insumos
-    for (const folioInsumo of insumosFolio) {
-      const insumoReglas = insumosParaAgregar.find((i) => i.id === folioInsumo.insumo.id);
-      if (insumoReglas) {
-        const min = insumoReglas.cantidad_minima || 0;
-        const max = insumoReglas.cantidad_maxima;
-
-        if (folioInsumo.cantidad < min) {
-          toast.error(
-            `El insumo "${folioInsumo.insumo.nombre}" requiere una cantidad mínima de ${min} unidades`
-          );
-          return;
-        }
-
-        if (max && folioInsumo.cantidad > max) {
-          toast.error(
-            `El insumo "${folioInsumo.insumo.nombre}" solo permite una cantidad máxima de ${max} unidades`
-          );
-          return;
-        }
-      }
-    }
-
-    // Validar grupos exclusivos
-    const gruposSeleccionados = new Map<string, string>();
-    for (const folioInsumo of insumosFolio) {
-      const insumoReglas = insumosParaAgregar.find((i) => i.id === folioInsumo.insumo.id);
-      if (insumoReglas?.grupo_exclusivo) {
-        if (gruposSeleccionados.has(insumoReglas.grupo_exclusivo)) {
-          toast.error(
-            `Solo se permite seleccionar un insumo del grupo "${insumoReglas.grupo_exclusivo}". Tienes "${gruposSeleccionados.get(
-              insumoReglas.grupo_exclusivo
-            )}" y "${folioInsumo.insumo.nombre}" seleccionados.`
-          );
-          return;
-        }
-        gruposSeleccionados.set(insumoReglas.grupo_exclusivo, folioInsumo.insumo.nombre);
-      }
     }
 
     try {
@@ -1048,50 +986,26 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {insumosFolio.map((fi) => {
-                  const insumoReglas = insumosParaAgregar.find((i) => i.id === fi.insumo.id);
-                  const min = insumoReglas?.cantidad_minima || 0;
-                  const max = insumoReglas?.cantidad_maxima;
-                  const nota = insumoReglas?.nota;
-
-                  return (
-                    <TableRow key={fi.insumo.id}>
-                      <TableCell className="py-2">
-                        <div>
-                          <div>{fi.insumo.nombre}</div>
-                          {nota && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {nota}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2">{fi.insumo.lote}</TableCell>
-                      <TableCell className="py-2">
-                        <div className="space-y-1">
-                          <Input
-                            type="number"
-                            min={min}
-                            max={max || undefined}
-                            value={fi.cantidad}
-                            onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
-                            className="w-20 h-8"
-                          />
-                          {(min > 0 || max) && (
-                            <div className="text-xs text-muted-foreground">
-                              {min > 0 && max ? `Mín: ${min} | Máx: ${max}` : min > 0 ? `Mín: ${min}` : `Máx: ${max}`}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveInsumo(fi.insumo.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {insumosFolio.map((fi) => (
+                  <TableRow key={fi.insumo.id}>
+                    <TableCell className="py-2">{fi.insumo.nombre}</TableCell>
+                    <TableCell className="py-2">{fi.insumo.lote}</TableCell>
+                    <TableCell className="py-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={fi.cantidad}
+                        onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
+                        className="w-20 h-8"
+                      />
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveInsumo(fi.insumo.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}

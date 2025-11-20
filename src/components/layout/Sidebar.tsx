@@ -13,7 +13,8 @@ import {
   UserCog,
   Upload,
   Download,
-  History
+  History,
+  Search
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HospitalSelector } from '@/components/HospitalSelector';
@@ -45,6 +46,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente', 'gerente_operaciones'] },
+    { path: '/diagnostico-insumos', icon: Search, label: 'Diagnóstico Insumos', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/export-users', icon: Download, label: 'Exportar Usuarios', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/import-setup', icon: Upload, label: 'Importar Sistema', roles: ['gerente', 'gerente_operaciones'] },
   ];

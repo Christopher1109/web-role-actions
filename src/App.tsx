@@ -23,6 +23,7 @@ import GenerateCredentials from './pages/GenerateCredentials';
 import PopulateInsumos from './pages/PopulateInsumos';
 import ImportProcedimientos from './pages/ImportProcedimientos';
 import SetupAlmacenes from './pages/SetupAlmacenes';
+import Kardex from './pages/Kardex';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -67,7 +68,10 @@ const AppContent = () => {
                 <Route path="/folios" element={<Folios userRole={userRole} />} />
               )}
               {(userRole === 'almacenista' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
-                <Route path="/insumos" element={<Insumos />} />
+                <>
+                  <Route path="/insumos" element={<Insumos />} />
+                  <Route path="/kardex" element={<Kardex />} />
+                </>
               )}
               {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>

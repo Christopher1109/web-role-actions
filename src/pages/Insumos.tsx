@@ -22,6 +22,8 @@ interface InventarioItem {
   fecha_caducidad: string;
   cantidad_inicial: number;
   cantidad_actual: number;
+  cantidad_minima?: number | null;
+  cantidad_maxima?: number | null;
   ubicacion: string;
   estatus: string;
   insumos_catalogo: {
@@ -163,6 +165,8 @@ const Insumos = () => {
           fecha_caducidad: data.fecha_caducidad,
           cantidad_inicial: data.cantidad || 0,
           cantidad_actual: data.cantidad || 0,
+          cantidad_minima: data.cantidad_minima ?? 10,
+          cantidad_maxima: data.cantidad_maxima ?? null,
           ubicacion: 'Almacén general',
           estatus: 'activo'
         });
@@ -179,8 +183,15 @@ const Insumos = () => {
     }
   };
 
-  const getStockStatus = (cantidadActual: number, cantidadMinima: number = 10) => {
+  const getStockStatus = (
+    cantidadActual: number,
+    cantidadMinima: number = 10,
+    cantidadMaxima?: number | null
+  ) => {
     if (cantidadActual === 0) return { variant: 'destructive' as const, label: 'Agotado' };
+    if (cantidadMaxima != null && cantidadActual > cantidadMaxima) {
+      return { variant: 'secondary' as const, label: 'Exceso' };
+    }
     if (cantidadActual <= cantidadMinima / 2) return { variant: 'destructive' as const, label: 'Crítico' };
     if (cantidadActual <= cantidadMinima) return { variant: 'default' as const, label: 'Bajo' };
     return { variant: 'default' as const, label: 'Normal' };
@@ -200,14 +211,14 @@ const Insumos = () => {
       item.insumos_catalogo?.clave?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.lote?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStockBajo = !filterStockBajo || item.cantidad_actual < 10;
+    const matchesStockBajo = !filterStockBajo || item.cantidad_actual < (item.cantidad_minima ?? 10);
     const matchesProximoCaducar = !filterProximosCaducar || isCaducidadProxima(item.fecha_caducidad);
     const matchesTipo = filterTipo === 'todos' || item.insumos_catalogo?.tipo === filterTipo;
 
     return matchesSearch && matchesStockBajo && matchesProximoCaducar && matchesTipo;
   });
 
-  const stockBajo = inventario.filter(i => i.cantidad_actual < 10).length;
+  const stockBajo = inventario.filter(i => i.cantidad_actual < (i.cantidad_minima ?? 10)).length;
   const proximosVencer = inventario.filter(i => isCaducidadProxima(i.fecha_caducidad)).length;
 
   return (
@@ -357,7 +368,11 @@ const Insumos = () => {
             // Vista de tarjetas (original)
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredInventario.map((item) => {
-                const status = getStockStatus(item.cantidad_actual);
+                const status = getStockStatus(
+                  item.cantidad_actual,
+                  item.cantidad_minima ?? 10,
+                  item.cantidad_maxima ?? undefined
+                );
                 const proximoVencer = isCaducidadProxima(item.fecha_caducidad);
 
                 return (
@@ -438,7 +453,11 @@ const Insumos = () => {
                     </TableHeader>
                     <TableBody>
                       {filteredInventario.map((item) => {
-                        const status = getStockStatus(item.cantidad_actual);
+                        const status = getStockStatus(
+                          item.cantidad_actual,
+                          item.cantidad_minima ?? 10,
+                          item.cantidad_maxima ?? undefined
+                        );
                         const proximoVencer = isCaducidadProxima(item.fecha_caducidad);
                         
                         return (

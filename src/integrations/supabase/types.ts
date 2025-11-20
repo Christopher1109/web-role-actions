@@ -473,6 +473,8 @@ export type Database = {
           almacen_id: string
           cantidad_actual: number | null
           cantidad_inicial: number | null
+          cantidad_maxima: number | null
+          cantidad_minima: number | null
           created_at: string | null
           estatus: string | null
           fecha_caducidad: string | null
@@ -487,6 +489,8 @@ export type Database = {
           almacen_id: string
           cantidad_actual?: number | null
           cantidad_inicial?: number | null
+          cantidad_maxima?: number | null
+          cantidad_minima?: number | null
           created_at?: string | null
           estatus?: string | null
           fecha_caducidad?: string | null
@@ -501,6 +505,8 @@ export type Database = {
           almacen_id?: string
           cantidad_actual?: number | null
           cantidad_inicial?: number | null
+          cantidad_maxima?: number | null
+          cantidad_minima?: number | null
           created_at?: string | null
           estatus?: string | null
           fecha_caducidad?: string | null

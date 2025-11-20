@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { InsumoCombobox } from "./InsumoCombobox";
+// import { InsumoCombobox } from "./InsumoCombobox"; // actualmente no se usa
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -19,7 +19,11 @@ type Insumo = {
   id: string;
   nombre: string;
   lote: string;
-  cantidad: number;
+  cantidadDefault: number;
+  cantidadMinima: number | null;
+  cantidadMaxima: number | null;
+  condicionante: string | null;
+  grupoExclusivo: string | null;
 };
 
 type FolioInsumo = {
@@ -29,6 +33,10 @@ type FolioInsumo = {
     lote: string;
   };
   cantidad: number;
+  cantidadMinima: number | null;
+  cantidadMaxima: number | null;
+  condicionante: string | null;
+  grupoExclusivo: string | null;
 };
 
 /*
@@ -36,7 +44,7 @@ type FolioInsumo = {
  * a los valores snake_case usados en anestesia_insumos
  */
 const procedimientoToTipoAnestesia: Record<string, string> = {
-  "Sedación": "sedacion",
+  Sedación: "sedacion",
   "Anestesia Loco Regional": "loco_regional",
   "Anestesia General Loco Regional": "loco_regional",
   "Anestesia General Balanceada Adulto": "general_balanceada_adulto",
@@ -48,7 +56,7 @@ const procedimientoToTipoAnestesia: Record<string, string> = {
 
 // Mapeo de labels para mostrar nombres amigables
 const tipoAnestesiaLabels: Record<string, string> = {
-  "Sedación": "Sedación / Cuidados anestésicos monitoreados",
+  Sedación: "Sedación / Cuidados anestésicos monitoreados",
   "Anestesia Loco Regional": "Loco regional",
   "Anestesia General Loco Regional": "Loco regional",
   "Anestesia General Balanceada Adulto": "General balanceada adulto",
@@ -56,7 +64,7 @@ const tipoAnestesiaLabels: Record<string, string> = {
   "Anestesia General Endovenosa": "General endovenosa",
   "Anestesia General de Alta Especialidad": "Alta especialidad",
   "Alta Especialidad Trasplante Renal": "Alta especialidad trasplante renal",
-  "anestesia_mixta": "Anestesia mixta",
+  anestesia_mixta: "Anestesia mixta",
 };
 
 // Esquema de validación de los campos del folio T33
@@ -117,7 +125,9 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedInsumoId, setSelectedInsumoId] = useState<string>("");
   // Lista de tipos de anestesia disponibles para el hospital seleccionado
-  const [tiposAnestesiaDisponibles, setTiposAnestesiaDisponibles] = useState<Array<{ value: string; label: string }>>([]);
+  const [tiposAnestesiaDisponibles, setTiposAnestesiaDisponibles] = useState<Array<{ value: string; label: string }>>(
+    [],
+  );
   const [loadingProcedimientos, setLoadingProcedimientos] = useState(false);
 
   // Configuración inicial del formulario
@@ -245,38 +255,45 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
    */
   const combinarInsumosAnestesiaMixta = (principal: Insumo[], secundaria: Insumo[]) => {
     const insumosMap = new Map<string, FolioInsumo>();
-    
+
     // Agregar los primeros 5 de la principal
     principal.slice(0, 5).forEach((insumo) => {
       insumosMap.set(insumo.id, {
         insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
-        cantidad: insumo.cantidad,
+        cantidad: insumo.cantidadDefault,
+        cantidadMinima: insumo.cantidadMinima,
+        cantidadMaxima: insumo.cantidadMaxima,
+        condicionante: insumo.condicionante,
+        grupoExclusivo: insumo.grupoExclusivo,
       });
     });
-    
+
     // Agregar los primeros 5 de la secundaria (o sumar si ya existe)
     secundaria.slice(0, 5).forEach((insumo) => {
       const existing = insumosMap.get(insumo.id);
       if (existing) {
         // Si ya existe, sumar la cantidad
-        existing.cantidad += insumo.cantidad;
+        existing.cantidad += insumo.cantidadDefault;
       } else {
         // Si no existe, agregarlo
         insumosMap.set(insumo.id, {
           insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
-          cantidad: insumo.cantidad,
+          cantidad: insumo.cantidadDefault,
+          cantidadMinima: insumo.cantidadMinima,
+          cantidadMaxima: insumo.cantidadMaxima,
+          condicionante: insumo.condicionante,
+          grupoExclusivo: insumo.grupoExclusivo,
         });
       }
     });
-    
+
     setInsumosFolio(Array.from(insumosMap.values()));
   };
 
   /**
    * Carga los insumos de una anestesia específica. Utiliza el mapa
    * tipoAnestesiaToDb para traducir el slug del select al nombre real de
-   * la tabla `anestesia_insumos`.  Elimina el requisito de budget_code
-   * para que funcione aun cuando el hospital no tenga datos en la BD.
+   * la tabla `anestesia_insumos`.
    */
   const loadInsumosForTipo = async (tipo: string): Promise<Insumo[]> => {
     if (!tipo) return [];
@@ -284,14 +301,18 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     try {
       // Convertir el nombre del procedimiento al valor snake_case
       const tipoDb = procedimientoToTipoAnestesia[tipo] ?? tipo;
-      
+
       console.log(`🔍 Buscando insumos para tipo: "${tipo}" → "${tipoDb}"`);
 
-      const { data: anestesiaInsumos, error } = await supabase
+      const { data: anestesiaInsumos, error } = (await supabase
         .from("anestesia_insumos")
         .select(
           `
           cantidad_default,
+          cantidad_minima,
+          cantidad_maxima,
+          condicionante,
+          grupo_exclusivo,
           orden,
           insumo_id,
           insumos (
@@ -302,19 +323,26 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         `,
         )
         .eq("tipo_anestesia", tipoDb)
-        .order("orden", { ascending: true }) as { data: any[] | null; error: any };
+        .order("orden", { ascending: true })) as {
+        data: any[] | null;
+        error: any;
+      };
 
       if (error) throw error;
 
-      const insumos = (anestesiaInsumos || [])
+      const insumos: Insumo[] = (anestesiaInsumos || [])
         .filter((ai: any) => ai.insumos)
         .map((ai: any) => ({
           id: ai.insumos.id,
           nombre: ai.insumos.nombre,
           lote: ai.insumos.lote || "",
-          cantidad: ai.cantidad_default || 1,
+          cantidadDefault: ai.cantidad_default ?? 1,
+          cantidadMinima: ai.cantidad_minima ?? null,
+          cantidadMaxima: ai.cantidad_maxima ?? null,
+          condicionante: ai.condicionante ?? null,
+          grupoExclusivo: ai.grupo_exclusivo ?? null,
         }));
-      
+
       console.log(`✅ Insumos cargados: ${insumos.length}`);
       return insumos;
     } catch (error) {
@@ -332,7 +360,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         setInsumosFolio([]);
         return;
       }
-      
+
       if (tipoAnestesia === "anestesia_mixta") {
         // Si es mixta, limpiar y esperar a que se seleccionen los dos tipos
         setInsumosDisponibles([]);
@@ -344,13 +372,17 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       setInsumosDisponibles(insumosData);
 
       // REEMPLAZAR con los primeros 5 insumos básicos
-      const preselected = insumosData.slice(0, 5).map((insumo) => ({
+      const preselected: FolioInsumo[] = insumosData.slice(0, 5).map((insumo) => ({
         insumo: {
           id: insumo.id,
           nombre: insumo.nombre,
           lote: insumo.lote,
         },
-        cantidad: insumo.cantidad,
+        cantidad: insumo.cantidadDefault,
+        cantidadMinima: insumo.cantidadMinima,
+        cantidadMaxima: insumo.cantidadMaxima,
+        condicionante: insumo.condicionante,
+        grupoExclusivo: insumo.grupoExclusivo,
       }));
       setInsumosFolio(preselected);
     };
@@ -372,9 +404,17 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         combinarInsumosAnestesiaMixta(insumosData, secundariaData);
       } else {
         // Solo principal, mostrar sus 5 insumos
-        const preselected = insumosData.slice(0, 5).map((insumo) => ({
-          insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
-          cantidad: insumo.cantidad,
+        const preselected: FolioInsumo[] = insumosData.slice(0, 5).map((insumo) => ({
+          insumo: {
+            id: insumo.id,
+            nombre: insumo.nombre,
+            lote: insumo.lote,
+          },
+          cantidad: insumo.cantidadDefault,
+          cantidadMinima: insumo.cantidadMinima,
+          cantidadMaxima: insumo.cantidadMaxima,
+          condicionante: insumo.condicionante,
+          grupoExclusivo: insumo.grupoExclusivo,
         }));
         setInsumosFolio(preselected);
       }
@@ -397,9 +437,17 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         combinarInsumosAnestesiaMixta(principalData, insumosData);
       } else {
         // Solo secundaria, mostrar sus 5 insumos
-        const preselected = insumosData.slice(0, 5).map((insumo) => ({
-          insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
-          cantidad: insumo.cantidad,
+        const preselected: FolioInsumo[] = insumosData.slice(0, 5).map((insumo) => ({
+          insumo: {
+            id: insumo.id,
+            nombre: insumo.nombre,
+            lote: insumo.lote,
+          },
+          cantidad: insumo.cantidadDefault,
+          cantidadMinima: insumo.cantidadMinima,
+          cantidadMaxima: insumo.cantidadMaxima,
+          condicionante: insumo.condicionante,
+          grupoExclusivo: insumo.grupoExclusivo,
         }));
         setInsumosFolio(preselected);
       }
@@ -427,11 +475,22 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   const handleAgregarInsumo = () => {
     const insumo = insumosParaAgregar.find((i) => i.id === selectedInsumoId);
     if (!insumo) return;
+
+    const defaultCantidad = insumo.cantidadDefault ?? insumo.cantidadMinima ?? 1;
+
     setInsumosFolio([
       ...insumosFolio,
       {
-        insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
-        cantidad: 1,
+        insumo: {
+          id: insumo.id,
+          nombre: insumo.nombre,
+          lote: insumo.lote,
+        },
+        cantidad: defaultCantidad,
+        cantidadMinima: insumo.cantidadMinima,
+        cantidadMaxima: insumo.cantidadMaxima,
+        condicionante: insumo.condicionante,
+        grupoExclusivo: insumo.grupoExclusivo,
       },
     ]);
     setSelectedInsumoId("");
@@ -443,9 +502,34 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     setInsumosFolio(insumosFolio.filter((fi) => fi.insumo.id !== insumoId));
   };
 
-  // Actualiza la cantidad de un insumo del folio
+  // Actualiza la cantidad de un insumo del folio respetando min/max
   const handleUpdateCantidad = (insumoId: string, cantidad: number) => {
-    setInsumosFolio(insumosFolio.map((fi) => (fi.insumo.id === insumoId ? { ...fi, cantidad } : fi)));
+    setInsumosFolio((prev) =>
+      prev.map((fi) => {
+        if (fi.insumo.id !== insumoId) return fi;
+
+        const min = fi.cantidadMinima ?? 0;
+        const max = fi.cantidadMaxima ?? Number.MAX_SAFE_INTEGER;
+
+        let nuevaCantidad = cantidad;
+
+        if (nuevaCantidad < min) {
+          nuevaCantidad = min;
+          if (min > 0) {
+            toast.error(`La cantidad mínima para ${fi.insumo.nombre} es ${min}`);
+          }
+        }
+
+        if (nuevaCantidad > max) {
+          nuevaCantidad = max;
+          if (fi.cantidadMaxima != null) {
+            toast.error(`La cantidad máxima para ${fi.insumo.nombre} es ${max}`);
+          }
+        }
+
+        return { ...fi, cantidad: nuevaCantidad };
+      }),
+    );
   };
 
   // Envía el formulario completo
@@ -458,17 +542,14 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
     try {
       // Validar tipo de anestesia con el backend
-      const { data: validationResult, error: validationError } = await supabase.functions.invoke(
-        "validate-folio",
-        {
-          body: {
-            hospital_id: selectedHospital.id,
-            tipo_anestesia: values.tipo_anestesia,
-            anestesia_principal: anestesiaPrincipal || null,
-            anestesia_secundaria: anestesiaSecundaria || null,
-          },
-        }
-      );
+      const { data: validationResult, error: validationError } = await supabase.functions.invoke("validate-folio", {
+        body: {
+          hospital_id: selectedHospital.id,
+          tipo_anestesia: values.tipo_anestesia,
+          anestesia_principal: anestesiaPrincipal || null,
+          anestesia_secundaria: anestesiaSecundaria || null,
+        },
+      });
 
       if (validationError) throw validationError;
 
@@ -993,7 +1074,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                     <TableCell className="py-2">
                       <Input
                         type="number"
-                        min="1"
+                        min={fi.cantidadMinima ?? 0}
                         value={fi.cantidad}
                         onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
                         className="w-20 h-8"

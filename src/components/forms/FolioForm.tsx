@@ -41,16 +41,16 @@ type FolioInsumo = {
 
 /*
  * Mapeo de nombres de procedimientos (como vienen de la tabla procedimientos)
- * a los valores snake_case usados en anestesia_insumos
+ * a los valores usados en anestesia_insumos.tipo_anestesia
  */
 const procedimientoToTipoAnestesia: Record<string, string> = {
   Sedación: "sedacion",
-  "Anestesia Loco Regional": "loco_regional",
-  "Anestesia General Loco Regional": "loco_regional",
+  "Anestesia Loco Regional": "locorregional",
+  "Anestesia General Loco Regional": "locorregional",
   "Anestesia General Balanceada Adulto": "general_balanceada_adulto",
   "Anestesia General Balanceada Pediátrica": "general_balanceada_pediatrica",
   "Anestesia General Endovenosa": "general_endovenosa",
-  "Anestesia General de Alta Especialidad": "alta_especialidad",
+  "Anestesia General de Alta Especialidad": "general_alta_especialidad",
   "Alta Especialidad Trasplante Renal": "alta_especialidad_trasplante",
 };
 
@@ -291,15 +291,13 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   };
 
   /**
-   * Carga los insumos de una anestesia específica. Utiliza el mapa
-   * tipoAnestesiaToDb para traducir el slug del select al nombre real de
-   * la tabla `anestesia_insumos`.
+   * Carga los insumos de una anestesia específica desde `anestesia_insumos`
    */
   const loadInsumosForTipo = async (tipo: string): Promise<Insumo[]> => {
     if (!tipo) return [];
 
     try {
-      // Convertir el nombre del procedimiento al valor snake_case
+      // Convertir el nombre del procedimiento al valor usado en anestesia_insumos.tipo_anestesia
       const tipoDb = procedimientoToTipoAnestesia[tipo] ?? tipo;
 
       console.log(`🔍 Buscando insumos para tipo: "${tipo}" → "${tipoDb}"`);
@@ -421,7 +419,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     };
 
     loadInsumosPrincipal();
-  }, [anestesiaPrincipal, tipoAnestesia]);
+  }, [anestesiaPrincipal, tipoAnestesia, anestesiaSecundaria]);
 
   // Efecto: cuando cambia anestesiaSecundaria en modo mixta
   useEffect(() => {
@@ -454,7 +452,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     };
 
     loadInsumosSecundaria();
-  }, [anestesiaSecundaria, tipoAnestesia]);
+  }, [anestesiaSecundaria, tipoAnestesia, anestesiaPrincipal]);
 
   // Calcula insumos para agregar en la UI.  En modo mixta usa la unión de insumos de ambas anestesias
   const insumosParaAgregar = React.useMemo(() => {
@@ -475,6 +473,16 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   const handleAgregarInsumo = () => {
     const insumo = insumosParaAgregar.find((i) => i.id === selectedInsumoId);
     if (!insumo) return;
+
+    // 🔴 VALIDAR GRUPO EXCLUSIVO: solo un insumo por grupo_exclusivo
+    if (insumo.grupoExclusivo) {
+      const yaExisteEnGrupo = insumosFolio.find((fi) => fi.grupoExclusivo === insumo.grupoExclusivo);
+
+      if (yaExisteEnGrupo) {
+        toast.error(`Solo puedes seleccionar un insumo del grupo: ${insumo.grupoExclusivo}`);
+        return;
+      }
+    }
 
     const defaultCantidad = insumo.cantidadDefault ?? insumo.cantidadMinima ?? 1;
 
@@ -538,6 +546,14 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     if (!selectedHospital?.id) {
       toast.error("Debe seleccionar un hospital");
       return;
+    }
+
+    // Validar anestesia mixta si aplica
+    if (values.tipo_anestesia === "anestesia_mixta") {
+      if (!anestesiaPrincipal || !anestesiaSecundaria) {
+        toast.error("Debes seleccionar anestesia principal y secundaria");
+        return;
+      }
     }
 
     try {

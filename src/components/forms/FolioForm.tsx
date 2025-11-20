@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 // import { InsumoCombobox } from "./InsumoCombobox"; // actualmente no se usa
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type Insumo = {
   id: string;
@@ -129,6 +130,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     [],
   );
   const [loadingProcedimientos, setLoadingProcedimientos] = useState(false);
+  // Validaciones y alertas
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Configuración inicial del formulario
   const form = useForm<FolioFormValues>({
@@ -469,6 +472,49 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     return availableInsumos.filter((insumo) => !insumosFolio.some((fi) => fi.insumo.id === insumo.id));
   }, [tipoAnestesia, insumosDisponibles, insumosDisponiblesPrincipal, insumosDisponiblesSecundaria, insumosFolio]);
 
+  // Validar todos los insumos actuales
+  const validateAllInsumos = (insumos: FolioInsumo[]) => {
+    const errors: string[] = [];
+
+    // Validar cantidades
+    insumos.forEach((fi) => {
+      const min = fi.cantidadMinima ?? 0;
+      const max = fi.cantidadMaxima ?? Number.MAX_SAFE_INTEGER;
+
+      if (fi.cantidad < min && min > 0) {
+        errors.push(`${fi.insumo.nombre}: cantidad mínima requerida es ${min}, actual ${fi.cantidad}`);
+      }
+
+      if (fi.cantidad > max && fi.cantidadMaxima != null) {
+        errors.push(`${fi.insumo.nombre}: cantidad máxima permitida es ${max}, actual ${fi.cantidad}`);
+      }
+    });
+
+    // Validar grupos exclusivos
+    const gruposUsados = new Map<string, string[]>();
+    insumos.forEach((fi) => {
+      if (fi.grupoExclusivo) {
+        if (!gruposUsados.has(fi.grupoExclusivo)) {
+          gruposUsados.set(fi.grupoExclusivo, []);
+        }
+        gruposUsados.get(fi.grupoExclusivo)!.push(fi.insumo.nombre);
+      }
+    });
+
+    gruposUsados.forEach((nombres, grupo) => {
+      if (nombres.length > 1) {
+        errors.push(`Grupo exclusivo "${grupo}": solo puedes seleccionar uno de: ${nombres.join(", ")}`);
+      }
+    });
+
+    setValidationErrors(errors);
+  };
+
+  // Validar insumos cuando cambien
+  useEffect(() => {
+    validateAllInsumos(insumosFolio);
+  }, [insumosFolio]);
+
   // Agrega un insumo manualmente desde el modal
   const handleAgregarInsumo = () => {
     const insumo = insumosParaAgregar.find((i) => i.id === selectedInsumoId);
@@ -507,7 +553,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
   // Elimina un insumo de la lista del folio
   const handleRemoveInsumo = (insumoId: string) => {
-    setInsumosFolio(insumosFolio.filter((fi) => fi.insumo.id !== insumoId));
+    const nuevosInsumos = insumosFolio.filter((fi) => fi.insumo.id !== insumoId);
+    setInsumosFolio(nuevosInsumos);
   };
 
   // Actualiza la cantidad de un insumo del folio respetando min/max
@@ -545,6 +592,12 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     // Validar que el tipo de anestesia sea válido para el hospital
     if (!selectedHospital?.id) {
       toast.error("Debe seleccionar un hospital");
+      return;
+    }
+
+    // Validar que no haya errores de validación
+    if (validationErrors.length > 0) {
+      toast.error("Por favor, corrige los errores de validación antes de continuar");
       return;
     }
 
@@ -1068,6 +1121,20 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
             </Button>
           </div>
 
+          {/* Alertas de validación */}
+          {validationErrors.length > 0 && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-1">
+                  {validationErrors.map((error, idx) => (
+                    <div key={idx}>• {error}</div>
+                  ))}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {insumosFolio.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No hay insumos agregados. Haz clic en "Agregar insumo" para comenzar.
@@ -1083,26 +1150,54 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {insumosFolio.map((fi) => (
-                  <TableRow key={fi.insumo.id}>
-                    <TableCell className="py-2">{fi.insumo.nombre}</TableCell>
-                    <TableCell className="py-2">{fi.insumo.lote}</TableCell>
-                    <TableCell className="py-2">
-                      <Input
-                        type="number"
-                        min={fi.cantidadMinima ?? 0}
-                        value={fi.cantidad}
-                        onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
-                        className="w-20 h-8"
-                      />
-                    </TableCell>
-                    <TableCell className="py-2">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveInsumo(fi.insumo.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {insumosFolio.map((fi) => {
+                  const min = fi.cantidadMinima ?? 0;
+                  const max = fi.cantidadMaxima ?? Number.MAX_SAFE_INTEGER;
+                  const cantidadValida = fi.cantidad >= min && fi.cantidad <= max;
+
+                  return (
+                    <TableRow key={fi.insumo.id} className={!cantidadValida ? "bg-destructive/10" : ""}>
+                      <TableCell className="py-2">
+                        <div className="flex items-center gap-2">
+                          {fi.insumo.nombre}
+                          {fi.grupoExclusivo && (
+                            <span className="text-xs bg-muted px-2 py-0.5 rounded">{fi.grupoExclusivo}</span>
+                          )}
+                        </div>
+                        {fi.condicionante && (
+                          <div className="text-xs text-muted-foreground mt-1">{fi.condicionante}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2">{fi.insumo.lote}</TableCell>
+                      <TableCell className="py-2">
+                        <div className="space-y-1">
+                          <Input
+                            type="number"
+                            min={fi.cantidadMinima ?? 0}
+                            max={fi.cantidadMaxima ?? undefined}
+                            value={fi.cantidad}
+                            onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
+                            className={`w-20 h-8 ${!cantidadValida ? "border-destructive" : ""}`}
+                          />
+                          {(fi.cantidadMinima != null || fi.cantidadMaxima != null) && (
+                            <div className="text-xs text-muted-foreground">
+                              {fi.cantidadMinima != null && fi.cantidadMaxima != null
+                                ? `${fi.cantidadMinima}-${fi.cantidadMaxima}`
+                                : fi.cantidadMinima != null
+                                ? `Min: ${fi.cantidadMinima}`
+                                : `Max: ${fi.cantidadMaxima}`}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveInsumo(fi.insumo.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

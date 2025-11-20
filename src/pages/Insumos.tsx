@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, AlertCircle, AlertTriangle, Calendar } from 'lucide-react';
+import { Plus, Search, AlertCircle, AlertTriangle, Calendar, LayoutGrid, Table2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import InsumoForm from '@/components/forms/InsumoForm';
 import InsumoDetailDialog from '@/components/dialogs/InsumoDetailDialog';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,18 +31,38 @@ interface InventarioItem {
     descripcion: string;
     categoria: string;
     unidad: string;
+    familia_insumo: string;
+    presentacion: string;
+    tipo: string;
   };
+}
+
+interface FamiliaGroup {
+  familia: string;
+  tipo: string;
+  items: InventarioItem[];
+  totalUnidades: number;
+  stockBajo: number;
+  proximosVencer: number;
 }
 
 const Insumos = () => {
   const { user } = useAuth();
   const { selectedHospital } = useHospital();
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [inventario, setInventario] = useState<InventarioItem[]>([]);
   const [selectedInsumo, setSelectedInsumo] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [expandedFamilias, setExpandedFamilias] = useState<Set<string>>(new Set());
+  
+  // Filtros avanzados
+  const [filterStockBajo, setFilterStockBajo] = useState(false);
+  const [filterProximosCaducar, setFilterProximosCaducar] = useState(false);
+  const [filterTipo, setFilterTipo] = useState<'todos' | 'insumo' | 'medicamento'>('todos');
+  const [agruparPorFamilia, setAgruparPorFamilia] = useState(true);
 
   useEffect(() => {
     if (user && selectedHospital) {
@@ -69,8 +91,7 @@ const Insumos = () => {
         return;
       }
 
-      // Obtener inventario con datos del catálogo
-      const { data, error } = await supabase
+      const { data, error} = await supabase
         .from('inventario_hospital')
         .select(`
           *,
@@ -80,7 +101,10 @@ const Insumos = () => {
             clave,
             descripcion,
             categoria,
-            unidad
+            unidad,
+            familia_insumo,
+            presentacion,
+            tipo
           )
         `)
         .eq('almacen_id', almacen.id)
@@ -181,12 +205,60 @@ const Insumos = () => {
     return days <= 60 && days >= 0;
   };
 
-  const filteredInventario = inventario.filter(item =>
-    item.insumos_catalogo?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.insumos_catalogo?.clave?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.lote?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const toggleFamilia = (familia: string) => {
+    const newExpanded = new Set(expandedFamilias);
+    if (newExpanded.has(familia)) {
+      newExpanded.delete(familia);
+    } else {
+      newExpanded.add(familia);
+    }
+    setExpandedFamilias(newExpanded);
+  };
 
+  // Filtrar inventario
+  const filteredInventario = inventario.filter(item => {
+    const matchesSearch = 
+      item.insumos_catalogo?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.insumos_catalogo?.clave?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.insumos_catalogo?.familia_insumo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.lote?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStockBajo = !filterStockBajo || item.cantidad_actual < 10;
+    const matchesProximoCaducar = !filterProximosCaducar || isCaducidadProxima(item.fecha_caducidad);
+    const matchesTipo = filterTipo === 'todos' || item.insumos_catalogo?.tipo === filterTipo;
+
+    return matchesSearch && matchesStockBajo && matchesProximoCaducar && matchesTipo;
+  });
+
+  // Agrupar por familia
+  const familiaGroups = (): FamiliaGroup[] => {
+    const groups: { [key: string]: FamiliaGroup } = {};
+    
+    filteredInventario.forEach(item => {
+      const familia = item.insumos_catalogo?.familia_insumo || 'Sin clasificar';
+      const tipo = item.insumos_catalogo?.tipo || 'insumo';
+      
+      if (!groups[familia]) {
+        groups[familia] = {
+          familia,
+          tipo,
+          items: [],
+          totalUnidades: 0,
+          stockBajo: 0,
+          proximosVencer: 0
+        };
+      }
+      
+      groups[familia].items.push(item);
+      groups[familia].totalUnidades += item.cantidad_actual;
+      if (item.cantidad_actual < 10) groups[familia].stockBajo++;
+      if (isCaducidadProxima(item.fecha_caducidad)) groups[familia].proximosVencer++;
+    });
+    
+    return Object.values(groups).sort((a, b) => a.familia.localeCompare(b.familia));
+  };
+
+  const familias = familiaGroups();
   const stockBajo = inventario.filter(i => i.cantidad_actual < 10).length;
   const proximosVencer = inventario.filter(i => isCaducidadProxima(i.fecha_caducidad)).length;
 
@@ -216,11 +288,26 @@ const Insumos = () => {
 
       {selectedHospital && (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
+          {/* Resumen por familia */}
+          <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Insumos
+                  Familias de Insumos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{familias.length}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Categorías diferentes
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Presentaciones Totales
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -238,9 +325,12 @@ const Insumos = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-destructive">{stockBajo}</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-2xl font-bold text-orange-500">{stockBajo}</div>
+                  {stockBajo > 0 && <AlertTriangle className="h-5 w-5 text-orange-500" />}
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Menos de 10 unidades
+                  Requieren reabastecimiento
                 </p>
               </CardContent>
             </Card>
@@ -248,125 +338,346 @@ const Insumos = () => {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Próximos a Caducar
+                  Próximos a Vencer
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-amber-600">{proximosVencer}</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-2xl font-bold text-red-500">{proximosVencer}</div>
+                  {proximosVencer > 0 && <Calendar className="h-5 w-5 text-red-500" />}
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Caducan en 60 días o menos
+                  Menos de 60 días
                 </p>
               </CardContent>
             </Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Inventario</CardTitle>
-                <div className="relative w-64">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar insumos..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
+          {/* Barra de búsqueda y controles */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nombre, familia, clave, lote o principio activo..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
               </div>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Cargando inventario...
-                </div>
-              ) : filteredInventario.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No se encontraron insumos
-                </div>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredInventario.map((item) => {
-                    const stockStatus = getStockStatus(item.cantidad_actual);
-                    const proximoCaducidad = isCaducidadProxima(item.fecha_caducidad);
-                    
-                    return (
-                      <Card 
-                        key={item.id} 
-                        className="cursor-pointer hover:shadow-md transition-shadow"
-                        onClick={() => {
-                          setSelectedInsumo({
-                            ...item,
-                            nombre: item.insumos_catalogo?.nombre,
-                            clave: item.insumos_catalogo?.clave,
-                            descripcion: item.insumos_catalogo?.descripcion,
-                            categoria: item.insumos_catalogo?.categoria,
-                            unidad: item.insumos_catalogo?.unidad,
-                            cantidad: item.cantidad_actual
-                          });
-                          setShowDetail(true);
-                        }}
-                      >
-                        <CardHeader>
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <CardTitle className="text-base truncate">
-                                {item.insumos_catalogo?.nombre}
-                              </CardTitle>
-                              {item.insumos_catalogo?.clave && (
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  Clave: {item.insumos_catalogo.clave}
-                                </p>
-                              )}
-                            </div>
-                            <Badge variant={stockStatus.variant} className="shrink-0">
-                              {stockStatus.label}
-                            </Badge>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <span className="text-muted-foreground block">Stock actual:</span>
-                              <span className="font-bold text-lg">{item.cantidad_actual}</span>
-                              <span className="text-muted-foreground text-xs"> / {item.cantidad_inicial} inicial</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground block">Lote:</span>
-                              <span className="font-medium text-sm truncate block">{item.lote}</span>
-                            </div>
-                          </div>
-                          
-                          {item.fecha_caducidad && (
-                            <div className="flex items-center justify-between text-sm pt-2 border-t">
-                              <span className="text-muted-foreground flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                Caducidad:
-                              </span>
-                              <span className={proximoCaducidad ? "font-medium text-amber-600" : "font-medium"}>
-                                {format(new Date(item.fecha_caducidad), 'dd/MM/yyyy')}
-                              </span>
-                            </div>
-                          )}
-                          
-                          {proximoCaducidad && (
-                            <div className="flex items-center gap-2 text-amber-600 text-xs mt-2 bg-amber-50 dark:bg-amber-950 p-2 rounded">
-                              <AlertTriangle className="h-3 w-3" />
-                              <span>Próximo a caducar</span>
-                            </div>
-                          )}
+              
+              <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as any)}>
+                <ToggleGroupItem value="cards" aria-label="Vista tarjetas">
+                  <LayoutGrid className="h-4 w-4" />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="table" aria-label="Vista tabla">
+                  <Table2 className="h-4 w-4" />
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
 
-                          <div className="text-xs text-muted-foreground pt-2 border-t">
-                            📍 {item.ubicacion}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
+            {/* Filtros rápidos */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={filterStockBajo ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setFilterStockBajo(!filterStockBajo)}
+              >
+                Stock Bajo
+              </Button>
+              <Button
+                variant={filterProximosCaducar ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setFilterProximosCaducar(!filterProximosCaducar)}
+              >
+                Próximos a Caducar
+              </Button>
+              <Button
+                variant={filterTipo === 'insumo' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setFilterTipo(filterTipo === 'insumo' ? 'todos' : 'insumo')}
+              >
+                Solo Insumos
+              </Button>
+              <Button
+                variant={filterTipo === 'medicamento' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setFilterTipo(filterTipo === 'medicamento' ? 'todos' : 'medicamento')}
+              >
+                Solo Medicamentos
+              </Button>
+              {viewMode === 'table' && (
+                <Button
+                  variant={agruparPorFamilia ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setAgruparPorFamilia(!agruparPorFamilia)}
+                >
+                  {agruparPorFamilia ? 'Ver Sin Agrupar' : 'Agrupar por Familia'}
+                </Button>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-12 text-muted-foreground">
+              Cargando inventario...
+            </div>
+          ) : filteredInventario.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                No se encontraron insumos que coincidan con los filtros
+              </CardContent>
+            </Card>
+          ) : viewMode === 'cards' ? (
+            // Vista de tarjetas (original)
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredInventario.map((item) => {
+                const status = getStockStatus(item.cantidad_actual);
+                const proximoVencer = isCaducidadProxima(item.fecha_caducidad);
+
+                return (
+                  <Card
+                    key={item.id}
+                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => {
+                      setSelectedInsumo(item);
+                      setShowDetail(true);
+                    }}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-base">
+                          {item.insumos_catalogo?.nombre || 'Sin nombre'}
+                        </CardTitle>
+                        <Badge variant={status.variant}>{status.label}</Badge>
+                      </div>
+                      {item.insumos_catalogo?.familia_insumo && (
+                        <CardDescription className="text-xs">
+                          {item.insumos_catalogo.familia_insumo}
+                          {item.insumos_catalogo.presentacion && ` • ${item.insumos_catalogo.presentacion}`}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <p className="text-muted-foreground text-xs">Clave</p>
+                          <p className="font-medium">{item.insumos_catalogo?.clave || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs">Tipo</p>
+                          <Badge variant="outline" className="text-xs">
+                            {item.insumos_catalogo?.tipo || 'insumo'}
+                          </Badge>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs">Lote</p>
+                          <p className="font-medium">{item.lote || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground text-xs">Stock Actual</p>
+                          <p className="font-bold text-lg">{item.cantidad_actual}</p>
+                        </div>
+                      </div>
+                      
+                      {proximoVencer && (
+                        <Alert variant="destructive" className="py-2">
+                          <Calendar className="h-3 w-3" />
+                          <AlertDescription className="text-xs">
+                            Caduca: {item.fecha_caducidad ? format(new Date(item.fecha_caducidad), 'dd/MM/yyyy') : 'N/A'}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            // Vista de tabla
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {agruparPorFamilia && <TableHead className="w-12"></TableHead>}
+                        <TableHead>Familia / Nombre</TableHead>
+                        <TableHead>Presentación</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Lote</TableHead>
+                        <TableHead>Caducidad</TableHead>
+                        <TableHead className="text-right">Stock Actual</TableHead>
+                        <TableHead className="text-right">Stock Inicial</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Ubicación</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {agruparPorFamilia ? (
+                        // Vista agrupada por familia
+                        familias.map((grupo) => (
+                          <>
+                            <TableRow
+                              key={grupo.familia}
+                              className="bg-muted/50 hover:bg-muted cursor-pointer font-medium"
+                              onClick={() => toggleFamilia(grupo.familia)}
+                            >
+                              <TableCell>
+                                {expandedFamilias.has(grupo.familia) ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                              </TableCell>
+                              <TableCell className="font-semibold">
+                                {grupo.familia}
+                                <Badge variant="outline" className="ml-2 text-xs">
+                                  {grupo.tipo}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {grupo.items.length} presentaciones
+                              </TableCell>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {grupo.totalUnidades} unidades
+                              </TableCell>
+                              <TableCell></TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  {grupo.stockBajo > 0 && (
+                                    <Badge variant="outline" className="text-xs text-orange-500">
+                                      {grupo.stockBajo} bajo
+                                    </Badge>
+                                  )}
+                                  {grupo.proximosVencer > 0 && (
+                                    <Badge variant="outline" className="text-xs text-red-500">
+                                      {grupo.proximosVencer} vencen
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell></TableCell>
+                            </TableRow>
+                            
+                            {expandedFamilias.has(grupo.familia) && grupo.items.map((item) => {
+                              const status = getStockStatus(item.cantidad_actual);
+                              const proximoVencer = isCaducidadProxima(item.fecha_caducidad);
+                              
+                              return (
+                                <TableRow
+                                  key={item.id}
+                                  className="cursor-pointer hover:bg-muted/50"
+                                  onClick={() => {
+                                    setSelectedInsumo(item);
+                                    setShowDetail(true);
+                                  }}
+                                >
+                                  <TableCell></TableCell>
+                                  <TableCell className="pl-8 text-sm">
+                                    {item.insumos_catalogo?.nombre}
+                                  </TableCell>
+                                  <TableCell className="text-sm">
+                                    {item.insumos_catalogo?.presentacion || '-'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className="text-xs">
+                                      {item.insumos_catalogo?.tipo}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-sm">{item.lote || 'N/A'}</TableCell>
+                                  <TableCell className="text-sm">
+                                    {item.fecha_caducidad ? (
+                                      <span className={proximoVencer ? 'text-red-500 font-medium' : ''}>
+                                        {format(new Date(item.fecha_caducidad), 'dd/MM/yyyy')}
+                                      </span>
+                                    ) : 'N/A'}
+                                  </TableCell>
+                                  <TableCell className="text-right font-semibold">
+                                    {item.cantidad_actual}
+                                  </TableCell>
+                                  <TableCell className="text-right text-muted-foreground">
+                                    {item.cantidad_inicial}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant={status.variant} className="text-xs">
+                                      {status.label}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-sm text-muted-foreground">
+                                    {item.ubicacion}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </>
+                        ))
+                      ) : (
+                        // Vista sin agrupar
+                        filteredInventario.map((item) => {
+                          const status = getStockStatus(item.cantidad_actual);
+                          const proximoVencer = isCaducidadProxima(item.fecha_caducidad);
+                          
+                          return (
+                            <TableRow
+                              key={item.id}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => {
+                                setSelectedInsumo(item);
+                                setShowDetail(true);
+                              }}
+                            >
+                              <TableCell className="font-medium">
+                                {item.insumos_catalogo?.nombre}
+                                {item.insumos_catalogo?.familia_insumo && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    {item.insumos_catalogo.familia_insumo}
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {item.insumos_catalogo?.presentacion || '-'}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">
+                                  {item.insumos_catalogo?.tipo}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">{item.lote || 'N/A'}</TableCell>
+                              <TableCell className="text-sm">
+                                {item.fecha_caducidad ? (
+                                  <span className={proximoVencer ? 'text-red-500 font-medium' : ''}>
+                                    {format(new Date(item.fecha_caducidad), 'dd/MM/yyyy')}
+                                  </span>
+                                ) : 'N/A'}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {item.cantidad_actual}
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                {item.cantidad_inicial}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={status.variant} className="text-xs">
+                                  {status.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {item.ubicacion}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 

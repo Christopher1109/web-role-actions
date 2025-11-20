@@ -1,8 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useHospital } from '@/contexts/HospitalContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Check, ChevronsUpDown } from 'lucide-react';
 
 // Define the schema for an insumo (inventory item).  Adjust fields as
 // necessary to match your database structure.  The important part is
@@ -10,10 +14,9 @@ import { useHospital } from '@/contexts/HospitalContext';
 // synchronised automatically with the hospital context.
 const insumoSchema = z.object({
   nombre: z.string().nonempty('El nombre es obligatorio'),
-  clave: z.string().nonempty('La clave es obligatoria'),
-  descripcion: z.string().optional(),
+  clave: z.string().optional(),
   lote: z.string().nonempty('El lote es obligatorio'),
-  cantidad: z.number().min(1, 'La cantidad debe ser mayor a 0'),
+  cantidad: z.number().min(0, 'La cantidad no puede ser negativa'),
   fecha_entrada: z.string().nonempty('La fecha de entrada es obligatoria'),
   fecha_caducidad: z.string().nonempty('La fecha de caducidad es obligatoria'),
   unidad: z.string().nonempty('Debes seleccionar un hospital'),
@@ -36,12 +39,15 @@ interface InsumoFormProps {
  */
 export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoFormProps) {
   const { selectedHospital, availableHospitals, canSelectHospital, setSelectedHospital } = useHospital();
+  const [catalogoInsumos, setCatalogoInsumos] = useState<Array<{ id: string; nombre: string; clave: string | null }>>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  
   const form = useForm<InsumoFormValues>({
     resolver: zodResolver(insumoSchema),
     defaultValues: {
       nombre: '',
       clave: '',
-      descripcion: '',
       lote: '',
       cantidad: 0,
       fecha_entrada: new Date().toISOString().split('T')[0],
@@ -51,6 +57,22 @@ export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoF
     },
   });
 
+  // Fetch catálogo de insumos para autocompletado
+  useEffect(() => {
+    const fetchCatalogo = async () => {
+      const { data } = await supabase
+        .from('insumos_catalogo')
+        .select('id, nombre, clave')
+        .eq('activo', true)
+        .order('nombre');
+      
+      if (data) {
+        setCatalogoInsumos(data);
+      }
+    };
+    fetchCatalogo();
+  }, []);
+
   // Synchronise the `unidad` value whenever selectedHospital changes
   useEffect(() => {
     if (selectedHospital) {
@@ -59,9 +81,6 @@ export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoF
   }, [selectedHospital, form]);
 
   const handleSubmit = (values: InsumoFormValues) => {
-    // Include hospital metadata when submitting the insumo.  This ensures
-    // that the record is stored against the correct hospital in the
-    // database.  You can adjust field names to match your table.
     const hospital = selectedHospital;
     onSubmit({
       ...values,
@@ -71,20 +90,90 @@ export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoF
     });
   };
 
+  const filteredInsumos = catalogoInsumos.filter((insumo) =>
+    insumo.nombre.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <form
       onSubmit={form.handleSubmit(handleSubmit)}
       className="space-y-4"
     >
-      {/* Nombre del insumo */}
+      {/* Nombre del insumo con autocompletado */}
       <div className="grid gap-1">
         <label className="text-sm font-medium" htmlFor="nombre">Nombre</label>
-        <input
-          id="nombre"
-          type="text"
-          {...form.register('nombre')}
-          className="w-full rounded-md border px-3 py-2 text-sm"
-        />
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="w-full rounded-md border px-3 py-2 text-sm text-left flex items-center justify-between bg-background hover:bg-accent"
+            >
+              <span className={form.watch('nombre') ? 'text-foreground' : 'text-muted-foreground'}>
+                {form.watch('nombre') || 'Buscar o escribir nombre del insumo...'}
+              </span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[400px] p-0 bg-background" align="start">
+            <Command>
+              <CommandInput
+                placeholder="Buscar insumo..."
+                value={searchQuery}
+                onValueChange={setSearchQuery}
+              />
+              <CommandList>
+                <CommandEmpty>
+                  {searchQuery ? (
+                    <div className="py-2 px-2 text-sm">
+                      <p className="text-muted-foreground mb-2">No se encontró en el catálogo.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          form.setValue('nombre', searchQuery);
+                          setOpen(false);
+                          setSearchQuery('');
+                        }}
+                        className="w-full px-2 py-1.5 text-left rounded-sm hover:bg-accent text-sm"
+                      >
+                        Usar "{searchQuery}" como nuevo insumo
+                      </button>
+                    </div>
+                  ) : (
+                    'Escribe para buscar...'
+                  )}
+                </CommandEmpty>
+                <CommandGroup>
+                  {filteredInsumos.map((insumo) => (
+                    <CommandItem
+                      key={insumo.id}
+                      value={insumo.nombre}
+                      onSelect={() => {
+                        form.setValue('nombre', insumo.nombre);
+                        if (insumo.clave) {
+                          form.setValue('clave', insumo.clave);
+                        }
+                        setOpen(false);
+                        setSearchQuery('');
+                      }}
+                    >
+                      <Check
+                        className={`mr-2 h-4 w-4 ${
+                          form.watch('nombre') === insumo.nombre ? 'opacity-100' : 'opacity-0'
+                        }`}
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-sm">{insumo.nombre}</span>
+                        {insumo.clave && (
+                          <span className="text-xs text-muted-foreground">Clave: {insumo.clave}</span>
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
         {form.formState.errors.nombre && (
           <p className="text-sm text-red-500">{form.formState.errors.nombre.message}</p>
         )}
@@ -92,26 +181,17 @@ export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoF
 
       {/* Clave del insumo */}
       <div className="grid gap-1">
-        <label className="text-sm font-medium" htmlFor="clave">Clave</label>
+        <label className="text-sm font-medium" htmlFor="clave">Clave (opcional)</label>
         <input
           id="clave"
           type="text"
           {...form.register('clave')}
           className="w-full rounded-md border px-3 py-2 text-sm"
+          placeholder="Se autocompletará si está en el catálogo"
         />
         {form.formState.errors.clave && (
           <p className="text-sm text-red-500">{form.formState.errors.clave.message}</p>
         )}
-      </div>
-
-      {/* Descripción */}
-      <div className="grid gap-1">
-        <label className="text-sm font-medium" htmlFor="descripcion">Descripción</label>
-        <textarea
-          id="descripcion"
-          {...form.register('descripcion')}
-          className="w-full rounded-md border px-3 py-2 text-sm"
-        />
       </div>
 
       {/* Lote */}

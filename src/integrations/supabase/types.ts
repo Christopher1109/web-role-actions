@@ -294,10 +294,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "folio_insumos_insumo_id_fkey"
+            foreignKeyName: "folios_insumos_insumo_id_fkey"
             columns: ["insumo_id"]
             isOneToOne: false
-            referencedRelation: "insumos"
+            referencedRelation: "insumos_catalogo"
             referencedColumns: ["id"]
           },
         ]

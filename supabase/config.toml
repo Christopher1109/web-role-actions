@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.import-procedimientos-hospital]
 verify_jwt = false
+
+[functions.remap-excel-to-catalog]
+verify_jwt = false

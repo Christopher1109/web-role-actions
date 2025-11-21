@@ -25,6 +25,7 @@ type Insumo = {
   cantidadMaxima: number | null;
   condicionante: string | null;
   grupoExclusivo: string | null;
+  tieneConfiguracion: boolean; // Indica si tiene configuración para el tipo de anestesia actual
 };
 
 type FolioInsumo = {
@@ -38,6 +39,7 @@ type FolioInsumo = {
   cantidadMaxima: number | null;
   condicionante: string | null;
   grupoExclusivo: string | null;
+  tieneConfiguracion: boolean;
 };
 
 /*
@@ -268,6 +270,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         cantidadMaxima: insumo.cantidadMaxima,
         condicionante: insumo.condicionante,
         grupoExclusivo: insumo.grupoExclusivo,
+        tieneConfiguracion: insumo.tieneConfiguracion,
       });
     });
 
@@ -286,6 +289,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           cantidadMaxima: insumo.cantidadMaxima,
           condicionante: insumo.condicionante,
           grupoExclusivo: insumo.grupoExclusivo,
+          tieneConfiguracion: insumo.tieneConfiguracion,
         });
       }
     });
@@ -294,60 +298,87 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   };
 
   /**
-   * Carga los insumos de una anestesia específica desde `anestesia_insumos`
+   * Carga los insumos de una anestesia específica desde `insumo_configuracion`
+   * usando el catálogo nuevo (insumos_catalogo)
    */
   const loadInsumosForTipo = async (tipo: string): Promise<Insumo[]> => {
     if (!tipo) return [];
 
     try {
-      // Convertir el nombre del procedimiento al valor usado en anestesia_insumos.tipo_anestesia
+      // Convertir el nombre del procedimiento al valor usado en insumo_configuracion.tipo_anestesia
       const tipoDb = procedimientoToTipoAnestesia[tipo] ?? tipo;
 
-      console.log(`🔍 Buscando insumos para tipo: "${tipo}" → "${tipoDb}"`);
+      console.log(`🔍 Buscando insumos en insumo_configuracion para tipo: "${tipo}" → "${tipoDb}"`);
 
-      const { data: anestesiaInsumos, error } = (await supabase
-        .from("anestesia_insumos")
+      // Consultar insumo_configuracion con join a insumos_catalogo
+      const { data: configuracionInsumos, error } = await supabase
+        .from("insumo_configuracion")
         .select(
           `
+          id,
           cantidad_default,
-          cantidad_minima,
-          cantidad_maxima,
+          min_anestesia,
+          max_anestesia,
           condicionante,
           grupo_exclusivo,
-          orden,
-          insumo_id,
-          insumos (
+          nota,
+          insumos_catalogo!inner (
             id,
             nombre,
-            lote
+            activo,
+            clave
           )
         `,
         )
         .eq("tipo_anestesia", tipoDb)
-        .order("orden", { ascending: true })) as {
-        data: any[] | null;
-        error: any;
-      };
+        .eq("insumos_catalogo.activo", true);
 
       if (error) throw error;
 
-      const insumos: Insumo[] = (anestesiaInsumos || [])
-        .filter((ai: any) => ai.insumos)
-        .map((ai: any) => ({
-          id: ai.insumos.id,
-          nombre: ai.insumos.nombre,
-          lote: ai.insumos.lote || "",
-          cantidadDefault: ai.cantidad_default ?? 1,
-          cantidadMinima: ai.cantidad_minima ?? null,
-          cantidadMaxima: ai.cantidad_maxima ?? null,
-          condicionante: ai.condicionante ?? null,
-          grupoExclusivo: ai.grupo_exclusivo ?? null,
+      const insumos: Insumo[] = (configuracionInsumos || [])
+        .filter((config: any) => config.insumos_catalogo)
+        .map((config: any) => ({
+          id: config.insumos_catalogo.id,
+          nombre: config.insumos_catalogo.nombre,
+          lote: config.insumos_catalogo.clave || "", // Usar clave como lote por ahora
+          cantidadDefault: config.cantidad_default ?? 1,
+          cantidadMinima: config.min_anestesia ?? null,
+          cantidadMaxima: config.max_anestesia ?? null,
+          condicionante: config.condicionante ?? null,
+          grupoExclusivo: config.grupo_exclusivo ?? null,
+          tieneConfiguracion: true, // Todos los de esta query tienen configuración
         }));
 
-      console.log(`✅ Insumos cargados: ${insumos.length}`);
+      console.log(`✅ Insumos cargados desde insumo_configuracion: ${insumos.length}`);
+      
+      // Si no se encontraron insumos con configuración, cargar todos los insumos activos sin configuración
+      if (insumos.length === 0) {
+        console.warn(`⚠️ No hay configuración para tipo "${tipoDb}", cargando insumos genéricos`);
+        
+        const { data: insumosGenericos, error: errorGenericos } = await supabase
+          .from("insumos_catalogo")
+          .select("id, nombre, clave, activo")
+          .eq("activo", true)
+          .limit(20); // Limitar a 20 para no saturar
+
+        if (errorGenericos) throw errorGenericos;
+
+        return (insumosGenericos || []).map((insumo: any) => ({
+          id: insumo.id,
+          nombre: insumo.nombre,
+          lote: insumo.clave || "",
+          cantidadDefault: 1,
+          cantidadMinima: null,
+          cantidadMaxima: null,
+          condicionante: null,
+          grupoExclusivo: null,
+          tieneConfiguracion: false,
+        }));
+      }
+
       return insumos;
     } catch (error) {
-      console.error("Error loading insumos:", error);
+      console.error("Error loading insumos desde insumo_configuracion:", error);
       return [];
     }
   };
@@ -384,6 +415,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         cantidadMaxima: insumo.cantidadMaxima,
         condicionante: insumo.condicionante,
         grupoExclusivo: insumo.grupoExclusivo,
+        tieneConfiguracion: insumo.tieneConfiguracion,
       }));
       setInsumosFolio(preselected);
     };
@@ -416,6 +448,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           cantidadMaxima: insumo.cantidadMaxima,
           condicionante: insumo.condicionante,
           grupoExclusivo: insumo.grupoExclusivo,
+          tieneConfiguracion: insumo.tieneConfiguracion,
         }));
         setInsumosFolio(preselected);
       }
@@ -449,6 +482,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           cantidadMaxima: insumo.cantidadMaxima,
           condicionante: insumo.condicionante,
           grupoExclusivo: insumo.grupoExclusivo,
+          tieneConfiguracion: insumo.tieneConfiguracion,
         }));
         setInsumosFolio(preselected);
       }
@@ -545,6 +579,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         cantidadMaxima: insumo.cantidadMaxima,
         condicionante: insumo.condicionante,
         grupoExclusivo: insumo.grupoExclusivo,
+        tieneConfiguracion: insumo.tieneConfiguracion,
       },
     ]);
     setSelectedInsumoId("");
@@ -1179,13 +1214,19 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                             onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
                             className={`w-20 h-8 ${!cantidadValida ? "border-destructive" : ""}`}
                           />
-                          {(fi.cantidadMinima != null || fi.cantidadMaxima != null) && (
+                          {fi.tieneConfiguracion ? (
                             <div className="text-xs text-muted-foreground">
-                              {fi.cantidadMinima != null && fi.cantidadMaxima != null
-                                ? `${fi.cantidadMinima}-${fi.cantidadMaxima}`
-                                : fi.cantidadMinima != null
-                                ? `Min: ${fi.cantidadMinima}`
-                                : `Max: ${fi.cantidadMaxima}`}
+                              {fi.cantidadMinima != null || fi.cantidadMaxima != null ? (
+                                <>
+                                  Mín: {fi.cantidadMinima ?? 0} / Máx: {fi.cantidadMaxima ?? '∞'} / Default: {fi.cantidad}
+                                </>
+                              ) : (
+                                'Sin límites configurados'
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-yellow-600 dark:text-yellow-500">
+                              ⚠️ Sin configuración para este tipo de anestesia
                             </div>
                           )}
                         </div>

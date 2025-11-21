@@ -364,6 +364,65 @@ export type Database = {
           },
         ]
       }
+      insumo_configuracion: {
+        Row: {
+          cantidad_default: number | null
+          condicionante: string | null
+          created_at: string | null
+          grupo_exclusivo: string | null
+          id: string
+          insumo_catalogo_id: string
+          max_anestesia: number | null
+          max_global_inventario: number | null
+          min_anestesia: number | null
+          min_global_inventario: number | null
+          nota: string | null
+          tipo_anestesia: string | null
+          tipo_limite: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          cantidad_default?: number | null
+          condicionante?: string | null
+          created_at?: string | null
+          grupo_exclusivo?: string | null
+          id?: string
+          insumo_catalogo_id: string
+          max_anestesia?: number | null
+          max_global_inventario?: number | null
+          min_anestesia?: number | null
+          min_global_inventario?: number | null
+          nota?: string | null
+          tipo_anestesia?: string | null
+          tipo_limite?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          cantidad_default?: number | null
+          condicionante?: string | null
+          created_at?: string | null
+          grupo_exclusivo?: string | null
+          id?: string
+          insumo_catalogo_id?: string
+          max_anestesia?: number | null
+          max_global_inventario?: number | null
+          min_anestesia?: number | null
+          min_global_inventario?: number | null
+          nota?: string | null
+          tipo_anestesia?: string | null
+          tipo_limite?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insumo_configuracion_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       insumos: {
         Row: {
           cantidad: number | null

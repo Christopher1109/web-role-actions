@@ -123,6 +123,39 @@ export type Database = {
           },
         ]
       }
+      excel_insumo_config: {
+        Row: {
+          id: number
+          id_bcb: string | null
+          max_excel: number | null
+          min_excel: number | null
+          nombre_insumo: string
+          observaciones: string | null
+          tiene_valores_claros: boolean | null
+          tipo_anestesia: string
+        }
+        Insert: {
+          id?: number
+          id_bcb?: string | null
+          max_excel?: number | null
+          min_excel?: number | null
+          nombre_insumo: string
+          observaciones?: string | null
+          tiene_valores_claros?: boolean | null
+          tipo_anestesia: string
+        }
+        Update: {
+          id?: number
+          id_bcb?: string | null
+          max_excel?: number | null
+          min_excel?: number | null
+          nombre_insumo?: string
+          observaciones?: string | null
+          tiene_valores_claros?: boolean | null
+          tipo_anestesia?: string
+        }
+        Relationships: []
+      }
       folios: {
         Row: {
           anestesia_principal: string | null

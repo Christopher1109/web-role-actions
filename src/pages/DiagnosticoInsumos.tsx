@@ -33,12 +33,29 @@ interface Stats {
   no_unificar: number;
 }
 
+interface PopulateResult {
+  success: boolean;
+  mensaje: string;
+  estadisticas: {
+    total_insumos_antiguos: number;
+    total_insumos_nuevos: number;
+    mapeos_match_alto: number;
+    registros_anestesia: number;
+    registros_insertados: number;
+    no_mapeados: number;
+  };
+  ejemplos: any[];
+  matches_altos_sample: any[];
+}
+
 const DiagnosticoInsumos = () => {
   const [loading, setLoading] = useState(false);
   const [resultados, setResultados] = useState<MatchResult[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterClasificacion, setFilterClasificacion] = useState<string>("todos");
+  const [loadingPopulate, setLoadingPopulate] = useState(false);
+  const [populateResult, setPopulateResult] = useState<PopulateResult | null>(null);
 
   const ejecutarAnalisis = async () => {
     setLoading(true);
@@ -59,6 +76,27 @@ const DiagnosticoInsumos = () => {
       toast.error('Error al ejecutar el análisis de similitud');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const ejecutarPoblacion = async () => {
+    setLoadingPopulate(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('populate-insumo-configuracion');
+
+      if (error) throw error;
+
+      if (data.success) {
+        setPopulateResult(data);
+        toast.success('Matriz de configuración poblada exitosamente');
+      } else {
+        throw new Error(data.error || 'Error en la población');
+      }
+    } catch (error) {
+      console.error('Error ejecutando población:', error);
+      toast.error('Error al poblar la matriz de configuración');
+    } finally {
+      setLoadingPopulate(false);
     }
   };
 
@@ -132,24 +170,100 @@ const DiagnosticoInsumos = () => {
             Análisis de similitud entre catálogo antiguo (insumos) y catálogo nuevo (insumos_catalogo)
           </p>
         </div>
-        <Button 
-          onClick={ejecutarAnalisis} 
-          disabled={loading}
-          size="lg"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Analizando...
-            </>
-          ) : (
-            <>
-              <Search className="mr-2 h-4 w-4" />
-              Ejecutar Análisis
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={ejecutarAnalisis} 
+            disabled={loading}
+            size="lg"
+            variant="outline"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Analizando...
+              </>
+            ) : (
+              <>
+                <Search className="mr-2 h-4 w-4" />
+                Ejecutar Análisis
+              </>
+            )}
+          </Button>
+          <Button 
+            onClick={ejecutarPoblacion} 
+            disabled={loadingPopulate || !stats}
+            size="lg"
+          >
+            {loadingPopulate ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Poblando...
+              </>
+            ) : (
+              "Poblar Matriz de Configuración"
+            )}
+          </Button>
+        </div>
       </div>
+
+      {populateResult && (
+        <Card className="border-green-200 bg-green-50">
+          <CardHeader>
+            <CardTitle className="text-green-800">✅ Matriz de Configuración Poblada</CardTitle>
+            <CardDescription>{populateResult.mensaje}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Mapeos MATCH_ALTO</p>
+                <p className="text-2xl font-bold text-green-700">{populateResult.estadisticas.mapeos_match_alto}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Registros de Anestesia</p>
+                <p className="text-2xl font-bold">{populateResult.estadisticas.registros_anestesia}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Registros Insertados</p>
+                <p className="text-2xl font-bold text-blue-700">{populateResult.estadisticas.registros_insertados}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">No Mapeados</p>
+                <p className="text-2xl font-bold text-red-700">{populateResult.estadisticas.no_mapeados}</p>
+              </div>
+            </div>
+
+            {populateResult.ejemplos.length > 0 && (
+              <div className="mt-4">
+                <h4 className="font-semibold mb-2">Ejemplos de Configuración Insertada:</h4>
+                <div className="rounded-md border bg-white">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Insumo</TableHead>
+                        <TableHead>Tipo Anestesia</TableHead>
+                        <TableHead className="text-center">Min</TableHead>
+                        <TableHead className="text-center">Max</TableHead>
+                        <TableHead className="text-center">Default</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {populateResult.ejemplos.map((ejemplo: any, idx: number) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium">{ejemplo.insumos_catalogo?.nombre}</TableCell>
+                          <TableCell>{ejemplo.tipo_anestesia}</TableCell>
+                          <TableCell className="text-center">{ejemplo.min_anestesia ?? '-'}</TableCell>
+                          <TableCell className="text-center">{ejemplo.max_anestesia ?? '-'}</TableCell>
+                          <TableCell className="text-center">{ejemplo.cantidad_default ?? '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

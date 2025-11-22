@@ -185,6 +185,8 @@ export type Database = {
           paciente_apellido_materno: string | null
           paciente_apellido_paterno: string | null
           paciente_edad: number | null
+          paciente_edad_unidad: string | null
+          paciente_edad_valor: number | null
           paciente_genero: string | null
           paciente_nombre: string | null
           paciente_nss: string | null
@@ -223,6 +225,8 @@ export type Database = {
           paciente_apellido_materno?: string | null
           paciente_apellido_paterno?: string | null
           paciente_edad?: number | null
+          paciente_edad_unidad?: string | null
+          paciente_edad_valor?: number | null
           paciente_genero?: string | null
           paciente_nombre?: string | null
           paciente_nss?: string | null
@@ -261,6 +265,8 @@ export type Database = {
           paciente_apellido_materno?: string | null
           paciente_apellido_paterno?: string | null
           paciente_edad?: number | null
+          paciente_edad_unidad?: string | null
+          paciente_edad_valor?: number | null
           paciente_genero?: string | null
           paciente_nombre?: string | null
           paciente_nss?: string | null
@@ -640,6 +646,7 @@ export type Database = {
           especialidad: Database["public"]["Enums"]["especialidad_medica"]
           hospital_budget_code: string | null
           hospital_display_name: string | null
+          hospital_id: string | null
           id: string
           nombre: string
           state_name: string | null
@@ -651,6 +658,7 @@ export type Database = {
           especialidad: Database["public"]["Enums"]["especialidad_medica"]
           hospital_budget_code?: string | null
           hospital_display_name?: string | null
+          hospital_id?: string | null
           id?: string
           nombre: string
           state_name?: string | null
@@ -662,12 +670,21 @@ export type Database = {
           especialidad?: Database["public"]["Enums"]["especialidad_medica"]
           hospital_budget_code?: string | null
           hospital_display_name?: string | null
+          hospital_id?: string | null
           id?: string
           nombre?: string
           state_name?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "medicos_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       movimientos_inventario: {
         Row: {
@@ -820,6 +837,7 @@ export type Database = {
       }
       procedimientos: {
         Row: {
+          clave_procedimiento: string | null
           created_at: string | null
           descripcion: string | null
           hospital_id: string | null
@@ -828,6 +846,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          clave_procedimiento?: string | null
           created_at?: string | null
           descripcion?: string | null
           hospital_id?: string | null
@@ -836,6 +855,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          clave_procedimiento?: string | null
           created_at?: string | null
           descripcion?: string | null
           hospital_id?: string | null

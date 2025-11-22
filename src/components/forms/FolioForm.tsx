@@ -48,15 +48,17 @@ type FolioInsumo = {
  */
 const procedimientoToTipoAnestesia: Record<string, string> = {
   Sedación: "sedacion",
-  "Cuidados Anestésicos Monitoreados": "sedacion",
-  "Anestesia Loco Regional": "locorregional",
-  "Anestesia General Loco Regional": "locorregional",
+  "Cuidados Anestésicos Monitoreados": "cuidados_monitoreados",
+  "Anestesia Loco Regional": "loco_regional",
+  "Anestesia General Loco Regional": "loco_regional",
   "Anestesia General Balanceada Adulto": "general_balanceada_adulto",
   "Anestesia General Balanceada Pediátrica": "general_balanceada_pediatrica",
   "Anestesia General Endovenosa": "general_endovenosa",
-  "Anestesia General de Alta Especialidad": "general_alta_especialidad",
-  "Alta Especialidad Trasplante Renal": "alta_especialidad_trasplante",
-  "Anestesia de Alta Especialidad en Trasplante Renal": "alta_especialidad_trasplante",
+  "Anestesia General de Alta Especialidad": "alta_especialidad",
+  "Alta Especialidad Trasplante Renal": "trasplante_renal",
+  "Anestesia de Alta Especialidad en Trasplante Renal": "trasplante_renal",
+  "Anestesia de Alta Especialidad en Trasplante Hepático": "trasplante_hepatico",
+  "Anestesia de Alta Especialidad en Neurocirugía": "neurocirugia",
 };
 
 // Mapeo de labels para mostrar nombres amigables (los textos que quieres ver en la página)

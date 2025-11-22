@@ -21,6 +21,19 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     4: { cellWidth: 38 },
   };
 
+  // Mapa de claves de procedimiento por tipo de anestesia (como se guarda en folio.tipo_anestesia)
+  const tipoAnestesiaCodigos: Record<string, string> = {
+    "Anestesia General Balanceada Adulto": "19.01.001",
+    "Anestesia General de Alta Especialidad": "19.01.002",
+    "Anestesia General Endovenosa": "19.01.003",
+    "Anestesia General Balanceada Pediátrica": "19.01.004",
+    "Anestesia Loco Regional": "19.01.005",
+    Sedación: "19.01.006",
+    "Anestesia de Alta Especialidad en Trasplante Renal": "19.01.009",
+    "Alta Especialidad Trasplante Renal": "19.01.009",
+    "Cuidados Anestésicos Monitoreados": "19.01.010",
+  };
+
   // Logo
   doc.addImage(cbMedicaLogo, "JPEG", MARGIN_LEFT, 10, 30, 15);
 
@@ -302,6 +315,12 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     ? tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia
     : "N/A";
 
+  // Clave del procedimiento según el tipo de anestesia registrado en el folio
+  const claveProcedimiento =
+    folio.tipo_anestesia && tipoAnestesiaCodigos[folio.tipo_anestesia]
+      ? tipoAnestesiaCodigos[folio.tipo_anestesia]
+      : "N/A";
+
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -316,7 +335,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
         "Importe (Con IVA)",
       ],
     ],
-    body: [["1", "N/A", tipoAnestesiaDisplay, folio.cirugia || "N/A", "", ""]],
+    body: [["1", claveProcedimiento, tipoAnestesiaDisplay, folio.cirugia || "N/A", "", ""]],
     theme: "grid",
     styles: {
       lineColor: [0, 0, 0],

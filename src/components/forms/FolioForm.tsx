@@ -82,6 +82,8 @@ const tipoAnestesiaCodigos: Record<string, string> = {
   "Anestesia General Balanceada Pediátrica": "19.01.004",
   "Anestesia Loco Regional": "19.01.005",
   Sedación: "19.01.006",
+  "Anestesia de Alta Especialidad en Neurocirugía": "19.01.007",
+  "Anestesia de Alta Especialidad en Trasplante Hepático": "19.01.008",
   "Anestesia de Alta Especialidad en Trasplante Renal": "19.01.009",
   "Alta Especialidad Trasplante Renal": "19.01.009",
   "Cuidados Anestésicos Monitoreados": "19.01.010",
@@ -99,7 +101,8 @@ const folioSchema = z.object({
   pacienteApellidoMaterno: z.string().optional(),
   pacienteNombre: z.string().nonempty("El nombre del paciente es obligatorio"),
   pacienteNSS: z.string().optional(),
-  pacienteEdad: z.number().min(0).optional(),
+  pacienteEdadValor: z.number().min(0, "La edad no puede ser negativa"),
+  pacienteEdadUnidad: z.enum(["días", "semanas", "meses", "años"]),
   pacienteGenero: z.enum(["M", "F", "Otro"]).optional(),
   procedimientoQuirurgico: z.string().nonempty("El procedimiento es obligatorio"),
   especialidadQuirurgica: z.string().optional(),
@@ -166,7 +169,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       pacienteApellidoMaterno: "",
       pacienteNombre: "",
       pacienteNSS: "",
-      pacienteEdad: 0,
+      pacienteEdadValor: 0,
+      pacienteEdadUnidad: "años",
       pacienteGenero: undefined,
       procedimientoQuirurgico: "",
       especialidadQuirurgica: "",
@@ -240,14 +244,21 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     loadProcedimientosHospital();
   }, [selectedHospital]);
 
-  // Carga las listas de médicos al montar el componente
+  // Carga las listas de médicos filtradas por hospital
   useEffect(() => {
     const loadMedicos = async () => {
+      if (!selectedHospital?.id) {
+        setCirujanos([]);
+        setAnestesiologos([]);
+        return;
+      }
+
       try {
         const { data: medicosData, error } = await supabase
           .from("medicos")
           .select("*")
           .eq("activo", true)
+          .eq("hospital_id", selectedHospital.id)
           .order("nombre");
 
         if (error) throw error;
@@ -271,7 +282,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     };
 
     loadMedicos();
-  }, []);
+  }, [selectedHospital]);
 
   /**
    * Combina insumos de dos anestesias en modo mixta.
@@ -899,7 +910,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
             <FormField
               control={form.control}
-              name="pacienteEdad"
+              name="pacienteEdadValor"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Edad *</FormLabel>
@@ -907,7 +918,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                     <Input
                       type="number"
                       {...field}
-                      placeholder="35"
+                      placeholder="1"
                       onChange={(e) => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>
@@ -916,6 +927,32 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="pacienteEdadUnidad"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Unidad *</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="días">Días</SelectItem>
+                      <SelectItem value="semanas">Semanas</SelectItem>
+                      <SelectItem value="meses">Meses</SelectItem>
+                      <SelectItem value="años">Años</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
             <FormField
               control={form.control}
               name="pacienteGenero"

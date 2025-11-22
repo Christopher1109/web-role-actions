@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.remap-excel-to-catalog]
 verify_jwt = false
+
+[functions.setup-new-anesthesia-types]
+verify_jwt = false

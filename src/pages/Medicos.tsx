@@ -37,7 +37,7 @@ const Medicos = () => {
         .from('medicos')
         .select('*')
         .eq('activo', true)
-        .eq('hospital_budget_code', selectedHospital.budget_code)
+        .eq('hospital_id', selectedHospital.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -76,6 +76,7 @@ const Medicos = () => {
             subespecialidad: data.subespecialidad,
             unidad: data.unidad,
             telefono: data.telefono,
+            hospital_id: selectedHospital?.id,
             state_name: selectedHospital?.state_name,
             hospital_budget_code: selectedHospital?.budget_code,
             hospital_display_name: selectedHospital?.display_name,

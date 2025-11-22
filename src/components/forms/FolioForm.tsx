@@ -44,10 +44,11 @@ type FolioInsumo = {
 
 /*
  * Mapeo de nombres de procedimientos (como vienen de la tabla procedimientos)
- * a los valores usados en anestesia_insumos.tipo_anestesia
+ * a los valores usados en insumo_configuracion.tipo_anestesia
  */
 const procedimientoToTipoAnestesia: Record<string, string> = {
   Sedación: "sedacion",
+  "Cuidados Anestésicos Monitoreados": "sedacion",
   "Anestesia Loco Regional": "locorregional",
   "Anestesia General Loco Regional": "locorregional",
   "Anestesia General Balanceada Adulto": "general_balanceada_adulto",
@@ -55,19 +56,35 @@ const procedimientoToTipoAnestesia: Record<string, string> = {
   "Anestesia General Endovenosa": "general_endovenosa",
   "Anestesia General de Alta Especialidad": "general_alta_especialidad",
   "Alta Especialidad Trasplante Renal": "alta_especialidad_trasplante",
+  "Anestesia de Alta Especialidad en Trasplante Renal": "alta_especialidad_trasplante",
 };
 
-// Mapeo de labels para mostrar nombres amigables
+// Mapeo de labels para mostrar nombres amigables (los textos que quieres ver en la página)
 const tipoAnestesiaLabels: Record<string, string> = {
-  Sedación: "Sedación / Cuidados anestésicos monitoreados",
-  "Anestesia Loco Regional": "Loco regional",
-  "Anestesia General Loco Regional": "Loco regional",
-  "Anestesia General Balanceada Adulto": "General balanceada adulto",
-  "Anestesia General Balanceada Pediátrica": "General balanceada pediátrica",
-  "Anestesia General Endovenosa": "General endovenosa",
-  "Anestesia General de Alta Especialidad": "Alta especialidad",
-  "Alta Especialidad Trasplante Renal": "Alta especialidad trasplante renal",
+  Sedación: "Sedación",
+  "Cuidados Anestésicos Monitoreados": "Cuidados Anestésicos Monitoreados",
+  "Anestesia Loco Regional": "Anestesia Loco Regional",
+  "Anestesia General Loco Regional": "Anestesia Loco Regional",
+  "Anestesia General Balanceada Adulto": "Anestesia General Balanceada Adulto",
+  "Anestesia General Balanceada Pediátrica": "Anestesia General Balanceada Pediátrica",
+  "Anestesia General Endovenosa": "Anestesia General Endovenosa",
+  "Anestesia General de Alta Especialidad": "Anestesia General de Alta Especialidad",
+  "Alta Especialidad Trasplante Renal": "Anestesia de Alta Especialidad en Trasplante Renal",
+  "Anestesia de Alta Especialidad en Trasplante Renal": "Anestesia de Alta Especialidad en Trasplante Renal",
   anestesia_mixta: "Anestesia mixta",
+};
+
+// Mapeo de claves de procedimiento por tipo de anestesia (proc.nombre)
+const tipoAnestesiaCodigos: Record<string, string> = {
+  "Anestesia General Balanceada Adulto": "19.01.001",
+  "Anestesia General de Alta Especialidad": "19.01.002",
+  "Anestesia General Endovenosa": "19.01.003",
+  "Anestesia General Balanceada Pediátrica": "19.01.004",
+  "Anestesia Loco Regional": "19.01.005",
+  Sedación: "19.01.006",
+  "Anestesia de Alta Especialidad en Trasplante Renal": "19.01.009",
+  "Alta Especialidad Trasplante Renal": "19.01.009",
+  "Cuidados Anestésicos Monitoreados": "19.01.010",
 };
 
 // Esquema de validación de los campos del folio T33
@@ -161,6 +178,9 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       ...defaultValues,
     },
   });
+
+  // Para mostrar la clave del procedimiento del tipo seleccionado
+  const selectedTipoAnestesia = form.watch("tipo_anestesia");
 
   // Sincroniza el campo 'unidad' con el hospital seleccionado
   useEffect(() => {
@@ -350,11 +370,11 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         }));
 
       console.log(`✅ Insumos cargados desde insumo_configuracion: ${insumos.length}`);
-      
+
       // Si no se encontraron insumos con configuración, cargar todos los insumos activos sin configuración
       if (insumos.length === 0) {
         console.warn(`⚠️ No hay configuración para tipo "${tipoDb}", cargando insumos genéricos`);
-        
+
         const { data: insumosGenericos, error: errorGenericos } = await supabase
           .from("insumos_catalogo")
           .select("id, nombre, clave, activo")
@@ -639,7 +659,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     // Validar anestesia mixta si aplica
     if (values.tipo_anestesia === "anestesia_mixta") {
       if (!anestesiaPrincipal || !anestesiaSecundaria) {
-        toast.error("Debes seleccionar anestesia principal y secundaria");
+        toast.error("Debes seleccionar anestesia inicial y final");
         return;
       }
     }
@@ -666,8 +686,16 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       const cirujanoSeleccionado = cirujanos.find((m) => m.id === values.cirujano);
       const anestesiologoSeleccionado = anestesiologos.find((m) => m.id === values.anestesiologo);
 
+      // Determinar el tipo de anestesia que se va a registrar en el folio:
+      // si es mixta, usamos la anestesia final (secundaria)
+      const tipoAnestesiaFinal =
+        values.tipo_anestesia === "anestesia_mixta" && anestesiaSecundaria
+          ? anestesiaSecundaria
+          : values.tipo_anestesia;
+
       const submitData = {
         ...values,
+        tipo_anestesia: tipoAnestesiaFinal,
         cirujanoNombre: cirujanoSeleccionado?.nombre,
         anestesiologoNombre: anestesiologoSeleccionado?.nombre,
         insumos: insumosFolio,
@@ -1036,6 +1064,14 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                     )}
                   </SelectContent>
                 </Select>
+
+                {/* Clave de procedimiento para anestesia no mixta */}
+                {selectedTipoAnestesia && selectedTipoAnestesia !== "anestesia_mixta" && (
+                  <p className="text-sm mt-1">
+                    Clave del procedimiento: {tipoAnestesiaCodigos[selectedTipoAnestesia] ?? "N/A"}
+                  </p>
+                )}
+
                 <FormMessage />
               </FormItem>
             )}
@@ -1044,7 +1080,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           {tipoAnestesia === "anestesia_mixta" && (
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Anestesia Principal *</Label>
+                <Label>Anestesia inicial *</Label>
                 <Select value={anestesiaPrincipal} onValueChange={setAnestesiaPrincipal}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar" />
@@ -1059,10 +1095,13 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                       ))}
                   </SelectContent>
                 </Select>
+                {anestesiaPrincipal && (
+                  <p className="text-sm mt-1">Clave: {tipoAnestesiaCodigos[anestesiaPrincipal] ?? "N/A"}</p>
+                )}
               </div>
 
               <div>
-                <Label>Anestesia Secundaria *</Label>
+                <Label>Anestesia final *</Label>
                 <Select value={anestesiaSecundaria} onValueChange={setAnestesiaSecundaria}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar" />
@@ -1077,6 +1116,9 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                       ))}
                   </SelectContent>
                 </Select>
+                {anestesiaSecundaria && (
+                  <p className="text-sm mt-1">Clave: {tipoAnestesiaCodigos[anestesiaSecundaria] ?? "N/A"}</p>
+                )}
               </div>
             </div>
           )}
@@ -1218,10 +1260,11 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                             <div className="text-xs text-muted-foreground">
                               {fi.cantidadMinima != null || fi.cantidadMaxima != null ? (
                                 <>
-                                  Mín: {fi.cantidadMinima ?? 0} / Máx: {fi.cantidadMaxima ?? '∞'} / Default: {fi.cantidad}
+                                  Mín: {fi.cantidadMinima ?? 0} / Máx: {fi.cantidadMaxima ?? "∞"} / Default:{" "}
+                                  {fi.cantidad}
                                 </>
                               ) : (
-                                'Sin límites configurados'
+                                "Sin límites configurados"
                               )}
                             </div>
                           ) : (
@@ -1232,7 +1275,12 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                         </div>
                       </TableCell>
                       <TableCell className="py-2">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveInsumo(fi.insumo.id)}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveInsumo(fi.insumo.id)}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>

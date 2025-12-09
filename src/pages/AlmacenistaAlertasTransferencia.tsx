@@ -7,10 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { RefreshCw, Package, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { RefreshCw, Package, CheckCircle, AlertTriangle, XCircle, Settings2 } from 'lucide-react';
 import { useHospital } from '@/contexts/HospitalContext';
+import EdicionMasivaMínimos from '@/components/forms/EdicionMasivaMínimos';
 
 interface AlertaTransferencia {
   id: string;
@@ -224,14 +226,25 @@ const AlmacenistaAlertasTransferencia = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Alertas de Transferencia</h1>
-          <p className="text-muted-foreground">Recepción de insumos desde el Almacén Central</p>
+          <h1 className="text-3xl font-bold text-foreground">Gestión de Almacén</h1>
+          <p className="text-muted-foreground">Alertas de transferencia y configuración de inventario</p>
         </div>
         <Button onClick={fetchAlertas} variant="outline" size="sm">
           <RefreshCw className="mr-2 h-4 w-4" />
           Actualizar
         </Button>
       </div>
+      
+      <Tabs defaultValue="transferencias" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="transferencias">Alertas de Transferencia</TabsTrigger>
+          <TabsTrigger value="minimos" className="flex items-center gap-1">
+            <Settings2 className="h-3.5 w-3.5" />
+            Configurar Mínimos
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="transferencias" className="space-y-4">
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -373,6 +386,12 @@ const AlmacenistaAlertasTransferencia = () => {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+        
+        <TabsContent value="minimos" className="space-y-4">
+          <EdicionMasivaMínimos hospitalId={selectedHospital?.id} onActualizado={fetchAlertas} />
+        </TabsContent>
+      </Tabs>
 
       {/* Process Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

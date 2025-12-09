@@ -59,39 +59,3 @@ verify_jwt = false
 
 [functions.create-gerente-operaciones]
 verify_jwt = false
-
-[functions.analyze-insumos-similarity]
-verify_jwt = false
-
-[functions.populate-insumo-configuracion]
-verify_jwt = false
-
-[functions.populate-from-excel-files]
-verify_jwt = false
-
-[functions.populate-insumos-from-excel]
-verify_jwt = false
-
-[functions.setup-almacenes]
-verify_jwt = false
-
-[functions.validate-folio]
-verify_jwt = false
-
-[functions.import-procedimientos-hospital]
-verify_jwt = false
-
-[functions.remap-excel-to-catalog]
-verify_jwt = false
-
-[functions.setup-new-anesthesia-types]
-verify_jwt = false
-
-[functions.create-simple-users]
-verify_jwt = false
-
-[functions.fix-profiles-hospitals]
-verify_jwt = false
-
-[functions.rebuild-all-users]
-verify_jwt = false

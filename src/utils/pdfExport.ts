@@ -21,21 +21,6 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
     4: { cellWidth: 38 },
   };
 
-// Mapeo de claves de procedimiento por tipo de anestesia (proc.nombre)
-const tipoAnestesiaCodigos: Record<string, string> = {
-  "Anestesia General Balanceada Adulto": "19.01.001",
-  "Anestesia General de Alta Especialidad": "19.01.002",
-  "Anestesia General Endovenosa": "19.01.003",
-  "Anestesia General Balanceada Pediátrica": "19.01.004",
-  "Anestesia Loco Regional": "19.01.005",
-  Sedación: "19.01.006",
-  "Anestesia de Alta Especialidad en Neurocirugía": "19.01.007",
-  "Anestesia de Alta Especialidad en Trasplante Hepático": "19.01.008",
-  "Anestesia de Alta Especialidad en Trasplante Renal": "19.01.009",
-  "Alta Especialidad Trasplante Renal": "19.01.009",
-  "Cuidados Anestésicos Monitoreados": "19.01.010",
-};
-
   // Logo
   doc.addImage(cbMedicaLogo, "JPEG", MARGIN_LEFT, 10, 30, 15);
 
@@ -244,26 +229,6 @@ const tipoAnestesiaCodigos: Record<string, string> = {
   yPos = (doc as any).lastAutoTable.finalY;
 
   // 4) TABLA DE DATOS DEL PACIENTE
-  // Formatear edad con unidad (singular/plural)
-  let edadFormateada = "N/A";
-  if (folio.paciente_edad_valor != null && folio.paciente_edad_unidad) {
-    const valor = folio.paciente_edad_valor;
-    const unidad = folio.paciente_edad_unidad;
-    
-    // Manejar singular/plural
-    if (valor === 1) {
-      // Singular: quitar la "s" final
-      const unidadSingular = unidad.endsWith('s') ? unidad.slice(0, -1) : unidad;
-      edadFormateada = `${valor} ${unidadSingular}`;
-    } else {
-      // Plural: usar la unidad tal cual
-      edadFormateada = `${valor} ${unidad}`;
-    }
-  } else if (folio.paciente_edad != null) {
-    // Fallback a campo legacy
-    edadFormateada = `${folio.paciente_edad} ${folio.paciente_edad === 1 ? 'año' : 'años'}`;
-  }
-
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -275,7 +240,7 @@ const tipoAnestesiaCodigos: Record<string, string> = {
         folio.paciente_apellido_materno || "N/A",
         folio.paciente_nombre || "N/A",
         folio.paciente_genero || "N/A",
-        edadFormateada,
+        folio.paciente_edad?.toString() || "N/A",
         folio.paciente_nss || "N/A",
       ],
     ],
@@ -337,12 +302,6 @@ const tipoAnestesiaCodigos: Record<string, string> = {
     ? tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia
     : "N/A";
 
-  // Clave del procedimiento según el tipo de anestesia registrado en el folio
-  const claveProcedimiento =
-    folio.tipo_anestesia && tipoAnestesiaCodigos[folio.tipo_anestesia]
-      ? tipoAnestesiaCodigos[folio.tipo_anestesia]
-      : "N/A";
-
   autoTable(doc, {
     startY: yPos,
     margin: { left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -357,7 +316,7 @@ const tipoAnestesiaCodigos: Record<string, string> = {
         "Importe (Con IVA)",
       ],
     ],
-    body: [["1", claveProcedimiento, tipoAnestesiaDisplay, folio.cirugia || "N/A", "", ""]],
+    body: [["1", "N/A", tipoAnestesiaDisplay, folio.cirugia || "N/A", "", ""]],
     theme: "grid",
     styles: {
       lineColor: [0, 0, 0],

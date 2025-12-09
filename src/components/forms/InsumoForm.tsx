@@ -17,8 +17,6 @@ const insumoSchema = z.object({
   clave: z.string().optional(),
   lote: z.string().nonempty('El lote es obligatorio'),
   cantidad: z.number().min(0, 'La cantidad no puede ser negativa'),
-  cantidad_minima: z.number().min(0, 'La cantidad mínima no puede ser negativa'),
-  cantidad_maxima: z.number().optional().nullable(),
   fecha_entrada: z.string().nonempty('La fecha de entrada es obligatoria'),
   fecha_caducidad: z.string().nonempty('La fecha de caducidad es obligatoria'),
   unidad: z.string().nonempty('Debes seleccionar un hospital'),
@@ -52,8 +50,6 @@ export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoF
       clave: '',
       lote: '',
       cantidad: 0,
-      cantidad_minima: 10,
-      cantidad_maxima: null,
       fecha_entrada: new Date().toISOString().split('T')[0],
       fecha_caducidad: '',
       unidad: selectedHospital?.display_name || '',
@@ -94,14 +90,9 @@ export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoF
     });
   };
 
-  // Filtrar y eliminar duplicados por nombre
-  const filteredInsumos = catalogoInsumos
-    .filter((insumo) =>
-      insumo.nombre.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .filter((insumo, index, self) =>
-      index === self.findIndex((t) => t.nombre === insumo.nombre)
-    );
+  const filteredInsumos = catalogoInsumos.filter((insumo) =>
+    insumo.nombre.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <form
@@ -228,38 +219,6 @@ export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoF
         />
         {form.formState.errors.cantidad && (
           <p className="text-sm text-red-500">{form.formState.errors.cantidad.message}</p>
-        )}
-      </div>
-
-      {/* Cantidad Mínima */}
-      <div className="grid gap-1">
-        <label className="text-sm font-medium" htmlFor="cantidad_minima">Cantidad Mínima</label>
-        <input
-          id="cantidad_minima"
-          type="number"
-          {...form.register('cantidad_minima', { valueAsNumber: true })}
-          className="w-full rounded-md border px-3 py-2 text-sm"
-        />
-        {form.formState.errors.cantidad_minima && (
-          <p className="text-sm text-red-500">{form.formState.errors.cantidad_minima.message}</p>
-        )}
-      </div>
-
-      {/* Cantidad Máxima */}
-      <div className="grid gap-1">
-        <label className="text-sm font-medium" htmlFor="cantidad_maxima">Cantidad Máxima (opcional)</label>
-        <input
-          id="cantidad_maxima"
-          type="number"
-          {...form.register('cantidad_maxima', { 
-            valueAsNumber: true,
-            setValueAs: (v) => v === '' || isNaN(v) ? null : v
-          })}
-          className="w-full rounded-md border px-3 py-2 text-sm"
-          placeholder="Dejar vacío si no aplica"
-        />
-        {form.formState.errors.cantidad_maxima && (
-          <p className="text-sm text-red-500">{form.formState.errors.cantidad_maxima.message}</p>
         )}
       </div>
 

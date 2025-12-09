@@ -24,7 +24,7 @@ const createUserSchema = z.object({
     .trim()
     .nonempty({ message: "El nombre completo es requerido" })
     .max(200, { message: "Máximo 200 caracteres" }),
-  role: z.enum(['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen'], {
+  role: z.enum(['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'], {
     message: "Selecciona un rol válido"
   }),
   unidad: z.string()
@@ -77,11 +77,6 @@ const Usuarios = () => {
       value: 'gerente_operaciones', 
       label: 'Gerente de Operaciones',
       description: 'Control total del sistema'
-    },
-    { 
-      value: 'gerente_almacen', 
-      label: 'Gerente de Almacén',
-      description: 'Gestión de compras y proveedores'
     },
   ];
 

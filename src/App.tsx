@@ -24,12 +24,6 @@ import PopulateInsumos from './pages/PopulateInsumos';
 import ImportProcedimientos from './pages/ImportProcedimientos';
 import SetupAlmacenes from './pages/SetupAlmacenes';
 import Kardex from './pages/Kardex';
-import DiagnosticoInsumos from './pages/DiagnosticoInsumos';
-import Alertas from './pages/Alertas';
-import GerenteOperacionesDashboard from './pages/GerenteOperacionesDashboard';
-import AlmacenistaDashboard from './pages/AlmacenistaDashboard';
-import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
-import SupervisorDashboard from './pages/SupervisorDashboard';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -77,8 +71,6 @@ const AppContent = () => {
                 <>
                   <Route path="/insumos" element={<Insumos />} />
                   <Route path="/kardex" element={<Kardex />} />
-                  <Route path="/alertas" element={<Alertas />} />
-                  <Route path="/almacenista-dashboard" element={<AlmacenistaDashboard />} />
                 </>
               )}
               {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
@@ -88,16 +80,11 @@ const AppContent = () => {
                   <Route path="/reportes" element={<Reportes />} />
                 </>
               )}
-              {(userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
-                <Route path="/supervisor-dashboard" element={<SupervisorDashboard />} />
-              )}
               {(userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>
                   <Route path="/traspasos" element={<Traspasos />} />
                   <Route path="/usuarios" element={<Usuarios />} />
-                  <Route path="/gerente-dashboard" element={<GerenteOperacionesDashboard />} />
                   <Route path="/export-users" element={<ExportUsers />} />
-                  <Route path="/diagnostico-insumos" element={<DiagnosticoInsumos />} />
                   <Route path="/setup" element={<SetupData />} />
                   <Route path="/auto-setup" element={<AutoSetup />} />
                   <Route path="/import-setup" element={<ImportSetup />} />
@@ -107,9 +94,6 @@ const AppContent = () => {
                   <Route path="/import-procedimientos" element={<ImportProcedimientos />} />
                   <Route path="/setup-almacenes" element={<SetupAlmacenes />} />
                 </>
-              )}
-              {(userRole === 'gerente_almacen' || userRole === 'gerente_operaciones') && (
-                <Route path="/almacen-dashboard" element={<GerenteAlmacenDashboard />} />
               )}
               <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

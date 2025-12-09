@@ -13,12 +13,7 @@ import {
   UserCog,
   Upload,
   Download,
-  History,
-  Search,
-  AlertTriangle,
-  BarChart3,
-  Warehouse,
-  ClipboardList
+  History
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HospitalSelector } from '@/components/HospitalSelector';
@@ -38,25 +33,18 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     supervisor: 'Supervisor Hospitalario',
     gerente: 'Gerente de Operaciones',
     gerente_operaciones: 'Gerente de Operaciones',
-    gerente_almacen: 'Gerente de Almacén',
   };
 
   const menuItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen'] },
-    { path: '/gerente-dashboard', icon: BarChart3, label: 'Panel Gerente', roles: ['gerente', 'gerente_operaciones'] },
-    { path: '/supervisor-dashboard', icon: ClipboardList, label: 'Panel Supervisor', roles: ['supervisor', 'gerente', 'gerente_operaciones'] },
-    { path: '/almacen-dashboard', icon: Warehouse, label: 'Panel Almacén', roles: ['gerente_almacen', 'gerente_operaciones'] },
-    { path: '/almacenista-dashboard', icon: Warehouse, label: 'Panel Almacenista', roles: ['almacenista', 'lider', 'gerente', 'gerente_operaciones'] },
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/kardex', icon: History, label: 'Kardex', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
-    { path: '/alertas', icon: AlertTriangle, label: 'Alertas', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/medicos', icon: Users, label: 'Médicos', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/paquetes', icon: Database, label: 'Paquetes Anestesia', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente', 'gerente_operaciones'] },
-    { path: '/diagnostico-insumos', icon: Search, label: 'Diagnóstico Insumos', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/export-users', icon: Download, label: 'Exportar Usuarios', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/import-setup', icon: Upload, label: 'Importar Sistema', roles: ['gerente', 'gerente_operaciones'] },
   ];

@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { RefreshCw, DollarSign, CheckCircle, Clock, FileText, CreditCard, Send, Package } from 'lucide-react';
+import { RefreshCw, DollarSign, CheckCircle, Clock, FileText, CreditCard, Send, AlertCircle } from 'lucide-react';
+import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 
 interface OrdenCompra {
   id: string;
@@ -37,8 +38,37 @@ const FinanzasDashboard = () => {
   const [selectedOrden, setSelectedOrden] = useState<OrdenCompra | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  // Real-time notifications
+  useRealtimeNotifications({
+    userRole: 'finanzas',
+    onPedidoActualizado: () => {
+      fetchOrdenes();
+    }
+  });
+
   useEffect(() => {
     fetchOrdenes();
+    
+    // Subscribe to real-time changes on pedidos_compra
+    const channel = supabase
+      .channel('finanzas-pedidos')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pedidos_compra'
+        },
+        (payload) => {
+          console.log('Pedido change:', payload);
+          fetchOrdenes();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchOrdenes = async () => {
@@ -76,19 +106,24 @@ const FinanzasDashboard = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Update order to "pagado_espera_confirmacion" and send back to Gerente Almacen -> Cadena Suministros
+      // Update order to "pagado_espera_confirmacion" - this triggers notification to Cadena Suministros
       const { error } = await supabase
         .from('pedidos_compra')
         .update({
           estado: 'pagado_espera_confirmacion',
           aprobado_at: new Date().toISOString(),
-          aprobado_por: user?.id
+          aprobado_por: user?.id,
+          enviado_a_cadena: true,
+          enviado_a_cadena_at: new Date().toISOString()
         })
         .eq('id', orden.id);
 
       if (error) throw error;
 
-      toast.success(`Orden ${orden.numero_pedido} marcada como pagada. Enviada a Cadena de Suministros para recepción.`);
+      toast.success(`Orden ${orden.numero_pedido} marcada como pagada y enviada a Cadena de Suministros.`, {
+        description: 'Cadena de Suministros recibirá la orden para confirmar recepción de insumos.',
+        duration: 5000
+      });
       setDialogOpen(false);
       fetchOrdenes();
     } catch (error) {

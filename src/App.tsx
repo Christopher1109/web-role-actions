@@ -31,7 +31,10 @@ import AlmacenistaDashboard from './pages/AlmacenistaDashboard';
 import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
 import SupervisorDashboard from './pages/SupervisorDashboard';
 import Sidebar from './components/layout/Sidebar';
-import Header from './components/layout/Header';
+iimport CentralInventoryDashboard from './pages/CentralInventoryDashboard';
+import CadenaSuministroDashboard from './pages/CadenaSuministroDashboard';
+import FinanceDashboard from './pages/FinanceDashboard';
+mport Header from './components/layout/Header';
 
 const queryClient = new QueryClient();
 
@@ -112,7 +115,16 @@ const AppContent = () => {
                 <Route path="/almacen-dashboard" element={<GerenteAlmacenDashboard />} />
               )}
               <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              <Route        { (userRole === 'gerente_almacen' || userRole === 'gerente_operaciones' || userRole === 'cadena_suministro') && (
+          <Route path="/central-inventory" element={<CentralInventoryDashboard />} />
+        ) }
+        { userRole === 'cadena_suministro' && (
+          <Route path="/cadena-dashboard" element={<CadenaSuministroDashboard />} />
+        ) }
+        { userRole === 'finanzas' && (
+          <Route path="/finanzas" element={<FinanceDashboard />} />
+        ) }
+ path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </main>
         </div>

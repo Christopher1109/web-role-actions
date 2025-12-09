@@ -7,9 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { RefreshCw, Warehouse, Send, Building2, Package, TrendingUp, FileText, Clock, CheckCircle } from 'lucide-react';
+import { RefreshCw, Warehouse, Send, Building2, Package, TrendingUp, FileText, Clock, CheckCircle, Truck, Edit } from 'lucide-react';
 
 interface DocumentoSegmentado {
   id: string;
@@ -51,17 +53,51 @@ interface Transferencia {
   insumo?: { id: string; nombre: string; clave: string };
 }
 
+interface OrdenRecibir {
+  id: string;
+  numero_pedido: string;
+  estado: string;
+  total_items: number;
+  created_at: string;
+  items?: {
+    id: string;
+    insumo_catalogo_id: string;
+    cantidad_solicitada: number;
+    cantidad_recibida: number;
+    insumo?: { id: string; nombre: string; clave: string };
+  }[];
+}
+
+interface HospitalNecesidades {
+  hospital_id: string;
+  hospital_nombre: string;
+  insumos: {
+    id: string;
+    insumo_catalogo_id: string;
+    nombre: string;
+    clave: string;
+    faltante: number;
+    cantidadEnviar: number;
+    stockCentral: number;
+  }[];
+}
+
 const CadenaSuministrosDashboard = () => {
   const [documentos, setDocumentos] = useState<DocumentoSegmentado[]>([]);
   const [almacenCentral, setAlmacenCentral] = useState<AlmacenCentralItem[]>([]);
   const [transferencias, setTransferencias] = useState<Transferencia[]>([]);
+  const [ordenesParaRecibir, setOrdenesParaRecibir] = useState<OrdenRecibir[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Dialog state
+  // Dialog state for bulk hospital transfer
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedDetalle, setSelectedDetalle] = useState<DetalleSegmentado | null>(null);
-  const [cantidadEnviar, setCantidadEnviar] = useState<number>(0);
+  const [selectedHospital, setSelectedHospital] = useState<HospitalNecesidades | null>(null);
   const [enviando, setEnviando] = useState(false);
+
+  // Dialog for receiving orders
+  const [recibirDialogOpen, setRecibirDialogOpen] = useState(false);
+  const [ordenRecibiendo, setOrdenRecibiendo] = useState<OrdenRecibir | null>(null);
+  const [cantidadesRecibidas, setCantidadesRecibidas] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetchData();
@@ -115,6 +151,22 @@ const CadenaSuministrosDashboard = () => {
       if (transError) throw transError;
       setTransferencias(transData || []);
 
+      // Fetch ordenes pagadas pendientes de recibir (estado = pagado_espera_confirmacion)
+      const { data: ordenesData, error: ordenesError } = await supabase
+        .from('pedidos_compra')
+        .select(`
+          *,
+          items:pedido_items(
+            *,
+            insumo:insumos_catalogo(id, nombre, clave)
+          )
+        `)
+        .eq('estado', 'pagado_espera_confirmacion')
+        .order('created_at', { ascending: false });
+
+      if (ordenesError) throw ordenesError;
+      setOrdenesParaRecibir(ordenesData || []);
+
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
@@ -123,78 +175,208 @@ const CadenaSuministrosDashboard = () => {
     }
   };
 
-  const abrirDialogTransferencia = (detalle: DetalleSegmentado) => {
-    const stockCentral = almacenCentral.find(a => a.insumo_catalogo_id === detalle.insumo_catalogo_id);
-    if (!stockCentral || stockCentral.cantidad_disponible <= 0) {
-      toast.error('No hay stock disponible en el almacén central para este insumo');
-      return;
-    }
+  const getDisponibilidadCentral = (insumoId: string) => {
+    const item = almacenCentral.find(a => a.insumo_catalogo_id === insumoId);
+    return item?.cantidad_disponible || 0;
+  };
 
-    setSelectedDetalle(detalle);
-    setCantidadEnviar(Math.min(detalle.faltante_requerido, stockCentral.cantidad_disponible));
+  // Group document details by hospital
+  const agruparPorHospital = (doc: DocumentoSegmentado): HospitalNecesidades[] => {
+    if (!doc.detalles) return [];
+    
+    const grouped: Record<string, HospitalNecesidades> = {};
+    
+    doc.detalles.forEach(det => {
+      const hospitalId = det.hospital_id;
+      if (!grouped[hospitalId]) {
+        grouped[hospitalId] = {
+          hospital_id: hospitalId,
+          hospital_nombre: det.hospital?.display_name || det.hospital?.nombre || 'Hospital',
+          insumos: []
+        };
+      }
+      
+      const stockCentral = getDisponibilidadCentral(det.insumo_catalogo_id);
+      grouped[hospitalId].insumos.push({
+        id: det.id,
+        insumo_catalogo_id: det.insumo_catalogo_id,
+        nombre: det.insumo?.nombre || '',
+        clave: det.insumo?.clave || '',
+        faltante: det.faltante_requerido,
+        cantidadEnviar: Math.min(det.faltante_requerido, stockCentral),
+        stockCentral
+      });
+    });
+    
+    return Object.values(grouped);
+  };
+
+  const abrirDialogHospital = (hospital: HospitalNecesidades) => {
+    // Initialize quantities
+    setSelectedHospital({
+      ...hospital,
+      insumos: hospital.insumos.map(i => ({
+        ...i,
+        cantidadEnviar: Math.min(i.faltante, i.stockCentral)
+      }))
+    });
     setDialogOpen(true);
   };
 
-  const ejecutarTransferencia = async () => {
-    if (!selectedDetalle || cantidadEnviar <= 0) return;
+  const actualizarCantidad = (insumoId: string, cantidad: number) => {
+    if (!selectedHospital) return;
+    setSelectedHospital({
+      ...selectedHospital,
+      insumos: selectedHospital.insumos.map(i => 
+        i.insumo_catalogo_id === insumoId 
+          ? { ...i, cantidadEnviar: Math.min(cantidad, i.stockCentral) }
+          : i
+      )
+    });
+  };
+
+  const ejecutarTransferenciaMasiva = async () => {
+    if (!selectedHospital) return;
+
+    const insumosAEnviar = selectedHospital.insumos.filter(i => i.cantidadEnviar > 0);
+    if (insumosAEnviar.length === 0) {
+      toast.error('No hay insumos para enviar');
+      return;
+    }
 
     setEnviando(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      const stockCentral = almacenCentral.find(a => a.insumo_catalogo_id === selectedDetalle.insumo_catalogo_id);
-      if (!stockCentral || stockCentral.cantidad_disponible < cantidadEnviar) {
-        toast.error('Stock insuficiente en almacén central');
-        return;
+      for (const insumo of insumosAEnviar) {
+        const stockItem = almacenCentral.find(a => a.insumo_catalogo_id === insumo.insumo_catalogo_id);
+        if (!stockItem || stockItem.cantidad_disponible < insumo.cantidadEnviar) {
+          toast.error(`Stock insuficiente para ${insumo.nombre}`);
+          continue;
+        }
+
+        // 1. Create transfer record
+        const { data: transferencia, error: transError } = await supabase
+          .from('transferencias_central_hospital')
+          .insert({
+            hospital_destino_id: selectedHospital.hospital_id,
+            insumo_catalogo_id: insumo.insumo_catalogo_id,
+            cantidad_enviada: insumo.cantidadEnviar,
+            estado: 'enviado',
+            enviado_por: user?.id,
+            alerta_creada: true
+          })
+          .select()
+          .single();
+
+        if (transError) throw transError;
+
+        // 2. Create alert for almacenista
+        await supabase
+          .from('alertas_transferencia')
+          .insert({
+            transferencia_id: transferencia.id,
+            hospital_id: selectedHospital.hospital_id,
+            insumo_catalogo_id: insumo.insumo_catalogo_id,
+            cantidad_enviada: insumo.cantidadEnviar,
+            estado: 'pendiente'
+          });
+
+        // 3. Decrease almacen central
+        await supabase
+          .from('almacen_central')
+          .update({
+            cantidad_disponible: stockItem.cantidad_disponible - insumo.cantidadEnviar,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', stockItem.id);
       }
 
-      // 1. Create transfer record
-      const { data: transferencia, error: transError } = await supabase
-        .from('transferencias_central_hospital')
-        .insert({
-          hospital_destino_id: selectedDetalle.hospital_id,
-          insumo_catalogo_id: selectedDetalle.insumo_catalogo_id,
-          cantidad_enviada: cantidadEnviar,
-          estado: 'enviado',
-          enviado_por: user?.id,
-          alerta_creada: true
-        })
-        .select()
-        .single();
-
-      if (transError) throw transError;
-
-      // 2. Create alert for almacenista
-      const { error: alertaError } = await supabase
-        .from('alertas_transferencia')
-        .insert({
-          transferencia_id: transferencia.id,
-          hospital_id: selectedDetalle.hospital_id,
-          insumo_catalogo_id: selectedDetalle.insumo_catalogo_id,
-          cantidad_enviada: cantidadEnviar,
-          estado: 'pendiente'
-        });
-
-      if (alertaError) throw alertaError;
-
-      // 3. Decrease almacen central
-      const { error: almacenError } = await supabase
-        .from('almacen_central')
-        .update({
-          cantidad_disponible: stockCentral.cantidad_disponible - cantidadEnviar,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', stockCentral.id);
-
-      if (almacenError) throw almacenError;
-
-      toast.success(`Transferencia enviada. El almacenista del hospital recibirá una alerta.`);
+      toast.success(`${insumosAEnviar.length} insumos enviados a ${selectedHospital.hospital_nombre}`);
       setDialogOpen(false);
+      setSelectedHospital(null);
       fetchData();
 
     } catch (error) {
-      console.error('Error executing transfer:', error);
-      toast.error('Error al ejecutar transferencia');
+      console.error('Error executing bulk transfer:', error);
+      toast.error('Error al ejecutar transferencias');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  // Functions for receiving orders
+  const abrirRecibirDialog = (orden: OrdenRecibir) => {
+    setOrdenRecibiendo(orden);
+    const initialCantidades: Record<string, number> = {};
+    orden.items?.forEach(item => {
+      initialCantidades[item.id] = item.cantidad_solicitada;
+    });
+    setCantidadesRecibidas(initialCantidades);
+    setRecibirDialogOpen(true);
+  };
+
+  const confirmarRecepcion = async () => {
+    if (!ordenRecibiendo) return;
+
+    setEnviando(true);
+    try {
+      // 1. Update almacen_central with received quantities
+      for (const item of ordenRecibiendo.items || []) {
+        const cantidadRecibida = cantidadesRecibidas[item.id] || 0;
+        if (cantidadRecibida <= 0) continue;
+
+        const { data: existingItem } = await supabase
+          .from('almacen_central')
+          .select()
+          .eq('insumo_catalogo_id', item.insumo_catalogo_id)
+          .maybeSingle();
+
+        if (existingItem) {
+          await supabase
+            .from('almacen_central')
+            .update({
+              cantidad_disponible: existingItem.cantidad_disponible + cantidadRecibida,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingItem.id);
+        } else {
+          await supabase
+            .from('almacen_central')
+            .insert({
+              insumo_catalogo_id: item.insumo_catalogo_id,
+              cantidad_disponible: cantidadRecibida,
+              lote: `LOTE-${Date.now().toString(36).toUpperCase()}`
+            });
+        }
+
+        // Update pedido_items
+        await supabase
+          .from('pedido_items')
+          .update({
+            cantidad_recibida: cantidadRecibida,
+            estado: 'recibido'
+          })
+          .eq('id', item.id);
+      }
+
+      // 2. Update order status to 'recibido'
+      await supabase
+        .from('pedidos_compra')
+        .update({
+          estado: 'recibido',
+          completado_at: new Date().toISOString()
+        })
+        .eq('id', ordenRecibiendo.id);
+
+      toast.success(`Orden ${ordenRecibiendo.numero_pedido} recibida. Stock actualizado en Almacén Central.`);
+      setRecibirDialogOpen(false);
+      setOrdenRecibiendo(null);
+      fetchData();
+
+    } catch (error) {
+      console.error('Error confirming reception:', error);
+      toast.error('Error al confirmar recepción');
     } finally {
       setEnviando(false);
     }
@@ -228,11 +410,6 @@ const CadenaSuministrosDashboard = () => {
     }
   };
 
-  const getDisponibilidadCentral = (insumoId: string) => {
-    const item = almacenCentral.find(a => a.insumo_catalogo_id === insumoId);
-    return item?.cantidad_disponible || 0;
-  };
-
   const documentosPendientes = documentos.filter(d => !d.procesado_por_cadena);
 
   return (
@@ -249,7 +426,7 @@ const CadenaSuministrosDashboard = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Documentos Pendientes</CardTitle>
@@ -257,6 +434,15 @@ const CadenaSuministrosDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{documentosPendientes.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Órdenes por Recibir</CardTitle>
+            <Package className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{ordenesParaRecibir.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -272,7 +458,7 @@ const CadenaSuministrosDashboard = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Items en Almacén Central</CardTitle>
+            <CardTitle className="text-sm font-medium">Items en Almacén</CardTitle>
             <Warehouse className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -294,19 +480,74 @@ const CadenaSuministrosDashboard = () => {
         </Card>
       </div>
 
-      <Tabs defaultValue="documentos" className="space-y-4">
+      <Tabs defaultValue="recibir" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="documentos">
-            Documentos Recibidos
+          <TabsTrigger value="recibir">
+            Recepción de Órdenes
+            {ordenesParaRecibir.length > 0 && (
+              <Badge variant="destructive" className="ml-2">{ordenesParaRecibir.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="distribucion">
+            Distribución a Hospitales
             {documentosPendientes.length > 0 && (
-              <Badge variant="destructive" className="ml-2">{documentosPendientes.length}</Badge>
+              <Badge variant="secondary" className="ml-2">{documentosPendientes.length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="almacen">Almacén Central</TabsTrigger>
-          <TabsTrigger value="transferencias">Historial de Transferencias</TabsTrigger>
+          <TabsTrigger value="transferencias">Historial</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="documentos" className="space-y-4">
+        {/* Tab: Recepción de Órdenes Pagadas */}
+        <TabsContent value="recibir" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Órdenes Pagadas Pendientes de Recibir
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Confirma la recepción de los insumos para actualizar el Almacén Central
+              </p>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Cargando...</div>
+              ) : ordenesParaRecibir.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No hay órdenes pendientes de recibir
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {ordenesParaRecibir.map(orden => (
+                    <Card key={orden.id} className="border-l-4 border-l-primary">
+                      <CardContent className="pt-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-mono font-bold">{orden.numero_pedido}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(orden.created_at).toLocaleDateString('es-MX')} • {orden.total_items} items
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge className="bg-amber-100 text-amber-800">Pagado - Espera Confirmación</Badge>
+                            <Button onClick={() => abrirRecibirDialog(orden)}>
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Confirmar Recepción
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab: Distribución - Cards por Hospital */}
+        <TabsContent value="distribucion" className="space-y-4">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Cargando...</div>
           ) : documentos.length === 0 ? (
@@ -316,97 +557,92 @@ const CadenaSuministrosDashboard = () => {
               </CardContent>
             </Card>
           ) : (
-            documentos.map(doc => (
-              <Card key={doc.id}>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span>Documento del {new Date(doc.fecha_generacion).toLocaleDateString('es-MX', {
-                        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                      })}</span>
-                      {doc.procesado_por_cadena ? (
-                        <Badge variant="outline" className="bg-green-50 text-green-700">
-                          <CheckCircle className="mr-1 h-3 w-3" />
-                          Procesado
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">
-                          <Clock className="mr-1 h-3 w-3" />
-                          Pendiente
-                        </Badge>
+            documentos.map(doc => {
+              const hospitalesAgrupados = agruparPorHospital(doc);
+              
+              return (
+                <Card key={doc.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span>Documento del {new Date(doc.fecha_generacion).toLocaleDateString('es-MX', {
+                          day: 'numeric', month: 'short', year: 'numeric'
+                        })}</span>
+                        {doc.procesado_por_cadena ? (
+                          <Badge variant="outline" className="bg-green-50 text-green-700">
+                            <CheckCircle className="mr-1 h-3 w-3" />
+                            Procesado
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">
+                            <Clock className="mr-1 h-3 w-3" />
+                            Pendiente
+                          </Badge>
+                        )}
+                      </div>
+                      {!doc.procesado_por_cadena && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => marcarDocumentoProcesado(doc.id)}
+                        >
+                          Marcar procesado
+                        </Button>
                       )}
-                    </div>
-                    {!doc.procesado_por_cadena && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => marcarDocumentoProcesado(doc.id)}
-                      >
-                        Marcar como procesado
-                      </Button>
-                    )}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Selecciona cada necesidad para enviar insumos desde el almacén central
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  {!doc.detalles || doc.detalles.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">Sin detalles</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Hospital</TableHead>
-                          <TableHead>Clave</TableHead>
-                          <TableHead>Insumo</TableHead>
-                          <TableHead className="text-right">Existencia</TableHead>
-                          <TableHead className="text-right">Mínimo</TableHead>
-                          <TableHead className="text-right">Faltante</TableHead>
-                          <TableHead className="text-right">Stock Central</TableHead>
-                          <TableHead>Acción</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {doc.detalles.map((det) => {
-                          const stockCentral = getDisponibilidadCentral(det.insumo_catalogo_id);
-                          const puedeEnviar = stockCentral > 0;
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {hospitalesAgrupados.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-4">Sin detalles</p>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {hospitalesAgrupados.map(hospital => {
+                          const totalInsumos = hospital.insumos.length;
+                          const insumosConStock = hospital.insumos.filter(i => i.stockCentral > 0).length;
                           
                           return (
-                            <TableRow key={det.id}>
-                              <TableCell className="font-medium">
-                                {det.hospital?.display_name || det.hospital?.nombre}
-                              </TableCell>
-                              <TableCell className="font-mono text-sm">{det.insumo?.clave}</TableCell>
-                              <TableCell>{det.insumo?.nombre}</TableCell>
-                              <TableCell className="text-right font-mono">{det.existencia_actual}</TableCell>
-                              <TableCell className="text-right font-mono">{det.minimo}</TableCell>
-                              <TableCell className="text-right font-mono font-bold text-destructive">
-                                {det.faltante_requerido}
-                              </TableCell>
-                              <TableCell className={`text-right font-mono ${stockCentral > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
-                                {stockCentral}
-                              </TableCell>
-                              <TableCell>
-                                <Button 
-                                  variant="default" 
-                                  size="sm"
-                                  disabled={!puedeEnviar}
-                                  onClick={() => abrirDialogTransferencia(det)}
-                                >
-                                  <Send className="mr-2 h-4 w-4" />
-                                  Enviar
-                                </Button>
-                              </TableCell>
-                            </TableRow>
+                            <Card 
+                              key={hospital.hospital_id} 
+                              className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-primary"
+                              onClick={() => abrirDialogHospital(hospital)}
+                            >
+                              <CardHeader className="pb-2">
+                                <CardTitle className="text-base flex items-center gap-2">
+                                  <Building2 className="h-4 w-4" />
+                                  {hospital.hospital_nombre}
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="space-y-2 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Insumos requeridos:</span>
+                                    <span className="font-bold">{totalInsumos}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Con stock central:</span>
+                                    <span className={insumosConStock > 0 ? 'text-green-600 font-bold' : 'text-destructive'}>
+                                      {insumosConStock}
+                                    </span>
+                                  </div>
+                                  <Button 
+                                    className="w-full mt-2" 
+                                    size="sm"
+                                    disabled={insumosConStock === 0}
+                                  >
+                                    <Send className="mr-2 h-4 w-4" />
+                                    Enviar Insumos
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
                           );
                         })}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
-            ))
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })
           )}
         </TabsContent>
 
@@ -467,7 +703,6 @@ const CadenaSuministrosDashboard = () => {
                       <TableHead>Insumo</TableHead>
                       <TableHead className="text-right">Cantidad</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead>Alerta</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -491,16 +726,6 @@ const CadenaSuministrosDashboard = () => {
                         <TableCell>
                           <Badge variant={getEstadoColor(trans.estado)}>{trans.estado}</Badge>
                         </TableCell>
-                        <TableCell>
-                          {trans.alerta_creada ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700">
-                              <CheckCircle className="mr-1 h-3 w-3" />
-                              Enviada
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">Pendiente</Badge>
-                          )}
-                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -511,55 +736,128 @@ const CadenaSuministrosDashboard = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Dialog for transfer */}
+      {/* Dialog: Enviar insumos a hospital */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Enviar Insumo a Hospital</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5" />
+              Enviar Insumos a {selectedHospital?.hospital_nombre}
+            </DialogTitle>
           </DialogHeader>
-          {selectedDetalle && (
-            <div className="space-y-4">
-              <div>
-                <Label className="text-muted-foreground">Hospital</Label>
-                <p className="font-medium">{selectedDetalle.hospital?.display_name || selectedDetalle.hospital?.nombre}</p>
+          {selectedHospital && (
+            <ScrollArea className="max-h-[60vh]">
+              <div className="space-y-3 pr-4">
+                {selectedHospital.insumos.map((insumo) => (
+                  <Card key={insumo.insumo_catalogo_id} className={insumo.stockCentral === 0 ? 'opacity-50' : ''}>
+                    <CardContent className="py-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{insumo.nombre}</p>
+                          <p className="text-sm text-muted-foreground">{insumo.clave}</p>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <div className="text-center">
+                            <p className="text-muted-foreground">Faltante</p>
+                            <p className="font-mono text-destructive font-bold">{insumo.faltante}</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-muted-foreground">Stock</p>
+                            <p className={`font-mono font-bold ${insumo.stockCentral > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                              {insumo.stockCentral}
+                            </p>
+                          </div>
+                          <div className="w-24">
+                            <Label className="text-xs text-muted-foreground">Enviar</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={insumo.stockCentral}
+                              value={insumo.cantidadEnviar}
+                              onChange={(e) => actualizarCantidad(insumo.insumo_catalogo_id, Number(e.target.value))}
+                              disabled={insumo.stockCentral === 0}
+                              className="h-8"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-              <div>
-                <Label className="text-muted-foreground">Insumo</Label>
-                <p className="font-medium">{selectedDetalle.insumo?.nombre}</p>
-                <p className="text-sm text-muted-foreground">{selectedDetalle.insumo?.clave}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground">Faltante</Label>
-                  <p className="font-mono text-lg text-destructive">{selectedDetalle.faltante_requerido}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Stock Central</Label>
-                  <p className="font-mono text-lg text-green-600">
-                    {getDisponibilidadCentral(selectedDetalle.insumo_catalogo_id)}
-                  </p>
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="cantidad">Cantidad a Enviar</Label>
-                <Input
-                  id="cantidad"
-                  type="number"
-                  min={1}
-                  max={getDisponibilidadCentral(selectedDetalle.insumo_catalogo_id)}
-                  value={cantidadEnviar}
-                  onChange={(e) => setCantidadEnviar(Number(e.target.value))}
-                />
-              </div>
-            </div>
+            </ScrollArea>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={ejecutarTransferencia} disabled={enviando || cantidadEnviar <= 0}>
+            <Button 
+              onClick={ejecutarTransferenciaMasiva} 
+              disabled={enviando || !selectedHospital?.insumos.some(i => i.cantidadEnviar > 0)}
+            >
               <Send className="mr-2 h-4 w-4" />
               {enviando ? 'Enviando...' : 'Confirmar Envío'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Recibir orden */}
+      <Dialog open={recibirDialogOpen} onOpenChange={setRecibirDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Recibir Orden {ordenRecibiendo?.numero_pedido}
+            </DialogTitle>
+          </DialogHeader>
+          {ordenRecibiendo && (
+            <ScrollArea className="max-h-[60vh]">
+              <div className="space-y-3 pr-4">
+                <p className="text-sm text-muted-foreground mb-4">
+                  Ajusta las cantidades recibidas si difieren de las solicitadas:
+                </p>
+                {ordenRecibiendo.items?.map((item) => (
+                  <Card key={item.id}>
+                    <CardContent className="py-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{item.insumo?.nombre}</p>
+                          <p className="text-sm text-muted-foreground">{item.insumo?.clave}</p>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <div className="text-center">
+                            <p className="text-muted-foreground">Solicitado</p>
+                            <p className="font-mono font-bold">{item.cantidad_solicitada}</p>
+                          </div>
+                          <div className="w-24">
+                            <Label className="text-xs text-muted-foreground">Recibido</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={cantidadesRecibidas[item.id] || 0}
+                              onChange={(e) => setCantidadesRecibidas({
+                                ...cantidadesRecibidas,
+                                [item.id]: Number(e.target.value)
+                              })}
+                              className="h-8"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecibirDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmarRecepcion} disabled={enviando}>
+              <CheckCircle className="mr-2 h-4 w-4" />
+              {enviando ? 'Procesando...' : 'Confirmar Recepción'}
             </Button>
           </DialogFooter>
         </DialogContent>

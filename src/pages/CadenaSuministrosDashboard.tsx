@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { RefreshCw, Warehouse, Send, Building2, Package, TrendingUp, FileText, Clock, CheckCircle, Truck, Edit } from 'lucide-react';
+import { RefreshCw, Warehouse, Send, Building2, Package, TrendingUp, FileText, Clock, CheckCircle, Truck, Edit, AlertTriangle } from 'lucide-react';
 import { StatusTimeline } from '@/components/StatusTimeline';
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 
@@ -242,10 +242,21 @@ const CadenaSuministrosDashboard = () => {
       ...selectedHospital,
       insumos: selectedHospital.insumos.map(i => 
         i.insumo_catalogo_id === insumoId 
-          ? { ...i, cantidadEnviar: Math.min(cantidad, i.stockCentral) }
+          ? { ...i, cantidadEnviar: Math.max(0, cantidad) }
           : i
       )
     });
+  };
+
+  // Check if any item has insufficient stock (for warning)
+  const tieneStockInsuficiente = (hospital: HospitalNecesidades | null) => {
+    if (!hospital) return false;
+    return hospital.insumos.some(i => i.cantidadEnviar > i.stockCentral);
+  };
+
+  const getInsumosConStockInsuficiente = (hospital: HospitalNecesidades | null) => {
+    if (!hospital) return [];
+    return hospital.insumos.filter(i => i.cantidadEnviar > i.stockCentral);
   };
 
   const ejecutarTransferenciaMasiva = async () => {
@@ -833,13 +844,23 @@ const CadenaSuministrosDashboard = () => {
               </div>
             </ScrollArea>
           )}
+          {/* Warning for insufficient stock */}
+          {tieneStockInsuficiente(selectedHospital) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-amber-800">Stock insuficiente en algunos insumos</p>
+                <p className="text-amber-700">Se enviará solo lo disponible. El resto quedará pendiente.</p>
+              </div>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
             <Button 
               onClick={ejecutarTransferenciaMasiva} 
-              disabled={enviando || !selectedHospital?.insumos.some(i => i.cantidadEnviar > 0)}
+              disabled={enviando || !selectedHospital?.insumos.some(i => i.cantidadEnviar > 0 && i.cantidadEnviar <= i.stockCentral)}
             >
               <Send className="mr-2 h-4 w-4" />
               {enviando ? 'Enviando...' : 'Confirmar Envío'}

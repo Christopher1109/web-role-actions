@@ -14,6 +14,79 @@ export type Database = {
   }
   public: {
     Tables: {
+      alertas_transferencia: {
+        Row: {
+          aceptada_at: string | null
+          aceptada_por: string | null
+          cantidad_aceptada: number | null
+          cantidad_enviada: number
+          cantidad_merma: number | null
+          created_at: string
+          estado: string
+          hospital_id: string
+          id: string
+          insumo_catalogo_id: string
+          motivo_merma: string | null
+          notas: string | null
+          notificado: boolean | null
+          transferencia_id: string
+        }
+        Insert: {
+          aceptada_at?: string | null
+          aceptada_por?: string | null
+          cantidad_aceptada?: number | null
+          cantidad_enviada?: number
+          cantidad_merma?: number | null
+          created_at?: string
+          estado?: string
+          hospital_id: string
+          id?: string
+          insumo_catalogo_id: string
+          motivo_merma?: string | null
+          notas?: string | null
+          notificado?: boolean | null
+          transferencia_id: string
+        }
+        Update: {
+          aceptada_at?: string | null
+          aceptada_por?: string | null
+          cantidad_aceptada?: number | null
+          cantidad_enviada?: number
+          cantidad_merma?: number | null
+          created_at?: string
+          estado?: string
+          hospital_id?: string
+          id?: string
+          insumo_catalogo_id?: string
+          motivo_merma?: string | null
+          notas?: string | null
+          notificado?: boolean | null
+          transferencia_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alertas_transferencia_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alertas_transferencia_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alertas_transferencia_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "transferencias_central_hospital"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       almacen_central: {
         Row: {
           cantidad_disponible: number
@@ -261,54 +334,78 @@ export type Database = {
       documentos_necesidades_agrupado: {
         Row: {
           created_at: string
+          enviado_a_gerente_almacen: boolean | null
+          enviado_at: string | null
           estado: string
           fecha_generacion: string
           generado_por: string | null
           id: string
           notas: string | null
+          procesado_at: string | null
+          procesado_por_almacen: boolean | null
         }
         Insert: {
           created_at?: string
+          enviado_a_gerente_almacen?: boolean | null
+          enviado_at?: string | null
           estado?: string
           fecha_generacion?: string
           generado_por?: string | null
           id?: string
           notas?: string | null
+          procesado_at?: string | null
+          procesado_por_almacen?: boolean | null
         }
         Update: {
           created_at?: string
+          enviado_a_gerente_almacen?: boolean | null
+          enviado_at?: string | null
           estado?: string
           fecha_generacion?: string
           generado_por?: string | null
           id?: string
           notas?: string | null
+          procesado_at?: string | null
+          procesado_por_almacen?: boolean | null
         }
         Relationships: []
       }
       documentos_necesidades_segmentado: {
         Row: {
           created_at: string
+          enviado_a_cadena_suministros: boolean | null
+          enviado_at: string | null
           estado: string
           fecha_generacion: string
           generado_por: string | null
           id: string
           notas: string | null
+          procesado_at: string | null
+          procesado_por_cadena: boolean | null
         }
         Insert: {
           created_at?: string
+          enviado_a_cadena_suministros?: boolean | null
+          enviado_at?: string | null
           estado?: string
           fecha_generacion?: string
           generado_por?: string | null
           id?: string
           notas?: string | null
+          procesado_at?: string | null
+          procesado_por_cadena?: boolean | null
         }
         Update: {
           created_at?: string
+          enviado_a_cadena_suministros?: boolean | null
+          enviado_at?: string | null
           estado?: string
           fecha_generacion?: string
           generado_por?: string | null
           id?: string
           notas?: string | null
+          procesado_at?: string | null
+          procesado_por_cadena?: boolean | null
         }
         Relationships: []
       }
@@ -1275,6 +1372,9 @@ export type Database = {
           completado_at: string | null
           creado_por: string | null
           created_at: string
+          documento_origen_id: string | null
+          enviado_a_cadena: boolean | null
+          enviado_a_cadena_at: string | null
           estado: string
           fecha_estimada_entrega: string | null
           formato_origen_id: string | null
@@ -1291,6 +1391,9 @@ export type Database = {
           completado_at?: string | null
           creado_por?: string | null
           created_at?: string
+          documento_origen_id?: string | null
+          enviado_a_cadena?: boolean | null
+          enviado_a_cadena_at?: string | null
           estado?: string
           fecha_estimada_entrega?: string | null
           formato_origen_id?: string | null
@@ -1307,6 +1410,9 @@ export type Database = {
           completado_at?: string | null
           creado_por?: string | null
           created_at?: string
+          documento_origen_id?: string | null
+          enviado_a_cadena?: boolean | null
+          enviado_a_cadena_at?: string | null
           estado?: string
           fecha_estimada_entrega?: string | null
           formato_origen_id?: string | null
@@ -1318,6 +1424,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "pedidos_compra_documento_origen_id_fkey"
+            columns: ["documento_origen_id"]
+            isOneToOne: false
+            referencedRelation: "documentos_necesidades_agrupado"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pedidos_compra_formato_origen_id_fkey"
             columns: ["formato_origen_id"]
@@ -1421,6 +1534,7 @@ export type Database = {
       }
       transferencias_central_hospital: {
         Row: {
+          alerta_creada: boolean | null
           cantidad_enviada: number
           created_at: string
           enviado_por: string | null
@@ -1435,6 +1549,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          alerta_creada?: boolean | null
           cantidad_enviada?: number
           created_at?: string
           enviado_por?: string | null
@@ -1449,6 +1564,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          alerta_creada?: boolean | null
           cantidad_enviada?: number
           created_at?: string
           enviado_por?: string | null

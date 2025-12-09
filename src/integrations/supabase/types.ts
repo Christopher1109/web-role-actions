@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      almacen_central: {
+        Row: {
+          cantidad_disponible: number
+          created_at: string
+          fecha_caducidad: string | null
+          id: string
+          insumo_catalogo_id: string
+          lote: string | null
+          ubicacion: string | null
+          updated_at: string
+        }
+        Insert: {
+          cantidad_disponible?: number
+          created_at?: string
+          fecha_caducidad?: string | null
+          id?: string
+          insumo_catalogo_id: string
+          lote?: string | null
+          ubicacion?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cantidad_disponible?: number
+          created_at?: string
+          fecha_caducidad?: string | null
+          id?: string
+          insumo_catalogo_id?: string
+          lote?: string | null
+          ubicacion?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "almacen_central_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       almacenes: {
         Row: {
           activo: boolean | null
@@ -122,6 +163,154 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      documento_agrupado_detalle: {
+        Row: {
+          created_at: string
+          documento_id: string
+          id: string
+          insumo_catalogo_id: string
+          total_faltante_requerido: number
+        }
+        Insert: {
+          created_at?: string
+          documento_id: string
+          id?: string
+          insumo_catalogo_id: string
+          total_faltante_requerido?: number
+        }
+        Update: {
+          created_at?: string
+          documento_id?: string
+          id?: string
+          insumo_catalogo_id?: string
+          total_faltante_requerido?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documento_agrupado_detalle_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "documentos_necesidades_agrupado"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_agrupado_detalle_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documento_segmentado_detalle: {
+        Row: {
+          created_at: string
+          documento_id: string
+          existencia_actual: number
+          faltante_requerido: number
+          hospital_id: string
+          id: string
+          insumo_catalogo_id: string
+          minimo: number
+        }
+        Insert: {
+          created_at?: string
+          documento_id: string
+          existencia_actual?: number
+          faltante_requerido?: number
+          hospital_id: string
+          id?: string
+          insumo_catalogo_id: string
+          minimo?: number
+        }
+        Update: {
+          created_at?: string
+          documento_id?: string
+          existencia_actual?: number
+          faltante_requerido?: number
+          hospital_id?: string
+          id?: string
+          insumo_catalogo_id?: string
+          minimo?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documento_segmentado_detalle_documento_id_fkey"
+            columns: ["documento_id"]
+            isOneToOne: false
+            referencedRelation: "documentos_necesidades_segmentado"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_segmentado_detalle_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documento_segmentado_detalle_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documentos_necesidades_agrupado: {
+        Row: {
+          created_at: string
+          estado: string
+          fecha_generacion: string
+          generado_por: string | null
+          id: string
+          notas: string | null
+        }
+        Insert: {
+          created_at?: string
+          estado?: string
+          fecha_generacion?: string
+          generado_por?: string | null
+          id?: string
+          notas?: string | null
+        }
+        Update: {
+          created_at?: string
+          estado?: string
+          fecha_generacion?: string
+          generado_por?: string | null
+          id?: string
+          notas?: string | null
+        }
+        Relationships: []
+      }
+      documentos_necesidades_segmentado: {
+        Row: {
+          created_at: string
+          estado: string
+          fecha_generacion: string
+          generado_por: string | null
+          id: string
+          notas: string | null
+        }
+        Insert: {
+          created_at?: string
+          estado?: string
+          fecha_generacion?: string
+          generado_por?: string | null
+          id?: string
+          notas?: string | null
+        }
+        Update: {
+          created_at?: string
+          estado?: string
+          fecha_generacion?: string
+          generado_por?: string | null
+          id?: string
+          notas?: string | null
+        }
+        Relationships: []
       }
       excel_insumo_config: {
         Row: {
@@ -1230,6 +1419,66 @@ export type Database = {
         }
         Relationships: []
       }
+      transferencias_central_hospital: {
+        Row: {
+          cantidad_enviada: number
+          created_at: string
+          enviado_por: string | null
+          estado: string
+          fecha: string
+          hospital_destino_id: string
+          id: string
+          insumo_catalogo_id: string
+          notas: string | null
+          recibido_at: string | null
+          recibido_por: string | null
+          updated_at: string
+        }
+        Insert: {
+          cantidad_enviada?: number
+          created_at?: string
+          enviado_por?: string | null
+          estado?: string
+          fecha?: string
+          hospital_destino_id: string
+          id?: string
+          insumo_catalogo_id: string
+          notas?: string | null
+          recibido_at?: string | null
+          recibido_por?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cantidad_enviada?: number
+          created_at?: string
+          enviado_por?: string | null
+          estado?: string
+          fecha?: string
+          hospital_destino_id?: string
+          id?: string
+          insumo_catalogo_id?: string
+          notas?: string | null
+          recibido_at?: string | null
+          recibido_por?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transferencias_central_hospital_hospital_destino_id_fkey"
+            columns: ["hospital_destino_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencias_central_hospital_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       traspaso_insumos: {
         Row: {
           cantidad: number
@@ -1425,6 +1674,10 @@ export type Database = {
         Returns: boolean
       }
       is_gerente_almacen: { Args: { _user_id: string }; Returns: boolean }
+      recalcular_alerta_insumo: {
+        Args: { p_hospital_id: string; p_insumo_catalogo_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role:

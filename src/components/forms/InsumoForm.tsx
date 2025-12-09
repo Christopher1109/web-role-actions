@@ -90,9 +90,14 @@ export default function InsumoForm({ onClose, onSubmit, defaultValues }: InsumoF
     });
   };
 
-  const filteredInsumos = catalogoInsumos.filter((insumo) =>
-    insumo.nombre.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filtrar y eliminar duplicados por nombre
+  const filteredInsumos = catalogoInsumos
+    .filter((insumo) =>
+      insumo.nombre.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .filter((insumo, index, self) =>
+      index === self.findIndex((t) => t.nombre === insumo.nombre)
+    );
 
   return (
     <form

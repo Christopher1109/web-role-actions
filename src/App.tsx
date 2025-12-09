@@ -27,6 +27,7 @@ import Kardex from './pages/Kardex';
 import DiagnosticoInsumos from './pages/DiagnosticoInsumos';
 import Alertas from './pages/Alertas';
 import GerenteOperacionesDashboard from './pages/GerenteOperacionesDashboard';
+import AlmacenistaDashboard from './pages/AlmacenistaDashboard';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -75,6 +76,7 @@ const AppContent = () => {
                   <Route path="/insumos" element={<Insumos />} />
                   <Route path="/kardex" element={<Kardex />} />
                   <Route path="/alertas" element={<Alertas />} />
+                  <Route path="/almacenista-dashboard" element={<AlmacenistaDashboard />} />
                 </>
               )}
               {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (

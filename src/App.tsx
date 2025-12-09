@@ -25,6 +25,7 @@ import ImportProcedimientos from './pages/ImportProcedimientos';
 import SetupAlmacenes from './pages/SetupAlmacenes';
 import Kardex from './pages/Kardex';
 import DiagnosticoInsumos from './pages/DiagnosticoInsumos';
+import Alertas from './pages/Alertas';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -72,6 +73,7 @@ const AppContent = () => {
                 <>
                   <Route path="/insumos" element={<Insumos />} />
                   <Route path="/kardex" element={<Kardex />} />
+                  <Route path="/alertas" element={<Alertas />} />
                 </>
               )}
               {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (

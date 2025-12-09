@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,8 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Download, Upload, Package, ShoppingCart, CheckCircle, RefreshCw, Warehouse, Send, Clock, FileText, DollarSign } from 'lucide-react';
+import { Download, Upload, Package, ShoppingCart, CheckCircle, RefreshCw, Warehouse, Send, Clock, FileText, DollarSign, CreditCard, Truck } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { StatusTimeline, StatusBadge } from '@/components/StatusTimeline';
+import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 
 interface DocumentoAgrupado {
   id: string;
@@ -76,6 +78,17 @@ const GerenteAlmacenDashboard = () => {
   const [preciosDialogOpen, setPreciosDialogOpen] = useState(false);
   const [ordenEditando, setOrdenEditando] = useState<OrdenCompra | null>(null);
   const [precios, setPrecios] = useState<Record<string, number>>({});
+
+  const fetchDataCallback = useCallback(() => {
+    fetchData();
+  }, []);
+
+  // Realtime notifications
+  useRealtimeNotifications({
+    userRole: 'gerente_almacen',
+    onDocumentoAgrupado: fetchDataCallback,
+    onPedidoActualizado: fetchDataCallback,
+  });
 
   useEffect(() => {
     fetchData();
@@ -315,22 +328,38 @@ const GerenteAlmacenDashboard = () => {
   };
 
   const getEstadoBadge = (estado: string) => {
-    switch (estado) {
-      case 'pendiente':
-        return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Pendiente</Badge>;
-      case 'enviado_a_finanzas':
-        return <Badge className="bg-blue-100 text-blue-800"><DollarSign className="mr-1 h-3 w-3" />En Finanzas</Badge>;
-      case 'pagado_espera_confirmacion':
-        return <Badge className="bg-amber-100 text-amber-800"><Send className="mr-1 h-3 w-3" />Pagado - Espera</Badge>;
-      case 'recibido':
-        return <Badge variant="outline" className="bg-green-50 text-green-700"><CheckCircle className="mr-1 h-3 w-3" />Recibido</Badge>;
-      default:
-        return <Badge variant="outline">{estado}</Badge>;
+    return <StatusTimeline currentStatus={estado} tipo="pedido" />;
+  };
+
+  // Simulación de confirmación de pago (provisional)
+  const simularConfirmacionPago = async (orden: OrdenCompra) => {
+    setProcessingDoc(orden.id);
+    try {
+      // Actualizar estado a pagado y enviado a cadena
+      await supabase
+        .from('pedidos_compra')
+        .update({
+          estado: 'pagado_espera_confirmacion',
+          aprobado_at: new Date().toISOString(),
+          enviado_a_cadena: true,
+          enviado_a_cadena_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orden.id);
+
+      toast.success(`Pago confirmado. Orden ${orden.numero_pedido} enviada a Cadena de Suministros`);
+      fetchData();
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+      toast.error('Error al confirmar pago');
+    } finally {
+      setProcessingDoc(null);
     }
   };
 
   const documentosPendientes = documentos.filter(d => !d.procesado_por_almacen);
   const ordenesPendientes = ordenesCompra.filter(o => o.estado === 'pendiente');
+  const ordenesEnFinanzas = ordenesCompra.filter(o => o.estado === 'enviado_a_finanzas');
 
   return (
     <div className="space-y-6">
@@ -552,10 +581,29 @@ const GerenteAlmacenDashboard = () => {
                               Enviar a Finanzas
                             </Button>
                           )}
-                          {orden.estado !== 'pendiente' && (
-                            <span className="text-sm text-muted-foreground">
-                              {orden.estado === 'recibido' ? 'Completado' : 'En proceso'}
-                            </span>
+                          {orden.estado === 'enviado_a_finanzas' && (
+                            <Button 
+                              size="sm"
+                              variant="outline"
+                              className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                              onClick={() => simularConfirmacionPago(orden)}
+                              disabled={processingDoc === orden.id}
+                            >
+                              <CreditCard className="mr-2 h-4 w-4" />
+                              {processingDoc === orden.id ? 'Procesando...' : 'Simular Confirmación de Pago'}
+                            </Button>
+                          )}
+                          {orden.estado === 'pagado_espera_confirmacion' && (
+                            <Badge className="bg-cyan-100 text-cyan-800">
+                              <Truck className="mr-1 h-3 w-3" />
+                              Esperando recepción
+                            </Badge>
+                          )}
+                          {orden.estado === 'recibido' && (
+                            <Badge variant="outline" className="bg-green-50 text-green-700">
+                              <CheckCircle className="mr-1 h-3 w-3" />
+                              Completado
+                            </Badge>
                           )}
                         </TableCell>
                       </TableRow>

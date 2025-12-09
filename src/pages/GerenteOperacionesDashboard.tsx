@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { AlertTriangle, FileText, Send, RefreshCw, Building2, Package, CheckCircle2, Clock } from 'lucide-react';
+import { AlertTriangle, FileText, Send, RefreshCw, Building2, Package, CheckCircle2, Clock, Ban } from 'lucide-react';
+import { StatusTimeline, StatusBadge } from '@/components/StatusTimeline';
+import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 
 interface AlertaInventario {
   id: string;
@@ -70,6 +72,16 @@ const GerenteOperacionesDashboard = () => {
   const [filtroEstado, setFiltroEstado] = useState<string>('activa');
   const [loading, setLoading] = useState(true);
   const [generando, setGenerando] = useState(false);
+
+  const fetchDataCallback = useCallback(() => {
+    fetchData();
+  }, [filtroHospital, filtroEstado]);
+
+  // Realtime notifications
+  useRealtimeNotifications({
+    userRole: 'gerente_operaciones',
+    onPedidoActualizado: fetchDataCallback,
+  });
 
   useEffect(() => {
     fetchData();
@@ -315,15 +327,23 @@ const GerenteOperacionesDashboard = () => {
     const procesado = esSegmentado 
       ? (doc as DocumentoSegmentado).procesado_por_cadena 
       : (doc as DocumentoAgrupado).procesado_por_almacen;
+    const status = procesado ? 'procesado' : (enviado ? 'enviado' : 'generado');
 
-    if (procesado) {
-      return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200"><CheckCircle2 className="mr-1 h-3 w-3" />Procesado</Badge>;
-    }
-    if (enviado) {
-      return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Pendiente de procesar</Badge>;
-    }
-    return <Badge variant="outline">Generado</Badge>;
+    return <StatusTimeline currentStatus={status} tipo={esSegmentado ? 'segmentado' : 'agrupado'} />;
   };
+
+  // Check if we already sent documents today to prevent duplicates
+  const yaEnviadoHoySegmentado = documentosSegmentados.some(doc => {
+    const fecha = new Date(doc.fecha_generacion);
+    const hoy = new Date();
+    return fecha.toDateString() === hoy.toDateString() && doc.enviado_a_cadena_suministros;
+  });
+
+  const yaEnviadoHoyAgrupado = documentosAgrupados.some(doc => {
+    const fecha = new Date(doc.fecha_generacion);
+    const hoy = new Date();
+    return fecha.toDateString() === hoy.toDateString() && doc.enviado_a_gerente_almacen;
+  });
 
   return (
     <div className="space-y-6">
@@ -482,13 +502,22 @@ const GerenteOperacionesDashboard = () => {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Necesidades Segmentadas por Hospital</span>
-                <Button 
-                  onClick={generarYEnviarSegmentado} 
-                  disabled={generando || necesidadesSegmentadas.length === 0}
-                >
-                  <Send className="mr-2 h-4 w-4" />
-                  Enviar a Cadena de Suministros
-                </Button>
+                <div className="flex items-center gap-2">
+                  {yaEnviadoHoySegmentado && (
+                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                      <Ban className="mr-1 h-3 w-3" />
+                      Ya enviado hoy
+                    </Badge>
+                  )}
+                  <Button 
+                    onClick={generarYEnviarSegmentado} 
+                    disabled={generando || necesidadesSegmentadas.length === 0 || yaEnviadoHoySegmentado}
+                    variant={yaEnviadoHoySegmentado ? 'outline' : 'default'}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    {yaEnviadoHoySegmentado ? 'Documento ya enviado' : 'Enviar a Cadena de Suministros'}
+                  </Button>
+                </div>
               </CardTitle>
               <p className="text-sm text-muted-foreground">
                 Este documento se envía a Cadena de Suministros para distribución desde almacén central a hospitales
@@ -536,13 +565,22 @@ const GerenteOperacionesDashboard = () => {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Necesidades Consolidadas (Agrupado)</span>
-                <Button 
-                  onClick={generarYEnviarAgrupado} 
-                  disabled={generando || necesidadesAgrupadas.length === 0}
-                >
-                  <Send className="mr-2 h-4 w-4" />
-                  Enviar a Gerente de Almacén
-                </Button>
+                <div className="flex items-center gap-2">
+                  {yaEnviadoHoyAgrupado && (
+                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                      <Ban className="mr-1 h-3 w-3" />
+                      Ya enviado hoy
+                    </Badge>
+                  )}
+                  <Button 
+                    onClick={generarYEnviarAgrupado} 
+                    disabled={generando || necesidadesAgrupadas.length === 0 || yaEnviadoHoyAgrupado}
+                    variant={yaEnviadoHoyAgrupado ? 'outline' : 'default'}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    {yaEnviadoHoyAgrupado ? 'Documento ya enviado' : 'Enviar a Gerente de Almacén'}
+                  </Button>
+                </div>
               </CardTitle>
               <p className="text-sm text-muted-foreground">
                 Este documento se envía a Gerente de Almacén para gestión de compras con proveedores

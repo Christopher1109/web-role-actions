@@ -1805,6 +1805,7 @@ export type Database = {
         | "gerente_operaciones"
         | "gerente_almacen"
         | "cadena_suministros"
+        | "finanzas"
       especialidad_medica:
         | "anestesiologia"
         | "cirugia_general"
@@ -1951,6 +1952,7 @@ export const Constants = {
         "gerente_operaciones",
         "gerente_almacen",
         "cadena_suministros",
+        "finanzas",
       ],
       especialidad_medica: [
         "anestesiologia",

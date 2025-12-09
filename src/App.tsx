@@ -112,6 +112,9 @@ const AppContent = () => {
               {userRole === 'cadena_suministros' && (
                 <Route path="/distribucion" element={<CadenaSuministrosDashboard />} />
               )}
+              {userRole === 'finanzas' && (
+                <Route path="/finanzas" element={<FinanzasDashboard />} />
+              )}
               <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>

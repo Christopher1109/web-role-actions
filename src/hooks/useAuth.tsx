@@ -73,6 +73,7 @@ export const useAuth = () => {
           'gerente_operaciones', 
           'gerente_almacen', 
           'cadena_suministros',
+          'finanzas',
           'gerente', 
           'supervisor', 
           'lider', 

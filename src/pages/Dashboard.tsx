@@ -17,6 +17,7 @@ const Dashboard = ({ userRole }: DashboardProps) => {
     gerente_operaciones: 'Gerente de Operaciones',
     gerente_almacen: 'Gerente de Almacén',
     cadena_suministros: 'Cadena de Suministros',
+    finanzas: 'Finanzas',
   };
 
   const stats = [

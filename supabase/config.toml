@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.fix-profiles-hospitals]
 verify_jwt = false
+
+[functions.rebuild-all-users]
+verify_jwt = false

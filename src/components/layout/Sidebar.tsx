@@ -39,6 +39,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     gerente_operaciones: 'Gerente de Operaciones',
     gerente_almacen: 'Gerente de Almacén',
     cadena_suministros: 'Cadena de Suministros',
+    finanzas: 'Finanzas',
   };
 
   const menuItems = [
@@ -46,7 +47,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/alertas-operaciones', icon: AlertTriangle, label: 'Alertas y Necesidades', roles: ['gerente_operaciones'] },
     { path: '/almacen-central', icon: Warehouse, label: 'Almacén Central', roles: ['gerente_almacen'] },
     { path: '/distribucion', icon: Truck, label: 'Distribución', roles: ['cadena_suministros'] },
-    { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['gerente_operaciones'] },
+    { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['finanzas'] },
     { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
     { path: '/alertas-transferencia', icon: AlertTriangle, label: 'Recepción Insumos', roles: ['almacenista', 'lider'] },

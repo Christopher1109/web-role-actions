@@ -6,7 +6,8 @@ export type UserRole =
   | 'gerente'
   | 'gerente_operaciones'
   | 'gerente_almacen'
-  | 'cadena_suministros';
+  | 'cadena_suministros'
+  | 'finanzas';
 
 export interface Doctor {
   id: string;

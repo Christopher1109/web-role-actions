@@ -223,12 +223,13 @@ const GerenteAlmacenDashboard = () => {
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet) as Array<{
-          'ID Insumo': string;
+          'No.': number;
           'Clave': string;
-          'Nombre Insumo': string;
+          'Nombre del Insumo': string;
           'Cantidad Requerida': number;
           'Cantidad Proveedor': number;
-          'Precio Unitario': number;
+          'Precio Unitario ($)': number;
+          'ID Sistema': string;
         }>;
 
         const itemsConCantidad = jsonData.filter(row => 
@@ -266,10 +267,10 @@ const GerenteAlmacenDashboard = () => {
 
         const items = itemsConCantidad.map(row => ({
           pedido_id: orden.id,
-          insumo_catalogo_id: row['ID Insumo'],
+          insumo_catalogo_id: row['ID Sistema'],
           cantidad_solicitada: row['Cantidad Proveedor'],
           cantidad_recibida: 0,
-          precio_unitario: row['Precio Unitario'] || null,
+          precio_unitario: row['Precio Unitario ($)'] || null,
           estado: 'pendiente'
         }));
 

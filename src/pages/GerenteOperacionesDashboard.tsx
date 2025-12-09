@@ -5,10 +5,14 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { AlertTriangle, FileText, Send, RefreshCw, Building2, Package, CheckCircle2, Clock, Ban, Settings2 } from 'lucide-react';
-import { StatusTimeline, StatusBadge } from '@/components/StatusTimeline';
+import { AlertTriangle, FileText, Send, RefreshCw, Building2, Package, CheckCircle2, Clock, Settings2, Edit, History, Eye } from 'lucide-react';
+import { StatusTimeline } from '@/components/StatusTimeline';
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 import EdicionMasivaMínimos from '@/components/forms/EdicionMasivaMínimos';
 
@@ -25,60 +29,46 @@ interface AlertaInventario {
   insumo?: { id: string; nombre: string; clave: string };
 }
 
-interface NecesidadSegmentada {
-  hospital_id: string;
-  hospital_nombre: string;
-  insumo_catalogo_id: string;
-  insumo_nombre: string;
-  insumo_clave: string;
-  existencia_actual: number;
-  minimo: number;
-  faltante_requerido: number;
-}
-
 interface NecesidadAgrupada {
   insumo_catalogo_id: string;
   insumo_nombre: string;
   insumo_clave: string;
   total_faltante: number;
   hospitales_afectados: number;
+  cantidad_editable: number;
+  seleccionada: boolean;
+  alertas_ids: string[];
 }
 
-interface DocumentoSegmentado {
-  id: string;
-  fecha_generacion: string;
-  estado: string;
-  enviado_a_cadena_suministros: boolean;
-  enviado_at: string | null;
-  procesado_por_cadena: boolean;
-}
-
-interface DocumentoAgrupado {
+interface DocumentoEnviado {
   id: string;
   fecha_generacion: string;
   estado: string;
   enviado_a_gerente_almacen: boolean;
   enviado_at: string | null;
   procesado_por_almacen: boolean;
+  procesado_at: string | null;
+  total_items?: number;
 }
 
 const GerenteOperacionesDashboard = () => {
   const [alertas, setAlertas] = useState<AlertaInventario[]>([]);
-  const [necesidadesSegmentadas, setNecesidadesSegmentadas] = useState<NecesidadSegmentada[]>([]);
   const [necesidadesAgrupadas, setNecesidadesAgrupadas] = useState<NecesidadAgrupada[]>([]);
-  const [documentosSegmentados, setDocumentosSegmentados] = useState<DocumentoSegmentado[]>([]);
-  const [documentosAgrupados, setDocumentosAgrupados] = useState<DocumentoAgrupado[]>([]);
+  const [documentosEnviados, setDocumentosEnviados] = useState<DocumentoEnviado[]>([]);
   const [hospitales, setHospitales] = useState<{ id: string; nombre: string }[]>([]);
   const [filtroHospital, setFiltroHospital] = useState<string>('todos');
   const [filtroEstado, setFiltroEstado] = useState<string>('activa');
   const [loading, setLoading] = useState(true);
   const [generando, setGenerando] = useState(false);
+  
+  // Dialog para editar y enviar
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [itemsParaEnviar, setItemsParaEnviar] = useState<NecesidadAgrupada[]>([]);
 
   const fetchDataCallback = useCallback(() => {
     fetchData();
   }, [filtroHospital, filtroEstado]);
 
-  // Realtime notifications
   useRealtimeNotifications({
     userRole: 'gerente_operaciones',
     onPedidoActualizado: fetchDataCallback,
@@ -101,7 +91,7 @@ const GerenteOperacionesDashboard = () => {
         setHospitales(hospitalesData.map(h => ({ id: h.id, nombre: h.display_name || h.nombre })));
       }
 
-      // Fetch alertas with filters
+      // Fetch alertas activas (solo las que no han sido procesadas)
       let alertasQuery = supabase
         .from('insumos_alertas')
         .select(`
@@ -125,25 +115,17 @@ const GerenteOperacionesDashboard = () => {
       if (alertasError) throw alertasError;
       setAlertas(alertasData || []);
 
-      // Fetch existing documents
-      const { data: docsSegData } = await supabase
-        .from('documentos_necesidades_segmentado')
-        .select('*')
-        .order('fecha_generacion', { ascending: false })
-        .limit(10);
-      
-      setDocumentosSegmentados(docsSegData || []);
-
-      const { data: docsAgrData } = await supabase
+      // Fetch documentos enviados
+      const { data: docsData } = await supabase
         .from('documentos_necesidades_agrupado')
         .select('*')
         .order('fecha_generacion', { ascending: false })
-        .limit(10);
+        .limit(20);
       
-      setDocumentosAgrupados(docsAgrData || []);
+      setDocumentosEnviados(docsData || []);
 
-      // Calculate necesidades segmentadas from alertas activas
-      await calcularNecesidades();
+      // Calcular necesidades agrupadas solo de alertas activas
+      await calcularNecesidades(alertasData || []);
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -153,60 +135,80 @@ const GerenteOperacionesDashboard = () => {
     }
   };
 
-  const calcularNecesidades = async () => {
-    try {
-      const { data: alertasActivas, error } = await supabase
-        .from('insumos_alertas')
-        .select(`
-          *,
-          hospital:hospitales(id, nombre, display_name),
-          insumo:insumos_catalogo(id, nombre, clave)
-        `)
-        .eq('estado', 'activa');
-
-      if (error) throw error;
-
-      const segmentadas: NecesidadSegmentada[] = (alertasActivas || []).map(alerta => ({
-        hospital_id: alerta.hospital_id,
-        hospital_nombre: alerta.hospital?.display_name || alerta.hospital?.nombre || 'N/A',
-        insumo_catalogo_id: alerta.insumo_catalogo_id,
-        insumo_nombre: alerta.insumo?.nombre || 'N/A',
-        insumo_clave: alerta.insumo?.clave || 'N/A',
-        existencia_actual: alerta.cantidad_actual,
-        minimo: alerta.minimo_permitido,
-        faltante_requerido: Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual)
-      }));
-
-      setNecesidadesSegmentadas(segmentadas);
-
-      const agrupadasMap = new Map<string, NecesidadAgrupada>();
-      
-      segmentadas.forEach(seg => {
-        if (agrupadasMap.has(seg.insumo_catalogo_id)) {
-          const existing = agrupadasMap.get(seg.insumo_catalogo_id)!;
-          existing.total_faltante += seg.faltante_requerido;
+  const calcularNecesidades = async (alertasActivas: AlertaInventario[]) => {
+    const agrupadasMap = new Map<string, NecesidadAgrupada>();
+    
+    alertasActivas
+      .filter(a => a.estado === 'activa')
+      .forEach(alerta => {
+        const faltante = Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual);
+        
+        if (agrupadasMap.has(alerta.insumo_catalogo_id)) {
+          const existing = agrupadasMap.get(alerta.insumo_catalogo_id)!;
+          existing.total_faltante += faltante;
           existing.hospitales_afectados += 1;
+          existing.cantidad_editable += faltante;
+          existing.alertas_ids.push(alerta.id);
         } else {
-          agrupadasMap.set(seg.insumo_catalogo_id, {
-            insumo_catalogo_id: seg.insumo_catalogo_id,
-            insumo_nombre: seg.insumo_nombre,
-            insumo_clave: seg.insumo_clave,
-            total_faltante: seg.faltante_requerido,
-            hospitales_afectados: 1
+          agrupadasMap.set(alerta.insumo_catalogo_id, {
+            insumo_catalogo_id: alerta.insumo_catalogo_id,
+            insumo_nombre: alerta.insumo?.nombre || 'N/A',
+            insumo_clave: alerta.insumo?.clave || 'N/A',
+            total_faltante: faltante,
+            hospitales_afectados: 1,
+            cantidad_editable: faltante,
+            seleccionada: false,
+            alertas_ids: [alerta.id]
           });
         }
       });
 
-      setNecesidadesAgrupadas(Array.from(agrupadasMap.values()).sort((a, b) => b.total_faltante - a.total_faltante));
-
-    } catch (error) {
-      console.error('Error calculating needs:', error);
-    }
+    setNecesidadesAgrupadas(Array.from(agrupadasMap.values()).sort((a, b) => b.total_faltante - a.total_faltante));
   };
 
-  const generarYEnviarSegmentado = async () => {
-    if (necesidadesSegmentadas.length === 0) {
-      toast.error('No hay necesidades para enviar');
+  const toggleSeleccion = (insumoId: string) => {
+    setNecesidadesAgrupadas(prev => prev.map(n => 
+      n.insumo_catalogo_id === insumoId 
+        ? { ...n, seleccionada: !n.seleccionada }
+        : n
+    ));
+  };
+
+  const seleccionarTodos = () => {
+    const todasSeleccionadas = necesidadesAgrupadas.every(n => n.seleccionada);
+    setNecesidadesAgrupadas(prev => prev.map(n => ({ ...n, seleccionada: !todasSeleccionadas })));
+  };
+
+  const actualizarCantidad = (insumoId: string, cantidad: number) => {
+    setNecesidadesAgrupadas(prev => prev.map(n => 
+      n.insumo_catalogo_id === insumoId 
+        ? { ...n, cantidad_editable: Math.max(0, cantidad) }
+        : n
+    ));
+  };
+
+  const abrirDialogEnvio = () => {
+    const seleccionadas = necesidadesAgrupadas.filter(n => n.seleccionada && n.cantidad_editable > 0);
+    if (seleccionadas.length === 0) {
+      toast.error('Selecciona al menos un insumo para enviar');
+      return;
+    }
+    setItemsParaEnviar(seleccionadas);
+    setDialogOpen(true);
+  };
+
+  const actualizarCantidadEnDialog = (insumoId: string, cantidad: number) => {
+    setItemsParaEnviar(prev => prev.map(n => 
+      n.insumo_catalogo_id === insumoId 
+        ? { ...n, cantidad_editable: Math.max(0, cantidad) }
+        : n
+    ));
+  };
+
+  const enviarAGerenteAlmacen = async () => {
+    const itemsValidos = itemsParaEnviar.filter(n => n.cantidad_editable > 0);
+    if (itemsValidos.length === 0) {
+      toast.error('No hay items con cantidad mayor a 0');
       return;
     }
 
@@ -214,57 +216,7 @@ const GerenteOperacionesDashboard = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Create document record with enviado flag
-      const { data: documento, error: docError } = await supabase
-        .from('documentos_necesidades_segmentado')
-        .insert({
-          generado_por: user?.id,
-          estado: 'enviado',
-          enviado_a_cadena_suministros: true,
-          enviado_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (docError) throw docError;
-
-      // Insert details
-      const detalles = necesidadesSegmentadas.map(n => ({
-        documento_id: documento.id,
-        hospital_id: n.hospital_id,
-        insumo_catalogo_id: n.insumo_catalogo_id,
-        existencia_actual: n.existencia_actual,
-        minimo: n.minimo,
-        faltante_requerido: n.faltante_requerido
-      }));
-
-      const { error: detError } = await supabase
-        .from('documento_segmentado_detalle')
-        .insert(detalles);
-
-      if (detError) throw detError;
-
-      toast.success('Documento enviado a Cadena de Suministros');
-      fetchData();
-    } catch (error) {
-      console.error('Error generating document:', error);
-      toast.error('Error al generar documento');
-    } finally {
-      setGenerando(false);
-    }
-  };
-
-  const generarYEnviarAgrupado = async () => {
-    if (necesidadesAgrupadas.length === 0) {
-      toast.error('No hay necesidades para enviar');
-      return;
-    }
-
-    setGenerando(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // Create document record with enviado flag
+      // 1. Crear documento agrupado (solo va a Gerente Almacén, NO a Cadena)
       const { data: documento, error: docError } = await supabase
         .from('documentos_necesidades_agrupado')
         .insert({
@@ -278,11 +230,11 @@ const GerenteOperacionesDashboard = () => {
 
       if (docError) throw docError;
 
-      // Insert details
-      const detalles = necesidadesAgrupadas.map(n => ({
+      // 2. Insertar detalles
+      const detalles = itemsValidos.map(n => ({
         documento_id: documento.id,
         insumo_catalogo_id: n.insumo_catalogo_id,
-        total_faltante_requerido: n.total_faltante
+        total_faltante_requerido: n.cantidad_editable
       }));
 
       const { error: detError } = await supabase
@@ -291,8 +243,28 @@ const GerenteOperacionesDashboard = () => {
 
       if (detError) throw detError;
 
-      toast.success('Documento enviado a Gerente de Almacén');
+      // 3. Marcar las alertas incluidas como "en_proceso"
+      const todasAlertasIds = itemsValidos.flatMap(n => n.alertas_ids);
+      
+      if (todasAlertasIds.length > 0) {
+        await supabase
+          .from('insumos_alertas')
+          .update({ 
+            estado: 'en_proceso',
+            updated_at: new Date().toISOString()
+          })
+          .in('id', todasAlertasIds);
+      }
+
+      toast.success(`Documento enviado a Gerente de Almacén con ${itemsValidos.length} insumos`, {
+        description: 'El siguiente paso es que Gerente Almacén descargue el Excel, consulte proveedores y cree la orden de compra.',
+        duration: 5000
+      });
+
+      setDialogOpen(false);
+      setItemsParaEnviar([]);
       fetchData();
+
     } catch (error) {
       console.error('Error generating document:', error);
       toast.error('Error al generar documento');
@@ -320,31 +292,9 @@ const GerenteOperacionesDashboard = () => {
     }
   };
 
-  const getDocumentoEstadoBadge = (doc: DocumentoSegmentado | DocumentoAgrupado) => {
-    const esSegmentado = 'enviado_a_cadena_suministros' in doc;
-    const enviado = esSegmentado 
-      ? (doc as DocumentoSegmentado).enviado_a_cadena_suministros 
-      : (doc as DocumentoAgrupado).enviado_a_gerente_almacen;
-    const procesado = esSegmentado 
-      ? (doc as DocumentoSegmentado).procesado_por_cadena 
-      : (doc as DocumentoAgrupado).procesado_por_almacen;
-    const status = procesado ? 'procesado' : (enviado ? 'enviado' : 'generado');
-
-    return <StatusTimeline currentStatus={status} tipo={esSegmentado ? 'segmentado' : 'agrupado'} />;
-  };
-
-  // Check if we already sent documents today to prevent duplicates
-  const yaEnviadoHoySegmentado = documentosSegmentados.some(doc => {
-    const fecha = new Date(doc.fecha_generacion);
-    const hoy = new Date();
-    return fecha.toDateString() === hoy.toDateString() && doc.enviado_a_cadena_suministros;
-  });
-
-  const yaEnviadoHoyAgrupado = documentosAgrupados.some(doc => {
-    const fecha = new Date(doc.fecha_generacion);
-    const hoy = new Date();
-    return fecha.toDateString() === hoy.toDateString() && doc.enviado_a_gerente_almacen;
-  });
+  const seleccionadasCount = necesidadesAgrupadas.filter(n => n.seleccionada).length;
+  const totalSeleccionado = necesidadesAgrupadas.filter(n => n.seleccionada).reduce((sum, n) => sum + n.cantidad_editable, 0);
+  const alertasActivas = alertas.filter(a => a.estado === 'activa');
 
   return (
     <div className="space-y-6">
@@ -367,7 +317,7 @@ const GerenteOperacionesDashboard = () => {
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{alertas.filter(a => a.estado === 'activa').length}</div>
+            <div className="text-2xl font-bold">{alertasActivas.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -377,108 +327,146 @@ const GerenteOperacionesDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {new Set(alertas.filter(a => a.estado === 'activa').map(a => a.hospital_id)).size}
+              {new Set(alertasActivas.map(a => a.hospital_id)).size}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Insumos Críticos</CardTitle>
-            <Package className="h-4 w-4 text-destructive" />
+            <CardTitle className="text-sm font-medium">Insumos Únicos</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {alertas.filter(a => a.estado === 'activa' && a.prioridad === 'critica').length}
-            </div>
+            <div className="text-2xl font-bold">{necesidadesAgrupadas.length}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Faltante</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Seleccionados</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {necesidadesAgrupadas.reduce((sum, n) => sum + n.total_faltante, 0).toLocaleString()}
-            </div>
+            <div className="text-2xl font-bold">{seleccionadasCount}</div>
+            <p className="text-xs text-muted-foreground">{totalSeleccionado.toLocaleString()} unidades</p>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="alertas" className="space-y-4">
+      <Tabs defaultValue="consolidar" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="alertas">Alertas de Inventario</TabsTrigger>
+          <TabsTrigger value="consolidar">
+            Consolidar y Enviar
+            {necesidadesAgrupadas.length > 0 && (
+              <Badge variant="destructive" className="ml-2">{necesidadesAgrupadas.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="alertas">Detalle Alertas</TabsTrigger>
           <TabsTrigger value="minimos" className="flex items-center gap-1">
             <Settings2 className="h-3.5 w-3.5" />
             Configurar Mínimos
           </TabsTrigger>
-          <TabsTrigger value="segmentado">Para Cadena Suministros</TabsTrigger>
-          <TabsTrigger value="agrupado">Para Gerente Almacén</TabsTrigger>
-          <TabsTrigger value="historial">Historial de Envíos</TabsTrigger>
+          <TabsTrigger value="historial">
+            <History className="h-3.5 w-3.5 mr-1" />
+            Historial
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="alertas" className="space-y-4">
-          {/* Summary Cards by Priority */}
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card className="border-l-4 border-l-red-500">
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Crítica</p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {alertas.filter(a => a.estado === 'activa' && a.prioridad === 'critica').length}
-                    </p>
-                  </div>
-                  <AlertTriangle className="h-8 w-8 text-red-500" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-orange-500">
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Alta</p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {alertas.filter(a => a.estado === 'activa' && a.prioridad === 'alta').length}
-                    </p>
-                  </div>
-                  <AlertTriangle className="h-8 w-8 text-orange-500" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-yellow-500">
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Media</p>
-                    <p className="text-2xl font-bold text-yellow-600">
-                      {alertas.filter(a => a.estado === 'activa' && a.prioridad === 'media').length}
-                    </p>
-                  </div>
-                  <Package className="h-8 w-8 text-yellow-500" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="border-l-4 border-l-blue-500">
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Baja</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {alertas.filter(a => a.estado === 'activa' && a.prioridad === 'baja').length}
-                    </p>
-                  </div>
-                  <Package className="h-8 w-8 text-blue-500" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Filters and Table */}
+        {/* Tab: Consolidar y Enviar */}
+        <TabsContent value="consolidar" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Detalle de Alertas</span>
+                <div className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  <span>Necesidades Agrupadas por Insumo</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={seleccionarTodos}>
+                    {necesidadesAgrupadas.every(n => n.seleccionada) ? 'Deseleccionar Todos' : 'Seleccionar Todos'}
+                  </Button>
+                  <Button 
+                    onClick={abrirDialogEnvio} 
+                    disabled={seleccionadasCount === 0}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    Enviar Seleccionados ({seleccionadasCount})
+                  </Button>
+                </div>
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Selecciona los insumos que deseas incluir en el pedido. Puedes editar las cantidades antes de enviar.
+                <br />
+                <strong>Flujo:</strong> Gerente Operaciones → Gerente Almacén → Finanzas → Cadena de Suministros
+              </p>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Cargando...</div>
+              ) : necesidadesAgrupadas.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <AlertTriangle className="mx-auto h-12 w-12 text-muted-foreground/50 mb-2" />
+                  No hay alertas activas para procesar
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox 
+                          checked={necesidadesAgrupadas.every(n => n.seleccionada)}
+                          onCheckedChange={seleccionarTodos}
+                        />
+                      </TableHead>
+                      <TableHead>Clave</TableHead>
+                      <TableHead>Insumo</TableHead>
+                      <TableHead className="text-right">Total Faltante</TableHead>
+                      <TableHead className="text-right">Hospitales</TableHead>
+                      <TableHead className="text-right w-32">Cantidad a Pedir</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {necesidadesAgrupadas.map((n) => (
+                      <TableRow 
+                        key={n.insumo_catalogo_id} 
+                        className={n.seleccionada ? 'bg-primary/5' : ''}
+                      >
+                        <TableCell>
+                          <Checkbox 
+                            checked={n.seleccionada}
+                            onCheckedChange={() => toggleSeleccion(n.insumo_catalogo_id)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{n.insumo_clave}</TableCell>
+                        <TableCell className="font-medium">{n.insumo_nombre}</TableCell>
+                        <TableCell className="text-right font-mono text-destructive">
+                          {n.total_faltante.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">{n.hospitales_afectados}</TableCell>
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={n.cantidad_editable}
+                            onChange={(e) => actualizarCantidad(n.insumo_catalogo_id, parseInt(e.target.value) || 0)}
+                            className="w-24 text-right font-mono ml-auto"
+                            disabled={!n.seleccionada}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab: Detalle Alertas */}
+        <TabsContent value="alertas" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Detalle de Alertas por Hospital</span>
                 <div className="flex gap-2">
                   <Select value={filtroHospital} onValueChange={setFiltroHospital}>
                     <SelectTrigger className="w-[200px]">
@@ -504,9 +492,6 @@ const GerenteOperacionesDashboard = () => {
                   </Select>
                 </div>
               </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Los mínimos se configuran desde el dashboard del Almacenista en cada hospital (menú Inventario → editar insumo)
-              </p>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -527,7 +512,7 @@ const GerenteOperacionesDashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {alertas.map((alerta) => (
+                    {alertas.slice(0, 100).map((alerta) => (
                       <TableRow key={alerta.id} className={alerta.prioridad === 'critica' ? 'bg-red-50/50' : ''}>
                         <TableCell>
                           <Badge variant={getPrioridadColor(alerta.prioridad)} className="uppercase text-xs">
@@ -554,7 +539,7 @@ const GerenteOperacionesDashboard = () => {
                         </TableCell>
                         <TableCell>
                           <Badge variant={getEstadoColor(alerta.estado)}>
-                            {alerta.estado}
+                            {alerta.estado === 'en_proceso' ? 'En Proceso' : alerta.estado}
                           </Badge>
                         </TableCell>
                       </TableRow>
@@ -562,192 +547,162 @@ const GerenteOperacionesDashboard = () => {
                   </TableBody>
                 </Table>
               )}
+              {alertas.length > 100 && (
+                <p className="text-sm text-muted-foreground text-center mt-4">
+                  Mostrando 100 de {alertas.length} alertas
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Tab: Configurar Mínimos */}
         <TabsContent value="minimos" className="space-y-4">
           <EdicionMasivaMínimos esGlobal={true} onActualizado={fetchData} />
         </TabsContent>
 
-        <TabsContent value="segmentado" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Necesidades Segmentadas por Hospital</span>
-                <div className="flex items-center gap-2">
-                  {yaEnviadoHoySegmentado && (
-                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                      <Ban className="mr-1 h-3 w-3" />
-                      Ya enviado hoy
-                    </Badge>
-                  )}
-                  <Button 
-                    onClick={generarYEnviarSegmentado} 
-                    disabled={generando || necesidadesSegmentadas.length === 0 || yaEnviadoHoySegmentado}
-                    variant={yaEnviadoHoySegmentado ? 'outline' : 'default'}
-                  >
-                    <Send className="mr-2 h-4 w-4" />
-                    {yaEnviadoHoySegmentado ? 'Documento ya enviado' : 'Enviar a Cadena de Suministros'}
-                  </Button>
-                </div>
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Este documento se envía a Cadena de Suministros para distribución desde almacén central a hospitales
-              </p>
-            </CardHeader>
-            <CardContent>
-              {necesidadesSegmentadas.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No hay necesidades activas
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Hospital</TableHead>
-                      <TableHead>Clave</TableHead>
-                      <TableHead>Insumo</TableHead>
-                      <TableHead className="text-right">Existencia</TableHead>
-                      <TableHead className="text-right">Mínimo</TableHead>
-                      <TableHead className="text-right">Faltante</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {necesidadesSegmentadas.map((n, idx) => (
-                      <TableRow key={`${n.hospital_id}-${n.insumo_catalogo_id}-${idx}`}>
-                        <TableCell className="font-medium">{n.hospital_nombre}</TableCell>
-                        <TableCell className="font-mono text-sm">{n.insumo_clave}</TableCell>
-                        <TableCell>{n.insumo_nombre}</TableCell>
-                        <TableCell className="text-right font-mono">{n.existencia_actual}</TableCell>
-                        <TableCell className="text-right font-mono">{n.minimo}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-destructive">
-                          {n.faltante_requerido}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="agrupado" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Necesidades Consolidadas (Agrupado)</span>
-                <div className="flex items-center gap-2">
-                  {yaEnviadoHoyAgrupado && (
-                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                      <Ban className="mr-1 h-3 w-3" />
-                      Ya enviado hoy
-                    </Badge>
-                  )}
-                  <Button 
-                    onClick={generarYEnviarAgrupado} 
-                    disabled={generando || necesidadesAgrupadas.length === 0 || yaEnviadoHoyAgrupado}
-                    variant={yaEnviadoHoyAgrupado ? 'outline' : 'default'}
-                  >
-                    <Send className="mr-2 h-4 w-4" />
-                    {yaEnviadoHoyAgrupado ? 'Documento ya enviado' : 'Enviar a Gerente de Almacén'}
-                  </Button>
-                </div>
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Este documento se envía a Gerente de Almacén para gestión de compras con proveedores
-              </p>
-            </CardHeader>
-            <CardContent>
-              {necesidadesAgrupadas.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No hay necesidades activas
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Clave</TableHead>
-                      <TableHead>Insumo</TableHead>
-                      <TableHead className="text-right">Total Faltante</TableHead>
-                      <TableHead className="text-right">Hospitales Afectados</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {necesidadesAgrupadas.map((n) => (
-                      <TableRow key={n.insumo_catalogo_id}>
-                        <TableCell className="font-mono text-sm">{n.insumo_clave}</TableCell>
-                        <TableCell className="font-medium">{n.insumo_nombre}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-destructive">
-                          {n.total_faltante.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">{n.hospitales_afectados}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
+        {/* Tab: Historial */}
         <TabsContent value="historial" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Enviados a Cadena de Suministros</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {documentosSegmentados.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">Sin documentos enviados</p>
-                ) : (
-                  <div className="space-y-2">
-                    {documentosSegmentados.map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <p className="font-mono text-sm">
-                            {new Date(doc.fecha_generacion).toLocaleDateString('es-MX', {
-                              day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                            })}
-                          </p>
-                        </div>
-                        {getDocumentoEstadoBadge(doc)}
-                      </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Historial de Envíos a Gerente de Almacén
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Documentos generados y su estado en el flujo de compras
+              </p>
+            </CardHeader>
+            <CardContent>
+              {documentosEnviados.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No hay documentos enviados
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha Envío</TableHead>
+                      <TableHead>Estado Flujo</TableHead>
+                      <TableHead>Procesado por Almacén</TableHead>
+                      <TableHead>Fecha Procesado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {documentosEnviados.map(doc => (
+                      <TableRow key={doc.id}>
+                        <TableCell className="font-mono">
+                          {new Date(doc.fecha_generacion).toLocaleDateString('es-MX', {
+                            day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <StatusTimeline 
+                            currentStatus={doc.procesado_por_almacen ? 'procesado' : 'enviado'} 
+                            tipo="agrupado" 
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {doc.procesado_por_almacen ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700">
+                              <CheckCircle2 className="mr-1 h-3 w-3" />
+                              Sí
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">
+                              <Clock className="mr-1 h-3 w-3" />
+                              Pendiente
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {doc.procesado_at 
+                            ? new Date(doc.procesado_at).toLocaleDateString('es-MX', {
+                                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                              })
+                            : '-'
+                          }
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Enviados a Gerente de Almacén</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {documentosAgrupados.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">Sin documentos enviados</p>
-                ) : (
-                  <div className="space-y-2">
-                    {documentosAgrupados.map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <p className="font-mono text-sm">
-                            {new Date(doc.fecha_generacion).toLocaleDateString('es-MX', {
-                              day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                            })}
-                          </p>
-                        </div>
-                        {getDocumentoEstadoBadge(doc)}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog: Confirmar y Editar antes de enviar */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              Revisar y Enviar a Gerente de Almacén
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Revisa las cantidades antes de enviar. Este documento irá al Gerente de Almacén para que gestione la compra con proveedores.
+            </p>
+
+            <ScrollArea className="max-h-[50vh]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Clave</TableHead>
+                    <TableHead>Insumo</TableHead>
+                    <TableHead className="text-right">Faltante Original</TableHead>
+                    <TableHead className="text-right w-32">Cantidad a Pedir</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {itemsParaEnviar.map((item) => (
+                    <TableRow key={item.insumo_catalogo_id}>
+                      <TableCell className="font-mono text-sm">{item.insumo_clave}</TableCell>
+                      <TableCell className="font-medium">{item.insumo_nombre}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {item.total_faltante.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={item.cantidad_editable}
+                          onChange={(e) => actualizarCantidadEnDialog(item.insumo_catalogo_id, parseInt(e.target.value) || 0)}
+                          className="w-24 text-right font-mono ml-auto"
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+
+            <div className="flex justify-between items-center pt-4 border-t">
+              <div className="text-sm">
+                <span className="text-muted-foreground">Total items:</span>{' '}
+                <span className="font-bold">{itemsParaEnviar.length}</span>
+                <span className="mx-2">|</span>
+                <span className="text-muted-foreground">Total unidades:</span>{' '}
+                <span className="font-bold">{itemsParaEnviar.reduce((sum, i) => sum + i.cantidad_editable, 0).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={enviarAGerenteAlmacen} disabled={generando}>
+              <Send className="mr-2 h-4 w-4" />
+              {generando ? 'Enviando...' : 'Enviar a Gerente de Almacén'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

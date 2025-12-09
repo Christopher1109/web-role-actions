@@ -1532,6 +1532,35 @@ export type Database = {
         }
         Relationships: []
       }
+      supervisor_hospital_assignments: {
+        Row: {
+          created_at: string
+          hospital_id: string
+          id: string
+          supervisor_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          hospital_id: string
+          id?: string
+          supervisor_user_id: string
+        }
+        Update: {
+          created_at?: string
+          hospital_id?: string
+          id?: string
+          supervisor_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supervisor_hospital_assignments_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transferencias_central_hospital: {
         Row: {
           alerta_creada: boolean | null

@@ -3,15 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { AlertTriangle, FileText, Send, RefreshCw, Building2, Package, CheckCircle2, Clock, Settings2, Edit, History, Eye } from 'lucide-react';
+import { AlertTriangle, FileText, Send, RefreshCw, Building2, Package, CheckCircle2, Clock, Settings2, History, Eye, ChevronRight } from 'lucide-react';
 import { StatusTimeline } from '@/components/StatusTimeline';
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 import EdicionMasivaMínimos from '@/components/forms/EdicionMasivaMínimos';
@@ -29,14 +27,20 @@ interface AlertaInventario {
   insumo?: { id: string; nombre: string; clave: string };
 }
 
-interface NecesidadAgrupada {
+interface HospitalAlerta {
+  hospital_id: string;
+  hospital_nombre: string;
+  alertas: AlertaInventario[];
+  total_faltante: number;
+  prioridad_max: string;
+}
+
+interface NecesidadConsolidada {
   insumo_catalogo_id: string;
   insumo_nombre: string;
   insumo_clave: string;
   total_faltante: number;
-  hospitales_afectados: number;
-  cantidad_editable: number;
-  seleccionada: boolean;
+  hospitales: { hospital_id: string; hospital_nombre: string; faltante: number }[];
   alertas_ids: string[];
 }
 
@@ -53,21 +57,22 @@ interface DocumentoEnviado {
 
 const GerenteOperacionesDashboard = () => {
   const [alertas, setAlertas] = useState<AlertaInventario[]>([]);
-  const [necesidadesAgrupadas, setNecesidadesAgrupadas] = useState<NecesidadAgrupada[]>([]);
+  const [hospitalAlertas, setHospitalAlertas] = useState<HospitalAlerta[]>([]);
+  const [necesidadesConsolidadas, setNecesidadesConsolidadas] = useState<NecesidadConsolidada[]>([]);
   const [documentosEnviados, setDocumentosEnviados] = useState<DocumentoEnviado[]>([]);
-  const [hospitales, setHospitales] = useState<{ id: string; nombre: string }[]>([]);
-  const [filtroHospital, setFiltroHospital] = useState<string>('todos');
-  const [filtroEstado, setFiltroEstado] = useState<string>('activa');
   const [loading, setLoading] = useState(true);
   const [generando, setGenerando] = useState(false);
   
-  // Dialog para editar y enviar
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [itemsParaEnviar, setItemsParaEnviar] = useState<NecesidadAgrupada[]>([]);
+  // Dialog para ver alertas de un hospital
+  const [dialogHospitalOpen, setDialogHospitalOpen] = useState(false);
+  const [selectedHospital, setSelectedHospital] = useState<HospitalAlerta | null>(null);
+
+  // Dialog para confirmar envío consolidado
+  const [dialogEnvioOpen, setDialogEnvioOpen] = useState(false);
 
   const fetchDataCallback = useCallback(() => {
     fetchData();
-  }, [filtroHospital, filtroEstado]);
+  }, []);
 
   useRealtimeNotifications({
     userRole: 'gerente_operaciones',
@@ -76,44 +81,31 @@ const GerenteOperacionesDashboard = () => {
 
   useEffect(() => {
     fetchData();
-  }, [filtroHospital, filtroEstado]);
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch hospitales
-      const { data: hospitalesData } = await supabase
-        .from('hospitales')
-        .select('id, nombre, display_name')
-        .order('nombre');
-      
-      if (hospitalesData) {
-        setHospitales(hospitalesData.map(h => ({ id: h.id, nombre: h.display_name || h.nombre })));
-      }
-
-      // Fetch alertas activas (solo las que no han sido procesadas)
-      let alertasQuery = supabase
+      // Fetch alertas activas
+      const { data: alertasData, error: alertasError } = await supabase
         .from('insumos_alertas')
         .select(`
           *,
           hospital:hospitales(id, nombre, display_name),
           insumo:insumos_catalogo(id, nombre, clave)
         `)
+        .eq('estado', 'activa')
         .order('prioridad', { ascending: true })
         .order('created_at', { ascending: false });
-
-      if (filtroEstado !== 'todos') {
-        alertasQuery = alertasQuery.eq('estado', filtroEstado);
-      }
-
-      if (filtroHospital !== 'todos') {
-        alertasQuery = alertasQuery.eq('hospital_id', filtroHospital);
-      }
-
-      const { data: alertasData, error: alertasError } = await alertasQuery;
       
       if (alertasError) throw alertasError;
       setAlertas(alertasData || []);
+
+      // Agrupar alertas por hospital
+      agruparPorHospital(alertasData || []);
+      
+      // Consolidar necesidades por insumo
+      consolidarNecesidades(alertasData || []);
 
       // Fetch documentos enviados
       const { data: docsData } = await supabase
@@ -124,9 +116,6 @@ const GerenteOperacionesDashboard = () => {
       
       setDocumentosEnviados(docsData || []);
 
-      // Calcular necesidades agrupadas solo de alertas activas
-      await calcularNecesidades(alertasData || []);
-
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar datos');
@@ -135,142 +124,83 @@ const GerenteOperacionesDashboard = () => {
     }
   };
 
-  const calcularNecesidades = async (alertasActivas: AlertaInventario[]) => {
-    const agrupadasMap = new Map<string, NecesidadAgrupada>();
+  const getPrioridadMax = (alertas: AlertaInventario[]): string => {
+    const prioridades = ['critica', 'alta', 'media', 'baja'];
+    for (const p of prioridades) {
+      if (alertas.some(a => a.prioridad === p)) return p;
+    }
+    return 'baja';
+  };
+
+  const agruparPorHospital = (alertasActivas: AlertaInventario[]) => {
+    const hospitalMap = new Map<string, HospitalAlerta>();
     
-    alertasActivas
-      .filter(a => a.estado === 'activa')
-      .forEach(alerta => {
-        const faltante = Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual);
-        
-        if (agrupadasMap.has(alerta.insumo_catalogo_id)) {
-          const existing = agrupadasMap.get(alerta.insumo_catalogo_id)!;
-          existing.total_faltante += faltante;
-          existing.hospitales_afectados += 1;
-          existing.cantidad_editable += faltante;
-          existing.alertas_ids.push(alerta.id);
-        } else {
-          agrupadasMap.set(alerta.insumo_catalogo_id, {
-            insumo_catalogo_id: alerta.insumo_catalogo_id,
-            insumo_nombre: alerta.insumo?.nombre || 'N/A',
-            insumo_clave: alerta.insumo?.clave || 'N/A',
-            total_faltante: faltante,
-            hospitales_afectados: 1,
-            cantidad_editable: faltante,
-            seleccionada: false,
-            alertas_ids: [alerta.id]
-          });
-        }
-      });
-
-    setNecesidadesAgrupadas(Array.from(agrupadasMap.values()).sort((a, b) => b.total_faltante - a.total_faltante));
-  };
-
-  const toggleSeleccion = (insumoId: string) => {
-    setNecesidadesAgrupadas(prev => prev.map(n => 
-      n.insumo_catalogo_id === insumoId 
-        ? { ...n, seleccionada: !n.seleccionada }
-        : n
-    ));
-  };
-
-  const seleccionarTodos = () => {
-    const todasSeleccionadas = necesidadesAgrupadas.every(n => n.seleccionada);
-    setNecesidadesAgrupadas(prev => prev.map(n => ({ ...n, seleccionada: !todasSeleccionadas })));
-  };
-
-  const actualizarCantidad = (insumoId: string, cantidad: number) => {
-    setNecesidadesAgrupadas(prev => prev.map(n => 
-      n.insumo_catalogo_id === insumoId 
-        ? { ...n, cantidad_editable: Math.max(0, cantidad) }
-        : n
-    ));
-  };
-
-  const abrirDialogEnvio = () => {
-    const seleccionadas = necesidadesAgrupadas.filter(n => n.seleccionada && n.cantidad_editable > 0);
-    if (seleccionadas.length === 0) {
-      toast.error('Selecciona al menos un insumo para enviar');
-      return;
-    }
-    setItemsParaEnviar(seleccionadas);
-    setDialogOpen(true);
-  };
-
-  const actualizarCantidadEnDialog = (insumoId: string, cantidad: number) => {
-    setItemsParaEnviar(prev => prev.map(n => 
-      n.insumo_catalogo_id === insumoId 
-        ? { ...n, cantidad_editable: Math.max(0, cantidad) }
-        : n
-    ));
-  };
-
-  const enviarAGerenteAlmacen = async () => {
-    const itemsValidos = itemsParaEnviar.filter(n => n.cantidad_editable > 0);
-    if (itemsValidos.length === 0) {
-      toast.error('No hay items con cantidad mayor a 0');
-      return;
-    }
-
-    setGenerando(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
+    alertasActivas.forEach(alerta => {
+      const hospitalId = alerta.hospital_id;
+      const faltante = Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual);
       
-      // 1. Crear documento agrupado (solo va a Gerente Almacén, NO a Cadena)
-      const { data: documento, error: docError } = await supabase
-        .from('documentos_necesidades_agrupado')
-        .insert({
-          generado_por: user?.id,
-          estado: 'enviado',
-          enviado_a_gerente_almacen: true,
-          enviado_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (docError) throw docError;
-
-      // 2. Insertar detalles
-      const detalles = itemsValidos.map(n => ({
-        documento_id: documento.id,
-        insumo_catalogo_id: n.insumo_catalogo_id,
-        total_faltante_requerido: n.cantidad_editable
-      }));
-
-      const { error: detError } = await supabase
-        .from('documento_agrupado_detalle')
-        .insert(detalles);
-
-      if (detError) throw detError;
-
-      // 3. Marcar las alertas incluidas como "en_proceso"
-      const todasAlertasIds = itemsValidos.flatMap(n => n.alertas_ids);
-      
-      if (todasAlertasIds.length > 0) {
-        await supabase
-          .from('insumos_alertas')
-          .update({ 
-            estado: 'en_proceso',
-            updated_at: new Date().toISOString()
-          })
-          .in('id', todasAlertasIds);
+      if (hospitalMap.has(hospitalId)) {
+        const existing = hospitalMap.get(hospitalId)!;
+        existing.alertas.push(alerta);
+        existing.total_faltante += faltante;
+        existing.prioridad_max = getPrioridadMax(existing.alertas);
+      } else {
+        hospitalMap.set(hospitalId, {
+          hospital_id: hospitalId,
+          hospital_nombre: alerta.hospital?.display_name || alerta.hospital?.nombre || 'Hospital',
+          alertas: [alerta],
+          total_faltante: faltante,
+          prioridad_max: alerta.prioridad
+        });
       }
+    });
 
-      toast.success(`Documento enviado a Gerente de Almacén con ${itemsValidos.length} insumos`, {
-        description: 'El siguiente paso es que Gerente Almacén descargue el Excel, consulte proveedores y cree la orden de compra.',
-        duration: 5000
-      });
+    // Ordenar por prioridad y cantidad de alertas
+    const sorted = Array.from(hospitalMap.values()).sort((a, b) => {
+      const prioridadOrder = { critica: 0, alta: 1, media: 2, baja: 3 };
+      const prioridadDiff = (prioridadOrder[a.prioridad_max as keyof typeof prioridadOrder] || 3) - 
+                           (prioridadOrder[b.prioridad_max as keyof typeof prioridadOrder] || 3);
+      if (prioridadDiff !== 0) return prioridadDiff;
+      return b.alertas.length - a.alertas.length;
+    });
 
-      setDialogOpen(false);
-      setItemsParaEnviar([]);
-      fetchData();
+    setHospitalAlertas(sorted);
+  };
 
-    } catch (error) {
-      console.error('Error generating document:', error);
-      toast.error('Error al generar documento');
-    } finally {
-      setGenerando(false);
-    }
+  const consolidarNecesidades = (alertasActivas: AlertaInventario[]) => {
+    const insumoMap = new Map<string, NecesidadConsolidada>();
+    
+    alertasActivas.forEach(alerta => {
+      const faltante = Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual);
+      
+      if (insumoMap.has(alerta.insumo_catalogo_id)) {
+        const existing = insumoMap.get(alerta.insumo_catalogo_id)!;
+        existing.total_faltante += faltante;
+        existing.hospitales.push({
+          hospital_id: alerta.hospital_id,
+          hospital_nombre: alerta.hospital?.display_name || alerta.hospital?.nombre || 'Hospital',
+          faltante
+        });
+        existing.alertas_ids.push(alerta.id);
+      } else {
+        insumoMap.set(alerta.insumo_catalogo_id, {
+          insumo_catalogo_id: alerta.insumo_catalogo_id,
+          insumo_nombre: alerta.insumo?.nombre || 'N/A',
+          insumo_clave: alerta.insumo?.clave || 'N/A',
+          total_faltante: faltante,
+          hospitales: [{
+            hospital_id: alerta.hospital_id,
+            hospital_nombre: alerta.hospital?.display_name || alerta.hospital?.nombre || 'Hospital',
+            faltante
+          }],
+          alertas_ids: [alerta.id]
+        });
+      }
+    });
+
+    setNecesidadesConsolidadas(
+      Array.from(insumoMap.values()).sort((a, b) => b.total_faltante - a.total_faltante)
+    );
   };
 
   const getPrioridadColor = (prioridad: string) => {
@@ -283,18 +213,114 @@ const GerenteOperacionesDashboard = () => {
     }
   };
 
-  const getEstadoColor = (estado: string) => {
-    switch (estado) {
-      case 'activa': return 'destructive';
-      case 'en_proceso': return 'secondary';
-      case 'resuelta': return 'outline';
-      default: return 'outline';
+  const abrirDetalleHospital = (hospital: HospitalAlerta) => {
+    setSelectedHospital(hospital);
+    setDialogHospitalOpen(true);
+  };
+
+  const enviarDocumentos = async () => {
+    if (necesidadesConsolidadas.length === 0) {
+      toast.error('No hay necesidades para enviar');
+      return;
+    }
+
+    setGenerando(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // 1. Crear documento AGRUPADO (para Gerente Almacén)
+      const { data: docAgrupado, error: docAgError } = await supabase
+        .from('documentos_necesidades_agrupado')
+        .insert({
+          generado_por: user?.id,
+          estado: 'enviado',
+          enviado_a_gerente_almacen: true,
+          enviado_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (docAgError) throw docAgError;
+
+      // Insertar detalles agrupados
+      const detallesAgrupados = necesidadesConsolidadas.map(n => ({
+        documento_id: docAgrupado.id,
+        insumo_catalogo_id: n.insumo_catalogo_id,
+        total_faltante_requerido: n.total_faltante
+      }));
+
+      await supabase.from('documento_agrupado_detalle').insert(detallesAgrupados);
+
+      // 2. Crear documento SEGMENTADO (para Cadena de Suministros) - AL MISMO TIEMPO
+      const { data: docSegmentado, error: docSegError } = await supabase
+        .from('documentos_necesidades_segmentado')
+        .insert({
+          generado_por: user?.id,
+          estado: 'enviado',
+          enviado_a_cadena_suministros: true,
+          enviado_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (docSegError) throw docSegError;
+
+      // Insertar detalles segmentados (por hospital)
+      const detallesSegmentados: {
+        documento_id: string;
+        hospital_id: string;
+        insumo_catalogo_id: string;
+        existencia_actual: number;
+        minimo: number;
+        faltante_requerido: number;
+      }[] = [];
+
+      alertas.forEach(alerta => {
+        detallesSegmentados.push({
+          documento_id: docSegmentado.id,
+          hospital_id: alerta.hospital_id,
+          insumo_catalogo_id: alerta.insumo_catalogo_id,
+          existencia_actual: alerta.cantidad_actual,
+          minimo: alerta.minimo_permitido,
+          faltante_requerido: Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual)
+        });
+      });
+
+      await supabase.from('documento_segmentado_detalle').insert(detallesSegmentados);
+
+      // 3. Marcar todas las alertas como "en_proceso"
+      const todasAlertasIds = alertas.map(a => a.id);
+      
+      if (todasAlertasIds.length > 0) {
+        await supabase
+          .from('insumos_alertas')
+          .update({ 
+            estado: 'en_proceso',
+            updated_at: new Date().toISOString()
+          })
+          .in('id', todasAlertasIds);
+      }
+
+      toast.success('Documentos enviados exitosamente', {
+        description: `Se generaron 2 documentos: uno para Gerente de Almacén (consolidado) y otro para Cadena de Suministros (por hospital).`,
+        duration: 6000
+      });
+
+      setDialogEnvioOpen(false);
+      fetchData();
+
+    } catch (error) {
+      console.error('Error generating documents:', error);
+      toast.error('Error al generar documentos');
+    } finally {
+      setGenerando(false);
     }
   };
 
-  const seleccionadasCount = necesidadesAgrupadas.filter(n => n.seleccionada).length;
-  const totalSeleccionado = necesidadesAgrupadas.filter(n => n.seleccionada).reduce((sum, n) => sum + n.cantidad_editable, 0);
   const alertasActivas = alertas.filter(a => a.estado === 'activa');
+  const totalHospitalesAfectados = hospitalAlertas.length;
+  const totalInsumosUnicos = necesidadesConsolidadas.length;
+  const totalUnidadesFaltantes = necesidadesConsolidadas.reduce((sum, n) => sum + n.total_faltante, 0);
 
   return (
     <div className="space-y-6">
@@ -326,9 +352,7 @@ const GerenteOperacionesDashboard = () => {
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {new Set(alertasActivas.map(a => a.hospital_id)).size}
-            </div>
+            <div className="text-2xl font-bold">{totalHospitalesAfectados}</div>
           </CardContent>
         </Card>
         <Card>
@@ -337,30 +361,34 @@ const GerenteOperacionesDashboard = () => {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{necesidadesAgrupadas.length}</div>
+            <div className="text-2xl font-bold">{totalInsumosUnicos}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Seleccionados</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Faltante</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{seleccionadasCount}</div>
-            <p className="text-xs text-muted-foreground">{totalSeleccionado.toLocaleString()} unidades</p>
+            <div className="text-2xl font-bold">{totalUnidadesFaltantes.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">unidades</p>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="consolidar" className="space-y-4">
+      <Tabs defaultValue="alertas" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="consolidar">
-            Consolidar y Enviar
-            {necesidadesAgrupadas.length > 0 && (
-              <Badge variant="destructive" className="ml-2">{necesidadesAgrupadas.length}</Badge>
+          <TabsTrigger value="alertas">
+            <Building2 className="h-3.5 w-3.5 mr-1" />
+            Alertas por Hospital
+            {hospitalAlertas.length > 0 && (
+              <Badge variant="destructive" className="ml-2">{hospitalAlertas.length}</Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="alertas">Detalle Alertas</TabsTrigger>
+          <TabsTrigger value="consolidar">
+            <Send className="h-3.5 w-3.5 mr-1" />
+            Consolidar y Enviar
+          </TabsTrigger>
           <TabsTrigger value="minimos" className="flex items-center gap-1">
             <Settings2 className="h-3.5 w-3.5" />
             Configurar Mínimos
@@ -371,6 +399,70 @@ const GerenteOperacionesDashboard = () => {
           </TabsTrigger>
         </TabsList>
 
+        {/* Tab: Alertas por Hospital (Cards) */}
+        <TabsContent value="alertas" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Alertas Agrupadas por Hospital
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Haz clic en cada hospital para ver el detalle de sus insumos faltantes
+              </p>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Cargando...</div>
+              ) : hospitalAlertas.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckCircle2 className="mx-auto h-12 w-12 text-green-500 mb-2" />
+                  No hay alertas activas en ningún hospital
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {hospitalAlertas.map((hospital) => (
+                    <Card 
+                      key={hospital.hospital_id}
+                      className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 ${
+                        hospital.prioridad_max === 'critica' ? 'border-l-red-500' :
+                        hospital.prioridad_max === 'alta' ? 'border-l-orange-500' :
+                        hospital.prioridad_max === 'media' ? 'border-l-yellow-500' :
+                        'border-l-gray-300'
+                      }`}
+                      onClick={() => abrirDetalleHospital(hospital)}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-base">{hospital.hospital_nombre}</CardTitle>
+                          <Badge variant={getPrioridadColor(hospital.prioridad_max)} className="uppercase text-xs">
+                            {hospital.prioridad_max}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Alertas:</span>
+                            <span className="font-bold text-destructive">{hospital.alertas.length}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Unidades faltantes:</span>
+                            <span className="font-bold">{hospital.total_faltante.toLocaleString()}</span>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" className="w-full mt-3">
+                          Ver Detalle <ChevronRight className="ml-1 h-4 w-4" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Tab: Consolidar y Enviar */}
         <TabsContent value="consolidar" className="space-y-4">
           <Card>
@@ -378,178 +470,73 @@ const GerenteOperacionesDashboard = () => {
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Package className="h-5 w-5" />
-                  <span>Necesidades Agrupadas por Insumo</span>
+                  <span>Necesidades Consolidadas</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={seleccionarTodos}>
-                    {necesidadesAgrupadas.every(n => n.seleccionada) ? 'Deseleccionar Todos' : 'Seleccionar Todos'}
-                  </Button>
-                  <Button 
-                    onClick={abrirDialogEnvio} 
-                    disabled={seleccionadasCount === 0}
-                  >
-                    <Send className="mr-2 h-4 w-4" />
-                    Enviar Seleccionados ({seleccionadasCount})
-                  </Button>
-                </div>
+                <Button 
+                  onClick={() => setDialogEnvioOpen(true)} 
+                  disabled={necesidadesConsolidadas.length === 0}
+                  size="lg"
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  Enviar Todo ({necesidadesConsolidadas.length} insumos)
+                </Button>
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Selecciona los insumos que deseas incluir en el pedido. Puedes editar las cantidades antes de enviar.
+                Vista consolidada de todos los insumos faltantes. Al enviar, se generan 2 documentos automáticamente:
                 <br />
-                <strong>Flujo:</strong> Gerente Operaciones → Gerente Almacén → Finanzas → Cadena de Suministros
+                <strong>1.</strong> Para Gerente de Almacén (totales por insumo) → <strong>2.</strong> Para Cadena de Suministros (desglose por hospital)
               </p>
             </CardHeader>
             <CardContent>
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Cargando...</div>
-              ) : necesidadesAgrupadas.length === 0 ? (
+              ) : necesidadesConsolidadas.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <AlertTriangle className="mx-auto h-12 w-12 text-muted-foreground/50 mb-2" />
-                  No hay alertas activas para procesar
+                  <CheckCircle2 className="mx-auto h-12 w-12 text-green-500 mb-2" />
+                  No hay necesidades pendientes
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox 
-                          checked={necesidadesAgrupadas.every(n => n.seleccionada)}
-                          onCheckedChange={seleccionarTodos}
-                        />
-                      </TableHead>
                       <TableHead>Clave</TableHead>
                       <TableHead>Insumo</TableHead>
                       <TableHead className="text-right">Total Faltante</TableHead>
                       <TableHead className="text-right">Hospitales</TableHead>
-                      <TableHead className="text-right w-32">Cantidad a Pedir</TableHead>
+                      <TableHead>Hospitales Afectados</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {necesidadesAgrupadas.map((n) => (
-                      <TableRow 
-                        key={n.insumo_catalogo_id} 
-                        className={n.seleccionada ? 'bg-primary/5' : ''}
-                      >
-                        <TableCell>
-                          <Checkbox 
-                            checked={n.seleccionada}
-                            onCheckedChange={() => toggleSeleccion(n.insumo_catalogo_id)}
-                          />
-                        </TableCell>
+                    {necesidadesConsolidadas.slice(0, 50).map((n) => (
+                      <TableRow key={n.insumo_catalogo_id}>
                         <TableCell className="font-mono text-sm">{n.insumo_clave}</TableCell>
                         <TableCell className="font-medium">{n.insumo_nombre}</TableCell>
-                        <TableCell className="text-right font-mono text-destructive">
+                        <TableCell className="text-right font-mono text-destructive font-bold">
                           {n.total_faltante.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-right font-mono">{n.hospitales_afectados}</TableCell>
-                        <TableCell className="text-right">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={n.cantidad_editable}
-                            onChange={(e) => actualizarCantidad(n.insumo_catalogo_id, parseInt(e.target.value) || 0)}
-                            className="w-24 text-right font-mono ml-auto"
-                            disabled={!n.seleccionada}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab: Detalle Alertas */}
-        <TabsContent value="alertas" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Detalle de Alertas por Hospital</span>
-                <div className="flex gap-2">
-                  <Select value={filtroHospital} onValueChange={setFiltroHospital}>
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Filtrar hospital" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos los hospitales</SelectItem>
-                      {hospitales.map(h => (
-                        <SelectItem key={h.id} value={h.id}>{h.nombre}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                    <SelectTrigger className="w-[150px]">
-                      <SelectValue placeholder="Estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="activa">Activas</SelectItem>
-                      <SelectItem value="en_proceso">En Proceso</SelectItem>
-                      <SelectItem value="resuelta">Resueltas</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="text-center py-8 text-muted-foreground">Cargando...</div>
-              ) : alertas.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No hay alertas</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Prioridad</TableHead>
-                      <TableHead>Hospital</TableHead>
-                      <TableHead>Insumo</TableHead>
-                      <TableHead className="text-right">Existencia</TableHead>
-                      <TableHead className="text-right">Mínimo</TableHead>
-                      <TableHead className="text-right">Faltante</TableHead>
-                      <TableHead>Estado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {alertas.slice(0, 100).map((alerta) => (
-                      <TableRow key={alerta.id} className={alerta.prioridad === 'critica' ? 'bg-red-50/50' : ''}>
+                        <TableCell className="text-right font-mono">{n.hospitales.length}</TableCell>
                         <TableCell>
-                          <Badge variant={getPrioridadColor(alerta.prioridad)} className="uppercase text-xs">
-                            {alerta.prioridad}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {alerta.hospital?.display_name || alerta.hospital?.nombre}
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{alerta.insumo?.nombre}</div>
-                            <div className="text-xs text-muted-foreground font-mono">{alerta.insumo?.clave}</div>
+                          <div className="flex flex-wrap gap-1">
+                            {n.hospitales.slice(0, 3).map((h, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">
+                                {h.hospital_nombre.substring(0, 15)}...
+                              </Badge>
+                            ))}
+                            {n.hospitales.length > 3 && (
+                              <Badge variant="secondary" className="text-xs">
+                                +{n.hospitales.length - 3} más
+                              </Badge>
+                            )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right font-mono">
-                          <span className={alerta.cantidad_actual === 0 ? 'text-destructive font-bold' : ''}>
-                            {alerta.cantidad_actual}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">{alerta.minimo_permitido}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-destructive">
-                          {Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getEstadoColor(alerta.estado)}>
-                            {alerta.estado === 'en_proceso' ? 'En Proceso' : alerta.estado}
-                          </Badge>
-                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               )}
-              {alertas.length > 100 && (
+              {necesidadesConsolidadas.length > 50 && (
                 <p className="text-sm text-muted-foreground text-center mt-4">
-                  Mostrando 100 de {alertas.length} alertas
+                  Mostrando 50 de {necesidadesConsolidadas.length} insumos
                 </p>
               )}
             </CardContent>
@@ -567,10 +554,10 @@ const GerenteOperacionesDashboard = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <History className="h-5 w-5" />
-                Historial de Envíos a Gerente de Almacén
+                Historial de Envíos
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Documentos generados y su estado en el flujo de compras
+                Documentos generados y su estado en el flujo
               </p>
             </CardHeader>
             <CardContent>
@@ -633,72 +620,139 @@ const GerenteOperacionesDashboard = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Dialog: Confirmar y Editar antes de enviar */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Dialog: Detalle de alertas de un hospital */}
+      <Dialog open={dialogHospitalOpen} onOpenChange={setDialogHospitalOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-5 w-5" />
-              Revisar y Enviar a Gerente de Almacén
+              <Building2 className="h-5 w-5" />
+              {selectedHospital?.hospital_nombre}
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Revisa las cantidades antes de enviar. Este documento irá al Gerente de Almacén para que gestione la compra con proveedores.
-            </p>
-
-            <ScrollArea className="max-h-[50vh]">
+          {selectedHospital && (
+            <ScrollArea className="max-h-[60vh]">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Prioridad</TableHead>
                     <TableHead>Clave</TableHead>
                     <TableHead>Insumo</TableHead>
-                    <TableHead className="text-right">Faltante Original</TableHead>
-                    <TableHead className="text-right w-32">Cantidad a Pedir</TableHead>
+                    <TableHead className="text-right">Existencia</TableHead>
+                    <TableHead className="text-right">Mínimo</TableHead>
+                    <TableHead className="text-right">Faltante</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {itemsParaEnviar.map((item) => (
-                    <TableRow key={item.insumo_catalogo_id}>
-                      <TableCell className="font-mono text-sm">{item.insumo_clave}</TableCell>
-                      <TableCell className="font-medium">{item.insumo_nombre}</TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        {item.total_faltante.toLocaleString()}
+                  {selectedHospital.alertas.map((alerta) => (
+                    <TableRow key={alerta.id} className={alerta.prioridad === 'critica' ? 'bg-red-50/50' : ''}>
+                      <TableCell>
+                        <Badge variant={getPrioridadColor(alerta.prioridad)} className="uppercase text-xs">
+                          {alerta.prioridad}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Input
-                          type="number"
-                          min={0}
-                          value={item.cantidad_editable}
-                          onChange={(e) => actualizarCantidadEnDialog(item.insumo_catalogo_id, parseInt(e.target.value) || 0)}
-                          className="w-24 text-right font-mono ml-auto"
-                        />
+                      <TableCell className="font-mono text-sm">{alerta.insumo?.clave}</TableCell>
+                      <TableCell className="font-medium">{alerta.insumo?.nombre}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        <span className={alerta.cantidad_actual === 0 ? 'text-destructive font-bold' : ''}>
+                          {alerta.cantidad_actual}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {alerta.minimo_permitido}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-destructive">
+                        {Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual)}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </ScrollArea>
+          )}
 
-            <div className="flex justify-between items-center pt-4 border-t">
-              <div className="text-sm">
-                <span className="text-muted-foreground">Total items:</span>{' '}
-                <span className="font-bold">{itemsParaEnviar.length}</span>
-                <span className="mx-2">|</span>
-                <span className="text-muted-foreground">Total unidades:</span>{' '}
-                <span className="font-bold">{itemsParaEnviar.reduce((sum, i) => sum + i.cantidad_editable, 0).toLocaleString()}</span>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogHospitalOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar envío */}
+      <Dialog open={dialogEnvioOpen} onOpenChange={setDialogEnvioOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5" />
+              Confirmar Envío de Documentos
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              Se generarán <strong>2 documentos</strong> simultáneamente:
+            </p>
+            
+            <div className="space-y-3">
+              <Card className="bg-blue-50/50 border-blue-200">
+                <CardContent className="py-4">
+                  <div className="flex items-start gap-3">
+                    <FileText className="h-5 w-5 text-blue-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Documento Consolidado</p>
+                      <p className="text-sm text-muted-foreground">
+                        Para <strong>Gerente de Almacén</strong> - Totales por insumo para gestión de compras
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-green-50/50 border-green-200">
+                <CardContent className="py-4">
+                  <div className="flex items-start gap-3">
+                    <FileText className="h-5 w-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Documento Segmentado</p>
+                      <p className="text-sm text-muted-foreground">
+                        Para <strong>Cadena de Suministros</strong> - Desglose por hospital para distribución
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="bg-muted/50 rounded-lg p-4 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-muted-foreground">Hospitales afectados:</span>
+                  <span className="font-bold ml-2">{totalHospitalesAfectados}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Insumos únicos:</span>
+                  <span className="font-bold ml-2">{totalInsumosUnicos}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Total alertas:</span>
+                  <span className="font-bold ml-2">{alertasActivas.length}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Unidades faltantes:</span>
+                  <span className="font-bold ml-2">{totalUnidadesFaltantes.toLocaleString()}</span>
+                </div>
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDialogEnvioOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={enviarAGerenteAlmacen} disabled={generando}>
+            <Button onClick={enviarDocumentos} disabled={generando}>
               <Send className="mr-2 h-4 w-4" />
-              {generando ? 'Enviando...' : 'Enviar a Gerente de Almacén'}
+              {generando ? 'Enviando...' : 'Confirmar y Enviar'}
             </Button>
           </DialogFooter>
         </DialogContent>

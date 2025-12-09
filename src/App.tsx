@@ -28,6 +28,7 @@ import GerenteOperacionesDashboard from './pages/GerenteOperacionesDashboard';
 import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
 import CadenaSuministrosDashboard from './pages/CadenaSuministrosDashboard';
 import FinanzasDashboard from './pages/FinanzasDashboard';
+import AlmacenistaAlertasTransferencia from './pages/AlmacenistaAlertasTransferencia';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -75,6 +76,7 @@ const AppContent = () => {
                 <>
                   <Route path="/insumos" element={<Insumos />} />
                   <Route path="/kardex" element={<Kardex />} />
+                  <Route path="/alertas-transferencia" element={<AlmacenistaAlertasTransferencia />} />
                 </>
               )}
               {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (

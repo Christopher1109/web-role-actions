@@ -1184,6 +1184,7 @@ export type Database = {
           id: string
           nombre: string
           updated_at: string | null
+          username: string | null
         }
         Insert: {
           created_at?: string | null
@@ -1192,6 +1193,7 @@ export type Database = {
           id: string
           nombre: string
           updated_at?: string | null
+          username?: string | null
         }
         Update: {
           created_at?: string | null
@@ -1200,6 +1202,7 @@ export type Database = {
           id?: string
           nombre?: string
           updated_at?: string | null
+          username?: string | null
         }
         Relationships: []
       }
@@ -1432,6 +1435,7 @@ export type Database = {
         | "auxiliar"
         | "gerente_operaciones"
         | "gerente_almacen"
+        | "cadena_suministros"
       especialidad_medica:
         | "anestesiologia"
         | "cirugia_general"
@@ -1577,6 +1581,7 @@ export const Constants = {
         "auxiliar",
         "gerente_operaciones",
         "gerente_almacen",
+        "cadena_suministros",
       ],
       especialidad_medica: [
         "anestesiologia",

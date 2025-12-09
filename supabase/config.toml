@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.create-test-user]
 verify_jwt = false
+
+[functions.setup-all-users]
+verify_jwt = false

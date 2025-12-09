@@ -29,6 +29,7 @@ import Alertas from './pages/Alertas';
 import GerenteOperacionesDashboard from './pages/GerenteOperacionesDashboard';
 import AlmacenistaDashboard from './pages/AlmacenistaDashboard';
 import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
+import SupervisorDashboard from './pages/SupervisorDashboard';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -86,6 +87,9 @@ const AppContent = () => {
                   <Route path="/paquetes" element={<Paquetes />} />
                   <Route path="/reportes" element={<Reportes />} />
                 </>
+              )}
+              {(userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
+                <Route path="/supervisor-dashboard" element={<SupervisorDashboard />} />
               )}
               {(userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>

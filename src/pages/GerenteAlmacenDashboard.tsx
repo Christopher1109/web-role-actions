@@ -4,9 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Download, Upload, Package, ShoppingCart, CheckCircle, RefreshCw, Warehouse, Send, Clock, FileText } from 'lucide-react';
+import { Download, Upload, Package, ShoppingCart, CheckCircle, RefreshCw, Warehouse, Send, Clock, FileText, DollarSign } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface DocumentoAgrupado {
@@ -35,6 +39,7 @@ interface OrdenCompra {
   created_at: string;
   documento_origen_id: string | null;
   enviado_a_cadena: boolean;
+  aprobado_at: string | null;
   items?: OrdenCompraItem[];
 }
 
@@ -43,6 +48,7 @@ interface OrdenCompraItem {
   insumo_catalogo_id: string;
   cantidad_solicitada: number;
   cantidad_recibida: number;
+  precio_unitario: number | null;
   estado: string;
   insumo?: { id: string; nombre: string; clave: string };
 }
@@ -65,6 +71,11 @@ const GerenteAlmacenDashboard = () => {
   const [processingDoc, setProcessingDoc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+
+  // Dialog for setting prices
+  const [preciosDialogOpen, setPreciosDialogOpen] = useState(false);
+  const [ordenEditando, setOrdenEditando] = useState<OrdenCompra | null>(null);
+  const [precios, setPrecios] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetchData();
@@ -136,7 +147,8 @@ const GerenteAlmacenDashboard = () => {
       'Clave': d.insumo?.clave || 'N/A',
       'Nombre Insumo': d.insumo?.nombre || 'N/A',
       'Cantidad Requerida': d.total_faltante_requerido,
-      'Cantidad Proveedor': ''
+      'Cantidad Proveedor': '',
+      'Precio Unitario': ''
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -145,7 +157,8 @@ const GerenteAlmacenDashboard = () => {
       { wch: 15 },
       { wch: 50 },
       { wch: 20 },
-      { wch: 20 }
+      { wch: 20 },
+      { wch: 15 }
     ];
 
     const wb = XLSX.utils.book_new();
@@ -173,6 +186,7 @@ const GerenteAlmacenDashboard = () => {
           'Nombre Insumo': string;
           'Cantidad Requerida': number;
           'Cantidad Proveedor': number;
+          'Precio Unitario': number;
         }>;
 
         const itemsConCantidad = jsonData.filter(row => 
@@ -186,6 +200,12 @@ const GerenteAlmacenDashboard = () => {
 
         const { data: { user } } = await supabase.auth.getUser();
         const numeroPedido = `OC-${Date.now().toString(36).toUpperCase()}`;
+
+        // Calculate total from prices
+        const totalEstimado = itemsConCantidad.reduce((sum, row) => {
+          const precio = row['Precio Unitario'] || 100;
+          return sum + (precio * row['Cantidad Proveedor']);
+        }, 0);
 
         const { data: orden, error: ordenError } = await supabase
           .from('pedidos_compra')
@@ -207,6 +227,7 @@ const GerenteAlmacenDashboard = () => {
           insumo_catalogo_id: row['ID Insumo'],
           cantidad_solicitada: row['Cantidad Proveedor'],
           cantidad_recibida: 0,
+          precio_unitario: row['Precio Unitario'] || null,
           estado: 'pendiente'
         }));
 
@@ -241,112 +262,75 @@ const GerenteAlmacenDashboard = () => {
     }
   };
 
-  const registrarEntradaAlmacen = async (orden: OrdenCompra) => {
+  const abrirPreciosDialog = (orden: OrdenCompra) => {
+    setOrdenEditando(orden);
+    const initialPrecios: Record<string, number> = {};
+    orden.items?.forEach(item => {
+      initialPrecios[item.id] = item.precio_unitario || 100;
+    });
+    setPrecios(initialPrecios);
+    setPreciosDialogOpen(true);
+  };
+
+  const guardarPreciosYEnviarAFinanzas = async () => {
+    if (!ordenEditando) return;
+
+    setProcessingDoc(ordenEditando.id);
     try {
-      if (!orden.items || orden.items.length === 0) {
-        toast.error('La orden no tiene items');
-        return;
-      }
-
-      setProcessingDoc(orden.id);
-
-      for (const item of orden.items) {
-        const { data: existingItem } = await supabase
-          .from('almacen_central')
-          .select()
-          .eq('insumo_catalogo_id', item.insumo_catalogo_id)
-          .maybeSingle();
-
-        if (existingItem) {
-          await supabase
-            .from('almacen_central')
-            .update({
-              cantidad_disponible: existingItem.cantidad_disponible + item.cantidad_solicitada,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingItem.id);
-        } else {
-          await supabase
-            .from('almacen_central')
-            .insert({
-              insumo_catalogo_id: item.insumo_catalogo_id,
-              cantidad_disponible: item.cantidad_solicitada,
-              lote: `LOTE-${Date.now().toString(36).toUpperCase()}`
-            });
-        }
-
+      // Update prices for all items
+      for (const item of ordenEditando.items || []) {
         await supabase
           .from('pedido_items')
-          .update({
-            cantidad_recibida: item.cantidad_solicitada,
-            estado: 'recibido'
-          })
+          .update({ precio_unitario: precios[item.id] || 100 })
           .eq('id', item.id);
       }
 
+      // Update order status to sent to finance
       await supabase
         .from('pedidos_compra')
         .update({
-          estado: 'en_almacen',
-          completado_at: new Date().toISOString()
+          estado: 'enviado_a_finanzas',
+          updated_at: new Date().toISOString()
         })
-        .eq('id', orden.id);
+        .eq('id', ordenEditando.id);
 
-      toast.success('Entrada registrada en Almacén Central México');
+      toast.success(`Orden ${ordenEditando.numero_pedido} enviada a Finanzas para pago`);
+      setPreciosDialogOpen(false);
+      setOrdenEditando(null);
       fetchData();
     } catch (error) {
-      console.error('Error registering entry:', error);
-      toast.error('Error al registrar entrada');
+      console.error('Error sending to finance:', error);
+      toast.error('Error al enviar a finanzas');
     } finally {
       setProcessingDoc(null);
     }
   };
 
-  const enviarACadenaSuministros = async (orden: OrdenCompra) => {
-    try {
-      setProcessingDoc(orden.id);
-
-      await supabase
-        .from('pedidos_compra')
-        .update({
-          enviado_a_cadena: true,
-          enviado_a_cadena_at: new Date().toISOString(),
-          estado: 'enviado_a_cadena'
-        })
-        .eq('id', orden.id);
-
-      toast.success('Orden enviada a Cadena de Suministros para distribución');
-      fetchData();
-    } catch (error) {
-      console.error('Error sending to supply chain:', error);
-      toast.error('Error al enviar');
-    } finally {
-      setProcessingDoc(null);
-    }
+  const calcularTotalOrden = (orden: OrdenCompra) => {
+    if (!orden.items) return 0;
+    return orden.items.reduce((sum, item) => {
+      const precio = item.precio_unitario || 100;
+      return sum + (precio * item.cantidad_solicitada);
+    }, 0);
   };
 
-  const getEstadoColor = (estado: string) => {
+  const getEstadoBadge = (estado: string) => {
     switch (estado) {
-      case 'pendiente': return 'secondary';
-      case 'en_almacen': return 'outline';
-      case 'enviado_a_cadena': return 'outline';
-      case 'completado': return 'outline';
-      default: return 'outline';
-    }
-  };
-
-  const getEstadoLabel = (estado: string) => {
-    switch (estado) {
-      case 'pendiente': return 'Pendiente';
-      case 'en_almacen': return 'En Almacén';
-      case 'enviado_a_cadena': return 'Enviado a Cadena';
-      case 'completado': return 'Completado';
-      default: return estado;
+      case 'pendiente':
+        return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Pendiente</Badge>;
+      case 'enviado_a_finanzas':
+        return <Badge className="bg-blue-100 text-blue-800"><DollarSign className="mr-1 h-3 w-3" />En Finanzas</Badge>;
+      case 'pagado_espera_confirmacion':
+        return <Badge className="bg-amber-100 text-amber-800"><Send className="mr-1 h-3 w-3" />Pagado - Espera</Badge>;
+      case 'recibido':
+        return <Badge variant="outline" className="bg-green-50 text-green-700"><CheckCircle className="mr-1 h-3 w-3" />Recibido</Badge>;
+      default:
+        return <Badge variant="outline">{estado}</Badge>;
     }
   };
 
   const documentosPendientes = documentos.filter(d => !d.procesado_por_almacen);
-  const documentosProcesados = documentos.filter(d => d.procesado_por_almacen);
+  const ordenesPendientes = ordenesCompra.filter(o => o.estado === 'pendiente');
 
   return (
     <div className="space-y-6">
@@ -374,13 +358,11 @@ const GerenteAlmacenDashboard = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Órdenes en Proceso</CardTitle>
+            <CardTitle className="text-sm font-medium">Órdenes por Enviar</CardTitle>
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {ordenesCompra.filter(o => o.estado === 'pendiente' || o.estado === 'en_almacen').length}
-            </div>
+            <div className="text-2xl font-bold">{ordenesPendientes.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -395,7 +377,7 @@ const GerenteAlmacenDashboard = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Stock Total Central</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -413,7 +395,12 @@ const GerenteAlmacenDashboard = () => {
               <Badge variant="destructive" className="ml-2">{documentosPendientes.length}</Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="ordenes">Órdenes de Compra</TabsTrigger>
+          <TabsTrigger value="ordenes">
+            Órdenes de Compra
+            {ordenesPendientes.length > 0 && (
+              <Badge variant="secondary" className="ml-2">{ordenesPendientes.length}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="almacen">Almacén Central</TabsTrigger>
         </TabsList>
 
@@ -422,7 +409,7 @@ const GerenteAlmacenDashboard = () => {
             <CardHeader>
               <CardTitle>Documentos de Necesidades Recibidos</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Documentos enviados por Gerente de Operaciones. Descarga el Excel, consulta con proveedores, y sube la respuesta.
+                Descarga el Excel, consulta con proveedores, y sube la respuesta con precios.
               </p>
             </CardHeader>
             <CardContent>
@@ -494,14 +481,14 @@ const GerenteAlmacenDashboard = () => {
                               <Button 
                                 variant="default"
                                 size="sm"
-                                disabled={uploading}
                                 onClick={() => {
                                   setSelectedDocId(doc.id);
                                   fileInputRef.current?.click();
                                 }}
+                                disabled={uploading}
                               >
                                 <Upload className="mr-2 h-4 w-4" />
-                                Subir Respuesta
+                                {uploading ? 'Procesando...' : 'Subir Respuesta'}
                               </Button>
                             )}
                           </div>
@@ -520,69 +507,56 @@ const GerenteAlmacenDashboard = () => {
             <CardHeader>
               <CardTitle>Órdenes de Compra</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Registra la entrada de productos y envía a Cadena de Suministros para distribución
+                Revisa las órdenes, ajusta precios si es necesario, y envía a Finanzas para pago.
               </p>
             </CardHeader>
             <CardContent>
               {ordenesCompra.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No hay órdenes de compra</div>
+                <div className="text-center py-8 text-muted-foreground">
+                  No hay órdenes de compra
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Número</TableHead>
                       <TableHead>Fecha</TableHead>
-                      <TableHead>Proveedor</TableHead>
                       <TableHead className="text-right">Items</TableHead>
+                      <TableHead className="text-right">Total Estimado</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead>Acciones</TableHead>
+                      <TableHead>Acción</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {ordenesCompra.map((orden) => (
                       <TableRow key={orden.id}>
-                        <TableCell className="font-mono">{orden.numero_pedido}</TableCell>
+                        <TableCell className="font-mono font-bold">{orden.numero_pedido}</TableCell>
                         <TableCell>
                           {new Date(orden.created_at).toLocaleDateString('es-MX')}
                         </TableCell>
-                        <TableCell>{orden.proveedor}</TableCell>
                         <TableCell className="text-right">{orden.total_items}</TableCell>
-                        <TableCell>
-                          <Badge variant={getEstadoColor(orden.estado)}>
-                            {getEstadoLabel(orden.estado)}
-                          </Badge>
+                        <TableCell className="text-right font-mono font-bold">
+                          ${calcularTotalOrden(orden).toLocaleString()}
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
-                            {orden.estado === 'pendiente' && (
-                              <Button 
-                                variant="default" 
-                                size="sm"
-                                disabled={processingDoc === orden.id}
-                                onClick={() => registrarEntradaAlmacen(orden)}
-                              >
-                                <Package className="mr-2 h-4 w-4" />
-                                Registrar Entrada
-                              </Button>
-                            )}
-                            {orden.estado === 'en_almacen' && !orden.enviado_a_cadena && (
-                              <Button 
-                                variant="default" 
-                                size="sm"
-                                disabled={processingDoc === orden.id}
-                                onClick={() => enviarACadenaSuministros(orden)}
-                              >
-                                <Send className="mr-2 h-4 w-4" />
-                                Enviar a Cadena
-                              </Button>
-                            )}
-                            {orden.enviado_a_cadena && (
-                              <span className="text-sm text-muted-foreground flex items-center">
-                                <CheckCircle className="mr-1 h-4 w-4 text-green-600" />
-                                Enviado
-                              </span>
-                            )}
-                          </div>
+                          {getEstadoBadge(orden.estado)}
+                        </TableCell>
+                        <TableCell>
+                          {orden.estado === 'pendiente' && (
+                            <Button 
+                              size="sm"
+                              onClick={() => abrirPreciosDialog(orden)}
+                              disabled={processingDoc === orden.id}
+                            >
+                              <DollarSign className="mr-2 h-4 w-4" />
+                              Enviar a Finanzas
+                            </Button>
+                          )}
+                          {orden.estado !== 'pendiente' && (
+                            <span className="text-sm text-muted-foreground">
+                              {orden.estado === 'recibido' ? 'Completado' : 'En proceso'}
+                            </span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -631,6 +605,84 @@ const GerenteAlmacenDashboard = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog: Edit prices and send to finance */}
+      <Dialog open={preciosDialogOpen} onOpenChange={setPreciosDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Revisar Precios - Orden {ordenEditando?.numero_pedido}
+            </DialogTitle>
+          </DialogHeader>
+          {ordenEditando && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Revisa o ajusta los precios antes de enviar a Finanzas para pago:
+              </p>
+              <ScrollArea className="max-h-[50vh]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Clave</TableHead>
+                      <TableHead>Insumo</TableHead>
+                      <TableHead className="text-right">Cantidad</TableHead>
+                      <TableHead className="text-right">Precio Unit.</TableHead>
+                      <TableHead className="text-right">Subtotal</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ordenEditando.items?.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
+                        <TableCell>{item.insumo?.nombre}</TableCell>
+                        <TableCell className="text-right font-mono">{item.cantidad_solicitada}</TableCell>
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={precios[item.id] || 100}
+                            onChange={(e) => setPrecios({
+                              ...precios,
+                              [item.id]: Number(e.target.value)
+                            })}
+                            className="w-24 h-8 text-right"
+                          />
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold">
+                          ${((precios[item.id] || 100) * item.cantidad_solicitada).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+              <div className="flex justify-end border-t pt-4">
+                <div className="text-right">
+                  <p className="text-muted-foreground text-sm">Total de la Orden</p>
+                  <p className="text-2xl font-bold">
+                    ${ordenEditando.items?.reduce((sum, item) => 
+                      sum + ((precios[item.id] || 100) * item.cantidad_solicitada), 0
+                    ).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreciosDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={guardarPreciosYEnviarAFinanzas}
+              disabled={processingDoc === ordenEditando?.id}
+            >
+              <Send className="mr-2 h-4 w-4" />
+              {processingDoc === ordenEditando?.id ? 'Enviando...' : 'Enviar a Finanzas'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -26,6 +26,7 @@ import SetupAlmacenes from './pages/SetupAlmacenes';
 import Kardex from './pages/Kardex';
 import DiagnosticoInsumos from './pages/DiagnosticoInsumos';
 import Alertas from './pages/Alertas';
+import GerenteOperacionesDashboard from './pages/GerenteOperacionesDashboard';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -87,6 +88,7 @@ const AppContent = () => {
                 <>
                   <Route path="/traspasos" element={<Traspasos />} />
                   <Route path="/usuarios" element={<Usuarios />} />
+                  <Route path="/gerente-dashboard" element={<GerenteOperacionesDashboard />} />
                   <Route path="/export-users" element={<ExportUsers />} />
                   <Route path="/diagnostico-insumos" element={<DiagnosticoInsumos />} />
                   <Route path="/setup" element={<SetupData />} />

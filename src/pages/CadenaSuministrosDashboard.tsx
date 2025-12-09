@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { RefreshCw, Warehouse, Send, Building2, Package, TrendingUp, FileText, Clock, CheckCircle, Truck, Edit } from 'lucide-react';
+import { StatusTimeline } from '@/components/StatusTimeline';
+import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 
 interface DocumentoSegmentado {
   id: string;
@@ -98,6 +100,17 @@ const CadenaSuministrosDashboard = () => {
   const [recibirDialogOpen, setRecibirDialogOpen] = useState(false);
   const [ordenRecibiendo, setOrdenRecibiendo] = useState<OrdenRecibir | null>(null);
   const [cantidadesRecibidas, setCantidadesRecibidas] = useState<Record<string, number>>({});
+
+  const fetchDataCallback = useCallback(() => {
+    fetchData();
+  }, []);
+
+  // Realtime notifications
+  useRealtimeNotifications({
+    userRole: 'cadena_suministros',
+    onDocumentoSegmentado: fetchDataCallback,
+    onPedidoActualizado: fetchDataCallback,
+  });
 
   useEffect(() => {
     fetchData();

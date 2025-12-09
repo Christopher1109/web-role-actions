@@ -28,6 +28,7 @@ import DiagnosticoInsumos from './pages/DiagnosticoInsumos';
 import Alertas from './pages/Alertas';
 import GerenteOperacionesDashboard from './pages/GerenteOperacionesDashboard';
 import AlmacenistaDashboard from './pages/AlmacenistaDashboard';
+import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -102,6 +103,9 @@ const AppContent = () => {
                   <Route path="/import-procedimientos" element={<ImportProcedimientos />} />
                   <Route path="/setup-almacenes" element={<SetupAlmacenes />} />
                 </>
+              )}
+              {(userRole === 'gerente_almacen' || userRole === 'gerente_operaciones') && (
+                <Route path="/almacen-dashboard" element={<GerenteAlmacenDashboard />} />
               )}
               <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

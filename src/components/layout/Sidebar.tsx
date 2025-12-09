@@ -37,11 +37,13 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     supervisor: 'Supervisor Hospitalario',
     gerente: 'Gerente de Operaciones',
     gerente_operaciones: 'Gerente de Operaciones',
+    gerente_almacen: 'Gerente de Almacén',
   };
 
   const menuItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen'] },
     { path: '/gerente-dashboard', icon: BarChart3, label: 'Panel Gerente', roles: ['gerente', 'gerente_operaciones'] },
+    { path: '/almacen-dashboard', icon: Warehouse, label: 'Panel Almacén', roles: ['gerente_almacen', 'gerente_operaciones'] },
     { path: '/almacenista-dashboard', icon: Warehouse, label: 'Panel Almacenista', roles: ['almacenista', 'lider', 'gerente', 'gerente_operaciones'] },
     { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },

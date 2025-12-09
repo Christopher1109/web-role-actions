@@ -1028,6 +1028,116 @@ export type Database = {
         }
         Relationships: []
       }
+      pedido_items: {
+        Row: {
+          cantidad_recibida: number
+          cantidad_solicitada: number
+          created_at: string
+          estado: string
+          id: string
+          insumo_catalogo_id: string
+          notas: string | null
+          pedido_id: string
+          precio_unitario: number | null
+        }
+        Insert: {
+          cantidad_recibida?: number
+          cantidad_solicitada?: number
+          created_at?: string
+          estado?: string
+          id?: string
+          insumo_catalogo_id: string
+          notas?: string | null
+          pedido_id: string
+          precio_unitario?: number | null
+        }
+        Update: {
+          cantidad_recibida?: number
+          cantidad_solicitada?: number
+          created_at?: string
+          estado?: string
+          id?: string
+          insumo_catalogo_id?: string
+          notas?: string | null
+          pedido_id?: string
+          precio_unitario?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pedido_items_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedido_items_pedido_id_fkey"
+            columns: ["pedido_id"]
+            isOneToOne: false
+            referencedRelation: "pedidos_compra"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pedidos_compra: {
+        Row: {
+          aprobado_at: string | null
+          aprobado_por: string | null
+          completado_at: string | null
+          creado_por: string | null
+          created_at: string
+          estado: string
+          fecha_estimada_entrega: string | null
+          formato_origen_id: string | null
+          id: string
+          notas: string | null
+          numero_pedido: string
+          proveedor: string | null
+          total_items: number
+          updated_at: string
+        }
+        Insert: {
+          aprobado_at?: string | null
+          aprobado_por?: string | null
+          completado_at?: string | null
+          creado_por?: string | null
+          created_at?: string
+          estado?: string
+          fecha_estimada_entrega?: string | null
+          formato_origen_id?: string | null
+          id?: string
+          notas?: string | null
+          numero_pedido: string
+          proveedor?: string | null
+          total_items?: number
+          updated_at?: string
+        }
+        Update: {
+          aprobado_at?: string | null
+          aprobado_por?: string | null
+          completado_at?: string | null
+          creado_por?: string | null
+          created_at?: string
+          estado?: string
+          fecha_estimada_entrega?: string | null
+          formato_origen_id?: string | null
+          id?: string
+          notas?: string | null
+          numero_pedido?: string
+          proveedor?: string | null
+          total_items?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pedidos_compra_formato_origen_id_fkey"
+            columns: ["formato_origen_id"]
+            isOneToOne: false
+            referencedRelation: "formatos_generados"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       procedimientos: {
         Row: {
           clave_procedimiento: string | null
@@ -1311,6 +1421,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_gerente_almacen: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role:
@@ -1320,6 +1431,7 @@ export type Database = {
         | "almacenista"
         | "auxiliar"
         | "gerente_operaciones"
+        | "gerente_almacen"
       especialidad_medica:
         | "anestesiologia"
         | "cirugia_general"
@@ -1464,6 +1576,7 @@ export const Constants = {
         "almacenista",
         "auxiliar",
         "gerente_operaciones",
+        "gerente_almacen",
       ],
       especialidad_medica: [
         "anestesiologia",

@@ -15,6 +15,7 @@ const Dashboard = ({ userRole }: DashboardProps) => {
     supervisor: 'Supervisor Hospitalario',
     gerente: 'Gerente de Operaciones',
     gerente_operaciones: 'Gerente de Operaciones',
+    gerente_almacen: 'Gerente de Almacén',
   };
 
   const stats = [

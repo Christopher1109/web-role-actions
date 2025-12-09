@@ -7,8 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { AlertTriangle, FileText, Download, RefreshCw, Building2, Package } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { AlertTriangle, FileText, Send, RefreshCw, Building2, Package, CheckCircle2, Clock } from 'lucide-react';
 
 interface AlertaInventario {
   id: string;
@@ -42,10 +41,30 @@ interface NecesidadAgrupada {
   hospitales_afectados: number;
 }
 
+interface DocumentoSegmentado {
+  id: string;
+  fecha_generacion: string;
+  estado: string;
+  enviado_a_cadena_suministros: boolean;
+  enviado_at: string | null;
+  procesado_por_cadena: boolean;
+}
+
+interface DocumentoAgrupado {
+  id: string;
+  fecha_generacion: string;
+  estado: string;
+  enviado_a_gerente_almacen: boolean;
+  enviado_at: string | null;
+  procesado_por_almacen: boolean;
+}
+
 const GerenteOperacionesDashboard = () => {
   const [alertas, setAlertas] = useState<AlertaInventario[]>([]);
   const [necesidadesSegmentadas, setNecesidadesSegmentadas] = useState<NecesidadSegmentada[]>([]);
   const [necesidadesAgrupadas, setNecesidadesAgrupadas] = useState<NecesidadAgrupada[]>([]);
+  const [documentosSegmentados, setDocumentosSegmentados] = useState<DocumentoSegmentado[]>([]);
+  const [documentosAgrupados, setDocumentosAgrupados] = useState<DocumentoAgrupado[]>([]);
   const [hospitales, setHospitales] = useState<{ id: string; nombre: string }[]>([]);
   const [filtroHospital, setFiltroHospital] = useState<string>('todos');
   const [filtroEstado, setFiltroEstado] = useState<string>('activa');
@@ -93,6 +112,23 @@ const GerenteOperacionesDashboard = () => {
       if (alertasError) throw alertasError;
       setAlertas(alertasData || []);
 
+      // Fetch existing documents
+      const { data: docsSegData } = await supabase
+        .from('documentos_necesidades_segmentado')
+        .select('*')
+        .order('fecha_generacion', { ascending: false })
+        .limit(10);
+      
+      setDocumentosSegmentados(docsSegData || []);
+
+      const { data: docsAgrData } = await supabase
+        .from('documentos_necesidades_agrupado')
+        .select('*')
+        .order('fecha_generacion', { ascending: false })
+        .limit(10);
+      
+      setDocumentosAgrupados(docsAgrData || []);
+
       // Calculate necesidades segmentadas from alertas activas
       await calcularNecesidades();
 
@@ -106,7 +142,6 @@ const GerenteOperacionesDashboard = () => {
 
   const calcularNecesidades = async () => {
     try {
-      // Get all active alerts with inventory data
       const { data: alertasActivas, error } = await supabase
         .from('insumos_alertas')
         .select(`
@@ -118,7 +153,6 @@ const GerenteOperacionesDashboard = () => {
 
       if (error) throw error;
 
-      // Segmentadas por hospital
       const segmentadas: NecesidadSegmentada[] = (alertasActivas || []).map(alerta => ({
         hospital_id: alerta.hospital_id,
         hospital_nombre: alerta.hospital?.display_name || alerta.hospital?.nombre || 'N/A',
@@ -132,7 +166,6 @@ const GerenteOperacionesDashboard = () => {
 
       setNecesidadesSegmentadas(segmentadas);
 
-      // Agrupadas por insumo (suma de todos los hospitales)
       const agrupadasMap = new Map<string, NecesidadAgrupada>();
       
       segmentadas.forEach(seg => {
@@ -158,17 +191,24 @@ const GerenteOperacionesDashboard = () => {
     }
   };
 
-  const generarDocumentoSegmentado = async () => {
+  const generarYEnviarSegmentado = async () => {
+    if (necesidadesSegmentadas.length === 0) {
+      toast.error('No hay necesidades para enviar');
+      return;
+    }
+
     setGenerando(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Create document record
+      // Create document record with enviado flag
       const { data: documento, error: docError } = await supabase
         .from('documentos_necesidades_segmentado')
         .insert({
           generado_por: user?.id,
-          estado: 'generado'
+          estado: 'enviado',
+          enviado_a_cadena_suministros: true,
+          enviado_at: new Date().toISOString()
         })
         .select()
         .single();
@@ -191,10 +231,8 @@ const GerenteOperacionesDashboard = () => {
 
       if (detError) throw detError;
 
-      // Export to Excel
-      exportarExcelSegmentado();
-
-      toast.success('Documento segmentado generado correctamente');
+      toast.success('Documento enviado a Cadena de Suministros');
+      fetchData();
     } catch (error) {
       console.error('Error generating document:', error);
       toast.error('Error al generar documento');
@@ -203,17 +241,24 @@ const GerenteOperacionesDashboard = () => {
     }
   };
 
-  const generarDocumentoAgrupado = async () => {
+  const generarYEnviarAgrupado = async () => {
+    if (necesidadesAgrupadas.length === 0) {
+      toast.error('No hay necesidades para enviar');
+      return;
+    }
+
     setGenerando(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Create document record
+      // Create document record with enviado flag
       const { data: documento, error: docError } = await supabase
         .from('documentos_necesidades_agrupado')
         .insert({
           generado_por: user?.id,
-          estado: 'generado'
+          estado: 'enviado',
+          enviado_a_gerente_almacen: true,
+          enviado_at: new Date().toISOString()
         })
         .select()
         .single();
@@ -233,48 +278,14 @@ const GerenteOperacionesDashboard = () => {
 
       if (detError) throw detError;
 
-      // Export to Excel
-      exportarExcelAgrupado();
-
-      toast.success('Documento agrupado generado correctamente');
+      toast.success('Documento enviado a Gerente de Almacén');
+      fetchData();
     } catch (error) {
       console.error('Error generating document:', error);
       toast.error('Error al generar documento');
     } finally {
       setGenerando(false);
     }
-  };
-
-  const exportarExcelSegmentado = () => {
-    const data = necesidadesSegmentadas.map(n => ({
-      'Hospital': n.hospital_nombre,
-      'Clave Insumo': n.insumo_clave,
-      'Nombre Insumo': n.insumo_nombre,
-      'Existencia Actual': n.existencia_actual,
-      'Mínimo': n.minimo,
-      'Cantidad Requerida': n.faltante_requerido
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Necesidades por Hospital');
-    XLSX.writeFile(wb, `Necesidades_Segmentado_${new Date().toISOString().split('T')[0]}.xlsx`);
-  };
-
-  const exportarExcelAgrupado = () => {
-    const data = necesidadesAgrupadas.map(n => ({
-      'ID Insumo': n.insumo_catalogo_id,
-      'Clave Insumo': n.insumo_clave,
-      'Nombre Insumo': n.insumo_nombre,
-      'Cantidad Requerida Total': n.total_faltante,
-      'Hospitales Afectados': n.hospitales_afectados,
-      'Cantidad Proveedor': '' // Columna vacía para el proveedor
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Necesidades Consolidadas');
-    XLSX.writeFile(wb, `Necesidades_Agrupado_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const getPrioridadColor = (prioridad: string) => {
@@ -294,6 +305,24 @@ const GerenteOperacionesDashboard = () => {
       case 'resuelta': return 'outline';
       default: return 'outline';
     }
+  };
+
+  const getDocumentoEstadoBadge = (doc: DocumentoSegmentado | DocumentoAgrupado) => {
+    const esSegmentado = 'enviado_a_cadena_suministros' in doc;
+    const enviado = esSegmentado 
+      ? (doc as DocumentoSegmentado).enviado_a_cadena_suministros 
+      : (doc as DocumentoAgrupado).enviado_a_gerente_almacen;
+    const procesado = esSegmentado 
+      ? (doc as DocumentoSegmentado).procesado_por_cadena 
+      : (doc as DocumentoAgrupado).procesado_por_almacen;
+
+    if (procesado) {
+      return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200"><CheckCircle2 className="mr-1 h-3 w-3" />Procesado</Badge>;
+    }
+    if (enviado) {
+      return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Pendiente de procesar</Badge>;
+    }
+    return <Badge variant="outline">Generado</Badge>;
   };
 
   return (
@@ -358,8 +387,9 @@ const GerenteOperacionesDashboard = () => {
       <Tabs defaultValue="alertas" className="space-y-4">
         <TabsList>
           <TabsTrigger value="alertas">Alertas de Inventario</TabsTrigger>
-          <TabsTrigger value="segmentado">Documento Segmentado</TabsTrigger>
-          <TabsTrigger value="agrupado">Documento Agrupado</TabsTrigger>
+          <TabsTrigger value="segmentado">Para Cadena Suministros</TabsTrigger>
+          <TabsTrigger value="agrupado">Para Gerente Almacén</TabsTrigger>
+          <TabsTrigger value="historial">Historial de Envíos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="alertas" className="space-y-4">
@@ -452,24 +482,23 @@ const GerenteOperacionesDashboard = () => {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Necesidades Segmentadas por Hospital</span>
-                <div className="flex gap-2">
-                  <Button onClick={exportarExcelSegmentado} variant="outline" size="sm">
-                    <Download className="mr-2 h-4 w-4" />
-                    Exportar Excel
-                  </Button>
-                  <Button onClick={generarDocumentoSegmentado} disabled={generando || necesidadesSegmentadas.length === 0}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Generar Documento
-                  </Button>
-                </div>
+                <Button 
+                  onClick={generarYEnviarSegmentado} 
+                  disabled={generando || necesidadesSegmentadas.length === 0}
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  Enviar a Cadena de Suministros
+                </Button>
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Este documento se envía a Cadena de Suministro para la pulverización
+                Este documento se envía a Cadena de Suministros para distribución desde almacén central a hospitales
               </p>
             </CardHeader>
             <CardContent>
               {necesidadesSegmentadas.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No hay necesidades activas</div>
+                <div className="text-center py-8 text-muted-foreground">
+                  No hay necesidades activas
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -484,7 +513,7 @@ const GerenteOperacionesDashboard = () => {
                   </TableHeader>
                   <TableBody>
                     {necesidadesSegmentadas.map((n, idx) => (
-                      <TableRow key={idx}>
+                      <TableRow key={`${n.hospital_id}-${n.insumo_catalogo_id}-${idx}`}>
                         <TableCell className="font-medium">{n.hospital_nombre}</TableCell>
                         <TableCell className="font-mono text-sm">{n.insumo_clave}</TableCell>
                         <TableCell>{n.insumo_nombre}</TableCell>
@@ -506,32 +535,31 @@ const GerenteOperacionesDashboard = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Necesidades Agrupadas (Total)</span>
-                <div className="flex gap-2">
-                  <Button onClick={exportarExcelAgrupado} variant="outline" size="sm">
-                    <Download className="mr-2 h-4 w-4" />
-                    Exportar Excel
-                  </Button>
-                  <Button onClick={generarDocumentoAgrupado} disabled={generando || necesidadesAgrupadas.length === 0}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Generar Documento
-                  </Button>
-                </div>
+                <span>Necesidades Consolidadas (Agrupado)</span>
+                <Button 
+                  onClick={generarYEnviarAgrupado} 
+                  disabled={generando || necesidadesAgrupadas.length === 0}
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  Enviar a Gerente de Almacén
+                </Button>
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Este documento se envía al Gerente de Almacén para gestión con proveedores
+                Este documento se envía a Gerente de Almacén para gestión de compras con proveedores
               </p>
             </CardHeader>
             <CardContent>
               {necesidadesAgrupadas.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No hay necesidades activas</div>
+                <div className="text-center py-8 text-muted-foreground">
+                  No hay necesidades activas
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Clave</TableHead>
                       <TableHead>Insumo</TableHead>
-                      <TableHead className="text-right">Total Requerido</TableHead>
+                      <TableHead className="text-right">Total Faltante</TableHead>
                       <TableHead className="text-right">Hospitales Afectados</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -540,10 +568,10 @@ const GerenteOperacionesDashboard = () => {
                       <TableRow key={n.insumo_catalogo_id}>
                         <TableCell className="font-mono text-sm">{n.insumo_clave}</TableCell>
                         <TableCell className="font-medium">{n.insumo_nombre}</TableCell>
-                        <TableCell className="text-right font-mono font-bold">
+                        <TableCell className="text-right font-mono font-bold text-destructive">
                           {n.total_faltante.toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-right">{n.hospitales_afectados}</TableCell>
+                        <TableCell className="text-right font-mono">{n.hospitales_afectados}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -551,6 +579,62 @@ const GerenteOperacionesDashboard = () => {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="historial" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Enviados a Cadena de Suministros</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {documentosSegmentados.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-4">Sin documentos enviados</p>
+                ) : (
+                  <div className="space-y-2">
+                    {documentosSegmentados.map(doc => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-mono text-sm">
+                            {new Date(doc.fecha_generacion).toLocaleDateString('es-MX', {
+                              day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        {getDocumentoEstadoBadge(doc)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Enviados a Gerente de Almacén</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {documentosAgrupados.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-4">Sin documentos enviados</p>
+                ) : (
+                  <div className="space-y-2">
+                    {documentosAgrupados.map(doc => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-mono text-sm">
+                            {new Date(doc.fecha_generacion).toLocaleDateString('es-MX', {
+                              day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        {getDocumentoEstadoBadge(doc)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

@@ -160,42 +160,101 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
           return;
         }
 
-        // 2a) SUPERVISOR → lista de hospitales en `assigned_hospitals`
+        // 2a) SUPERVISOR → buscar en supervisor_hospital_assignments primero,
+        // luego fallback a assigned_hospitals en tabla users
         if (userRole === "supervisor") {
-          const assigned = userRow.assigned_hospitals || "";
+          // Primero obtener el auth user_id del perfil
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("username", userId)
+            .maybeSingle();
 
-          const hospitalNames = assigned
-            .split(",")
-            .map((h) => h.trim())
-            .filter((h) => h.length > 0);
+          if (profileError) {
+            console.error("Error fetching profile for supervisor:", profileError);
+          }
 
-          if (hospitalNames.length === 0) {
-            console.warn("Supervisor sin hospitales asignados en assigned_hospitals");
+          let hospitals: Hospital[] = [];
+
+          // Intentar buscar en supervisor_hospital_assignments
+          if (profileData?.id) {
+            const { data: assignments, error: assignmentsError } = await supabase
+              .from("supervisor_hospital_assignments")
+              .select(`
+                hospital_id,
+                hospital:hospitales(*)
+              `)
+              .eq("supervisor_user_id", profileData.id);
+
+            if (!assignmentsError && assignments && assignments.length > 0) {
+              hospitals = assignments
+                .filter((a: any) => a.hospital)
+                .map((a: any) => ({
+                  ...mapHospital(a.hospital),
+                  state_name: a.hospital.state_id || ""
+                }));
+            }
+          }
+
+          // Fallback: buscar en users.assigned_hospitals si no hay asignaciones
+          if (hospitals.length === 0) {
+            const assigned = userRow.assigned_hospitals || "";
+            const hospitalNames = assigned
+              .split(",")
+              .map((h) => h.trim())
+              .filter((h) => h.length > 0);
+
+            if (hospitalNames.length > 0) {
+              const { data: hospitalsData, error: hospitalsError } = await (supabase as any)
+                .from("hospitales")
+                .select("*")
+                .in("display_name", hospitalNames)
+                .order("nombre") as { data: any[] | null; error: any };
+
+              if (!hospitalsError && hospitalsData) {
+                hospitals = hospitalsData.map(mapHospital);
+              }
+            }
+          }
+
+          // Segundo fallback: buscar por budget_code del supervisor
+          if (hospitals.length === 0 && userRow.hospital_budget_code) {
+            // Obtener el estado del hospital del supervisor
+            const { data: supervisorHospital, error: shError } = await supabase
+              .from("hospitales")
+              .select("*, states(name)")
+              .eq("budget_code", userRow.hospital_budget_code)
+              .maybeSingle();
+
+            if (!shError && supervisorHospital) {
+              // Buscar todos los hospitales del mismo estado
+              const stateId = supervisorHospital.state_id;
+              if (stateId) {
+                const { data: stateHospitals, error: stateError } = await supabase
+                  .from("hospitales")
+                  .select("*, states(name)")
+                  .eq("state_id", stateId)
+                  .order("nombre");
+
+                if (!stateError && stateHospitals) {
+                  hospitals = stateHospitals.map((h: any) => ({
+                    ...mapHospital(h),
+                    state_name: h.states?.name || ""
+                  }));
+                }
+              }
+            }
+          }
+
+          if (hospitals.length === 0) {
+            console.warn("Supervisor sin hospitales asignados");
             setAvailableHospitals([]);
             setSelectedHospital(null);
             return;
           }
 
-          const { data: hospitalsData, error: hospitalsError } = await (supabase as any)
-            .from("hospitales")
-            .select("*")
-            .in("display_name", hospitalNames)
-            .order("nombre") as { data: any[] | null; error: any };
-
-          if (hospitalsError) {
-            console.error("Error fetching supervisor hospitals:", hospitalsError);
-            setAvailableHospitals([]);
-            setSelectedHospital(null);
-            return;
-          }
-
-          const hospitals: Hospital[] = (hospitalsData || []).map(mapHospital);
           setAvailableHospitals(hospitals);
-          if (hospitals.length > 0) {
-            setSelectedHospital(hospitals[0]);
-          } else {
-            setSelectedHospital(null);
-          }
+          setSelectedHospital(hospitals[0]);
           return;
         }
 

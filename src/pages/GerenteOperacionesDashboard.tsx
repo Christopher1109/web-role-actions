@@ -7,9 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { AlertTriangle, FileText, Send, RefreshCw, Building2, Package, CheckCircle2, Clock, Ban } from 'lucide-react';
+import { AlertTriangle, FileText, Send, RefreshCw, Building2, Package, CheckCircle2, Clock, Ban, Settings2 } from 'lucide-react';
 import { StatusTimeline, StatusBadge } from '@/components/StatusTimeline';
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
+import EdicionMasivaMínimos from '@/components/forms/EdicionMasivaMínimos';
 
 interface AlertaInventario {
   id: string;
@@ -407,6 +408,10 @@ const GerenteOperacionesDashboard = () => {
       <Tabs defaultValue="alertas" className="space-y-4">
         <TabsList>
           <TabsTrigger value="alertas">Alertas de Inventario</TabsTrigger>
+          <TabsTrigger value="minimos" className="flex items-center gap-1">
+            <Settings2 className="h-3.5 w-3.5" />
+            Configurar Mínimos
+          </TabsTrigger>
           <TabsTrigger value="segmentado">Para Cadena Suministros</TabsTrigger>
           <TabsTrigger value="agrupado">Para Gerente Almacén</TabsTrigger>
           <TabsTrigger value="historial">Historial de Envíos</TabsTrigger>
@@ -559,6 +564,10 @@ const GerenteOperacionesDashboard = () => {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="minimos" className="space-y-4">
+          <EdicionMasivaMínimos esGlobal={true} onActualizado={fetchData} />
         </TabsContent>
 
         <TabsContent value="segmentado" className="space-y-4">

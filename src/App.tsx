@@ -24,6 +24,10 @@ import PopulateInsumos from './pages/PopulateInsumos';
 import ImportProcedimientos from './pages/ImportProcedimientos';
 import SetupAlmacenes from './pages/SetupAlmacenes';
 import Kardex from './pages/Kardex';
+import GerenteOperacionesDashboard from './pages/GerenteOperacionesDashboard';
+import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
+import CadenaSuministrosDashboard from './pages/CadenaSuministrosDashboard';
+import FinanzasDashboard from './pages/FinanzasDashboard';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -82,6 +86,8 @@ const AppContent = () => {
               )}
               {(userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>
+                  <Route path="/alertas-operaciones" element={<GerenteOperacionesDashboard />} />
+                  <Route path="/finanzas" element={<FinanzasDashboard />} />
                   <Route path="/traspasos" element={<Traspasos />} />
                   <Route path="/usuarios" element={<Usuarios />} />
                   <Route path="/export-users" element={<ExportUsers />} />
@@ -94,6 +100,15 @@ const AppContent = () => {
                   <Route path="/import-procedimientos" element={<ImportProcedimientos />} />
                   <Route path="/setup-almacenes" element={<SetupAlmacenes />} />
                 </>
+              )}
+              {userRole === 'gerente_almacen' && (
+                <>
+                  <Route path="/almacen-central" element={<GerenteAlmacenDashboard />} />
+                  <Route path="/traspasos" element={<Traspasos />} />
+                </>
+              )}
+              {userRole === 'cadena_suministros' && (
+                <Route path="/distribucion" element={<CadenaSuministrosDashboard />} />
               )}
               <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

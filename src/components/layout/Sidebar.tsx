@@ -13,7 +13,11 @@ import {
   UserCog,
   Upload,
   Download,
-  History
+  History,
+  AlertTriangle,
+  Warehouse,
+  Truck,
+  DollarSign
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HospitalSelector } from '@/components/HospitalSelector';
@@ -39,6 +43,10 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
 
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
+    { path: '/alertas-operaciones', icon: AlertTriangle, label: 'Alertas y Necesidades', roles: ['gerente_operaciones'] },
+    { path: '/almacen-central', icon: Warehouse, label: 'Almacén Central', roles: ['gerente_almacen'] },
+    { path: '/distribucion', icon: Truck, label: 'Distribución', roles: ['cadena_suministros'] },
+    { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['gerente_operaciones'] },
     { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
     { path: '/kardex', icon: History, label: 'Kardex', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen'] },

@@ -17,7 +17,8 @@ import {
   Search,
   AlertTriangle,
   BarChart3,
-  Warehouse
+  Warehouse,
+  ClipboardList
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HospitalSelector } from '@/components/HospitalSelector';
@@ -43,6 +44,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen'] },
     { path: '/gerente-dashboard', icon: BarChart3, label: 'Panel Gerente', roles: ['gerente', 'gerente_operaciones'] },
+    { path: '/supervisor-dashboard', icon: ClipboardList, label: 'Panel Supervisor', roles: ['supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/almacen-dashboard', icon: Warehouse, label: 'Panel Almacén', roles: ['gerente_almacen', 'gerente_operaciones'] },
     { path: '/almacenista-dashboard', icon: Warehouse, label: 'Panel Almacenista', roles: ['almacenista', 'lider', 'gerente', 'gerente_operaciones'] },
     { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },

@@ -4,7 +4,9 @@ export type UserRole =
   | 'lider' 
   | 'supervisor' 
   | 'gerente'
-  | 'gerente_operaciones';
+  | 'gerente_operaciones'
+  | 'gerente_almacen'
+  | 'cadena_suministros';
 
 export interface Doctor {
   id: string;

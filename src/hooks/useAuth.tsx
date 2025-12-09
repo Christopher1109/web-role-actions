@@ -52,23 +52,33 @@ export const useAuth = () => {
         .select('role')
         .eq('user_id', userId);
 
-      // Obtener username del perfil
+      // Obtener username del perfil (IMPORTANTE: obtener username, no solo nombre)
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('nombre')
+        .select('nombre, username')
         .eq('id', userId)
         .maybeSingle();
 
       if (profileData) {
-        setUsername((profileData as any).nombre);
+        // Usar el username para el HospitalContext
+        setUsername((profileData as any).username || (profileData as any).nombre);
       }
 
       if (error) {
         console.error('Error fetching user role:', error);
         setUserRole('auxiliar'); // Rol por defecto
       } else if (data && data.length > 0) {
-        // Jerarquía de roles (mayor a menor)
-        const roleHierarchy: UserRole[] = ['gerente_operaciones', 'gerente', 'supervisor', 'lider', 'almacenista', 'auxiliar'];
+        // Jerarquía de roles (mayor a menor) - incluir nuevos roles
+        const roleHierarchy: UserRole[] = [
+          'gerente_operaciones', 
+          'gerente_almacen', 
+          'cadena_suministros',
+          'gerente', 
+          'supervisor', 
+          'lider', 
+          'almacenista', 
+          'auxiliar'
+        ];
         
         // Encontrar el rol con mayor jerarquía
         const highestRole = roleHierarchy.find(role => 

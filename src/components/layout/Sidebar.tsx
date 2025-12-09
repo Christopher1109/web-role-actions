@@ -49,16 +49,14 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/distribucion', icon: Truck, label: 'Distribución', roles: ['cadena_suministros'] },
     { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['finanzas'] },
     { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
-    { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
+    { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/alertas-transferencia', icon: AlertTriangle, label: 'Recepción Insumos', roles: ['almacenista', 'lider'] },
-    { path: '/kardex', icon: History, label: 'Kardex', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen'] },
+    { path: '/kardex', icon: History, label: 'Kardex', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/medicos', icon: Users, label: 'Médicos', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/paquetes', icon: Database, label: 'Paquetes Anestesia', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
-    { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
-    { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente', 'gerente_operaciones', 'gerente_almacen'] },
+    { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
+    { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente', 'gerente_operaciones'] },
-    { path: '/export-users', icon: Download, label: 'Exportar Usuarios', roles: ['gerente', 'gerente_operaciones'] },
-    { path: '/import-setup', icon: Upload, label: 'Importar Sistema', roles: ['gerente', 'gerente_operaciones'] },
   ];
 
   const filteredMenuItems = menuItems.filter(item => 

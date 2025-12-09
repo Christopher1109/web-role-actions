@@ -123,6 +123,39 @@ export type Database = {
           },
         ]
       }
+      excel_insumo_config: {
+        Row: {
+          id: number
+          id_bcb: string | null
+          max_excel: number | null
+          min_excel: number | null
+          nombre_insumo: string
+          observaciones: string | null
+          tiene_valores_claros: boolean | null
+          tipo_anestesia: string
+        }
+        Insert: {
+          id?: number
+          id_bcb?: string | null
+          max_excel?: number | null
+          min_excel?: number | null
+          nombre_insumo: string
+          observaciones?: string | null
+          tiene_valores_claros?: boolean | null
+          tipo_anestesia: string
+        }
+        Update: {
+          id?: number
+          id_bcb?: string | null
+          max_excel?: number | null
+          min_excel?: number | null
+          nombre_insumo?: string
+          observaciones?: string | null
+          tiene_valores_claros?: boolean | null
+          tipo_anestesia?: string
+        }
+        Relationships: []
+      }
       folios: {
         Row: {
           anestesia_principal: string | null
@@ -152,6 +185,8 @@ export type Database = {
           paciente_apellido_materno: string | null
           paciente_apellido_paterno: string | null
           paciente_edad: number | null
+          paciente_edad_unidad: string | null
+          paciente_edad_valor: number | null
           paciente_genero: string | null
           paciente_nombre: string | null
           paciente_nss: string | null
@@ -190,6 +225,8 @@ export type Database = {
           paciente_apellido_materno?: string | null
           paciente_apellido_paterno?: string | null
           paciente_edad?: number | null
+          paciente_edad_unidad?: string | null
+          paciente_edad_valor?: number | null
           paciente_genero?: string | null
           paciente_nombre?: string | null
           paciente_nss?: string | null
@@ -228,6 +265,8 @@ export type Database = {
           paciente_apellido_materno?: string | null
           paciente_apellido_paterno?: string | null
           paciente_edad?: number | null
+          paciente_edad_unidad?: string | null
+          paciente_edad_valor?: number | null
           paciente_genero?: string | null
           paciente_nombre?: string | null
           paciente_nss?: string | null
@@ -308,6 +347,50 @@ export type Database = {
           },
         ]
       }
+      formatos_generados: {
+        Row: {
+          created_at: string
+          data_json: Json
+          estado: string
+          generado_por: string | null
+          hospital_id: string | null
+          id: string
+          notas: string | null
+          pdf_url: string | null
+          tipo: string
+        }
+        Insert: {
+          created_at?: string
+          data_json?: Json
+          estado?: string
+          generado_por?: string | null
+          hospital_id?: string | null
+          id?: string
+          notas?: string | null
+          pdf_url?: string | null
+          tipo: string
+        }
+        Update: {
+          created_at?: string
+          data_json?: Json
+          estado?: string
+          generado_por?: string | null
+          hospital_id?: string | null
+          id?: string
+          notas?: string | null
+          pdf_url?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "formatos_generados_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hospitales: {
         Row: {
           budget_code: string | null
@@ -360,6 +443,65 @@ export type Database = {
             columns: ["state_id"]
             isOneToOne: false
             referencedRelation: "states"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      insumo_configuracion: {
+        Row: {
+          cantidad_default: number | null
+          condicionante: string | null
+          created_at: string | null
+          grupo_exclusivo: string | null
+          id: string
+          insumo_catalogo_id: string
+          max_anestesia: number | null
+          max_global_inventario: number | null
+          min_anestesia: number | null
+          min_global_inventario: number | null
+          nota: string | null
+          tipo_anestesia: string | null
+          tipo_limite: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          cantidad_default?: number | null
+          condicionante?: string | null
+          created_at?: string | null
+          grupo_exclusivo?: string | null
+          id?: string
+          insumo_catalogo_id: string
+          max_anestesia?: number | null
+          max_global_inventario?: number | null
+          min_anestesia?: number | null
+          min_global_inventario?: number | null
+          nota?: string | null
+          tipo_anestesia?: string | null
+          tipo_limite?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          cantidad_default?: number | null
+          condicionante?: string | null
+          created_at?: string | null
+          grupo_exclusivo?: string | null
+          id?: string
+          insumo_catalogo_id?: string
+          max_anestesia?: number | null
+          max_global_inventario?: number | null
+          min_anestesia?: number | null
+          min_global_inventario?: number | null
+          nota?: string | null
+          tipo_anestesia?: string | null
+          tipo_limite?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insumo_configuracion_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
             referencedColumns: ["id"]
           },
         ]
@@ -423,6 +565,85 @@ export type Database = {
           },
         ]
       }
+      insumos_alertas: {
+        Row: {
+          cantidad_actual: number
+          created_at: string
+          enviado_a_gerente_operaciones: boolean
+          enviado_a_supervisor: boolean
+          estado: string
+          generado_por: string | null
+          hospital_id: string
+          id: string
+          insumo_catalogo_id: string
+          inventario_id: string | null
+          minimo_permitido: number
+          notas: string | null
+          prioridad: string
+          resuelto_at: string | null
+          resuelto_por: string | null
+          updated_at: string
+        }
+        Insert: {
+          cantidad_actual?: number
+          created_at?: string
+          enviado_a_gerente_operaciones?: boolean
+          enviado_a_supervisor?: boolean
+          estado?: string
+          generado_por?: string | null
+          hospital_id: string
+          id?: string
+          insumo_catalogo_id: string
+          inventario_id?: string | null
+          minimo_permitido?: number
+          notas?: string | null
+          prioridad?: string
+          resuelto_at?: string | null
+          resuelto_por?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cantidad_actual?: number
+          created_at?: string
+          enviado_a_gerente_operaciones?: boolean
+          enviado_a_supervisor?: boolean
+          estado?: string
+          generado_por?: string | null
+          hospital_id?: string
+          id?: string
+          insumo_catalogo_id?: string
+          inventario_id?: string | null
+          minimo_permitido?: number
+          notas?: string | null
+          prioridad?: string
+          resuelto_at?: string | null
+          resuelto_por?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insumos_alertas_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insumos_alertas_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insumos_alertas_inventario_id_fkey"
+            columns: ["inventario_id"]
+            isOneToOne: false
+            referencedRelation: "inventario_hospital"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       insumos_catalogo: {
         Row: {
           activo: boolean | null
@@ -468,11 +689,83 @@ export type Database = {
         }
         Relationships: []
       }
+      insumos_requerimientos: {
+        Row: {
+          alerta_origen_id: string | null
+          aprobado_at: string | null
+          aprobado_por: string | null
+          cantidad_requerida: number
+          created_at: string
+          estado: string
+          generado_por: string | null
+          hospital_id: string
+          id: string
+          insumo_catalogo_id: string
+          notas: string | null
+          prioridad: string
+          updated_at: string
+        }
+        Insert: {
+          alerta_origen_id?: string | null
+          aprobado_at?: string | null
+          aprobado_por?: string | null
+          cantidad_requerida?: number
+          created_at?: string
+          estado?: string
+          generado_por?: string | null
+          hospital_id: string
+          id?: string
+          insumo_catalogo_id: string
+          notas?: string | null
+          prioridad?: string
+          updated_at?: string
+        }
+        Update: {
+          alerta_origen_id?: string | null
+          aprobado_at?: string | null
+          aprobado_por?: string | null
+          cantidad_requerida?: number
+          created_at?: string
+          estado?: string
+          generado_por?: string | null
+          hospital_id?: string
+          id?: string
+          insumo_catalogo_id?: string
+          notas?: string | null
+          prioridad?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insumos_requerimientos_alerta_origen_id_fkey"
+            columns: ["alerta_origen_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_alertas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insumos_requerimientos_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insumos_requerimientos_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventario_hospital: {
         Row: {
           almacen_id: string
           cantidad_actual: number | null
           cantidad_inicial: number | null
+          cantidad_maxima: number | null
+          cantidad_minima: number | null
           created_at: string | null
           estatus: string | null
           fecha_caducidad: string | null
@@ -487,6 +780,8 @@ export type Database = {
           almacen_id: string
           cantidad_actual?: number | null
           cantidad_inicial?: number | null
+          cantidad_maxima?: number | null
+          cantidad_minima?: number | null
           created_at?: string | null
           estatus?: string | null
           fecha_caducidad?: string | null
@@ -501,6 +796,8 @@ export type Database = {
           almacen_id?: string
           cantidad_actual?: number | null
           cantidad_inicial?: number | null
+          cantidad_maxima?: number | null
+          cantidad_minima?: number | null
           created_at?: string | null
           estatus?: string | null
           fecha_caducidad?: string | null
@@ -542,6 +839,7 @@ export type Database = {
           especialidad: Database["public"]["Enums"]["especialidad_medica"]
           hospital_budget_code: string | null
           hospital_display_name: string | null
+          hospital_id: string | null
           id: string
           nombre: string
           state_name: string | null
@@ -553,6 +851,7 @@ export type Database = {
           especialidad: Database["public"]["Enums"]["especialidad_medica"]
           hospital_budget_code?: string | null
           hospital_display_name?: string | null
+          hospital_id?: string | null
           id?: string
           nombre: string
           state_name?: string | null
@@ -564,12 +863,21 @@ export type Database = {
           especialidad?: Database["public"]["Enums"]["especialidad_medica"]
           hospital_budget_code?: string | null
           hospital_display_name?: string | null
+          hospital_id?: string | null
           id?: string
           nombre?: string
           state_name?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "medicos_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       movimientos_inventario: {
         Row: {
@@ -720,8 +1028,119 @@ export type Database = {
         }
         Relationships: []
       }
+      pedido_items: {
+        Row: {
+          cantidad_recibida: number
+          cantidad_solicitada: number
+          created_at: string
+          estado: string
+          id: string
+          insumo_catalogo_id: string
+          notas: string | null
+          pedido_id: string
+          precio_unitario: number | null
+        }
+        Insert: {
+          cantidad_recibida?: number
+          cantidad_solicitada?: number
+          created_at?: string
+          estado?: string
+          id?: string
+          insumo_catalogo_id: string
+          notas?: string | null
+          pedido_id: string
+          precio_unitario?: number | null
+        }
+        Update: {
+          cantidad_recibida?: number
+          cantidad_solicitada?: number
+          created_at?: string
+          estado?: string
+          id?: string
+          insumo_catalogo_id?: string
+          notas?: string | null
+          pedido_id?: string
+          precio_unitario?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pedido_items_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedido_items_pedido_id_fkey"
+            columns: ["pedido_id"]
+            isOneToOne: false
+            referencedRelation: "pedidos_compra"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pedidos_compra: {
+        Row: {
+          aprobado_at: string | null
+          aprobado_por: string | null
+          completado_at: string | null
+          creado_por: string | null
+          created_at: string
+          estado: string
+          fecha_estimada_entrega: string | null
+          formato_origen_id: string | null
+          id: string
+          notas: string | null
+          numero_pedido: string
+          proveedor: string | null
+          total_items: number
+          updated_at: string
+        }
+        Insert: {
+          aprobado_at?: string | null
+          aprobado_por?: string | null
+          completado_at?: string | null
+          creado_por?: string | null
+          created_at?: string
+          estado?: string
+          fecha_estimada_entrega?: string | null
+          formato_origen_id?: string | null
+          id?: string
+          notas?: string | null
+          numero_pedido: string
+          proveedor?: string | null
+          total_items?: number
+          updated_at?: string
+        }
+        Update: {
+          aprobado_at?: string | null
+          aprobado_por?: string | null
+          completado_at?: string | null
+          creado_por?: string | null
+          created_at?: string
+          estado?: string
+          fecha_estimada_entrega?: string | null
+          formato_origen_id?: string | null
+          id?: string
+          notas?: string | null
+          numero_pedido?: string
+          proveedor?: string | null
+          total_items?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pedidos_compra_formato_origen_id_fkey"
+            columns: ["formato_origen_id"]
+            isOneToOne: false
+            referencedRelation: "formatos_generados"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       procedimientos: {
         Row: {
+          clave_procedimiento: string | null
           created_at: string | null
           descripcion: string | null
           hospital_id: string | null
@@ -730,6 +1149,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          clave_procedimiento?: string | null
           created_at?: string | null
           descripcion?: string | null
           hospital_id?: string | null
@@ -738,6 +1158,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          clave_procedimiento?: string | null
           created_at?: string | null
           descripcion?: string | null
           hospital_id?: string | null
@@ -758,6 +1179,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string | null
+          departamento: string | null
           hospital_id: string | null
           id: string
           nombre: string
@@ -765,6 +1187,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          departamento?: string | null
           hospital_id?: string | null
           id: string
           nombre: string
@@ -772,6 +1195,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          departamento?: string | null
           hospital_id?: string | null
           id?: string
           nombre?: string
@@ -997,6 +1421,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_gerente_almacen: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role:
@@ -1006,6 +1431,7 @@ export type Database = {
         | "almacenista"
         | "auxiliar"
         | "gerente_operaciones"
+        | "gerente_almacen"
       especialidad_medica:
         | "anestesiologia"
         | "cirugia_general"
@@ -1150,6 +1576,7 @@ export const Constants = {
         "almacenista",
         "auxiliar",
         "gerente_operaciones",
+        "gerente_almacen",
       ],
       especialidad_medica: [
         "anestesiologia",

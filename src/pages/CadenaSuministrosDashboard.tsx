@@ -520,7 +520,7 @@ const CadenaSuministrosDashboard = () => {
                 Órdenes Pagadas Pendientes de Recibir
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Confirma la recepción de los insumos para actualizar el Almacén Central
+                Revisa los items de cada orden y confirma la recepción para actualizar el Almacén Central
               </p>
             </CardHeader>
             <CardContent>
@@ -531,24 +531,57 @@ const CadenaSuministrosDashboard = () => {
                   No hay órdenes pendientes de recibir
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {ordenesParaRecibir.map(orden => (
                     <Card key={orden.id} className="border-l-4 border-l-primary">
-                      <CardContent className="pt-4">
+                      <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="font-mono font-bold">{orden.numero_pedido}</p>
+                            <p className="font-mono font-bold text-lg">{orden.numero_pedido}</p>
                             <p className="text-sm text-muted-foreground">
-                              {new Date(orden.created_at).toLocaleDateString('es-MX')} • {orden.total_items} items
+                              {new Date(orden.created_at).toLocaleDateString('es-MX', {
+                                year: 'numeric', month: 'long', day: 'numeric'
+                              })}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge className="bg-amber-100 text-amber-800">Pagado - Espera Confirmación</Badge>
-                            <Button onClick={() => abrirRecibirDialog(orden)}>
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              Confirmar Recepción
-                            </Button>
-                          </div>
+                          <Badge className="bg-amber-100 text-amber-800">Pagado - Espera Confirmación</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {/* Show items preview */}
+                        <div className="mb-4">
+                          <p className="text-sm font-medium text-muted-foreground mb-2">Items a recibir:</p>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Clave</TableHead>
+                                <TableHead>Insumo</TableHead>
+                                <TableHead className="text-right">Cantidad Solicitada</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {orden.items?.slice(0, 5).map(item => (
+                                <TableRow key={item.id}>
+                                  <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
+                                  <TableCell>{item.insumo?.nombre}</TableCell>
+                                  <TableCell className="text-right font-mono font-bold">{item.cantidad_solicitada}</TableCell>
+                                </TableRow>
+                              ))}
+                              {(orden.items?.length || 0) > 5 && (
+                                <TableRow>
+                                  <TableCell colSpan={3} className="text-center text-muted-foreground text-sm">
+                                    ... y {(orden.items?.length || 0) - 5} items más
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        <div className="flex justify-end">
+                          <Button onClick={() => abrirRecibirDialog(orden)} size="lg">
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                            Confirmar Recepción ({orden.total_items} items)
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>

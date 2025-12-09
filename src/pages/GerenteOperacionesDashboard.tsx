@@ -413,10 +413,67 @@ const GerenteOperacionesDashboard = () => {
         </TabsList>
 
         <TabsContent value="alertas" className="space-y-4">
+          {/* Summary Cards by Priority */}
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card className="border-l-4 border-l-red-500">
+              <CardContent className="pt-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Crítica</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {alertas.filter(a => a.estado === 'activa' && a.prioridad === 'critica').length}
+                    </p>
+                  </div>
+                  <AlertTriangle className="h-8 w-8 text-red-500" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-l-4 border-l-orange-500">
+              <CardContent className="pt-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Alta</p>
+                    <p className="text-2xl font-bold text-orange-600">
+                      {alertas.filter(a => a.estado === 'activa' && a.prioridad === 'alta').length}
+                    </p>
+                  </div>
+                  <AlertTriangle className="h-8 w-8 text-orange-500" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-l-4 border-l-yellow-500">
+              <CardContent className="pt-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Media</p>
+                    <p className="text-2xl font-bold text-yellow-600">
+                      {alertas.filter(a => a.estado === 'activa' && a.prioridad === 'media').length}
+                    </p>
+                  </div>
+                  <Package className="h-8 w-8 text-yellow-500" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-l-4 border-l-blue-500">
+              <CardContent className="pt-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Baja</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {alertas.filter(a => a.estado === 'activa' && a.prioridad === 'baja').length}
+                    </p>
+                  </div>
+                  <Package className="h-8 w-8 text-blue-500" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Filters and Table */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Alertas por Hospital</span>
+                <span>Detalle de Alertas</span>
                 <div className="flex gap-2">
                   <Select value={filtroHospital} onValueChange={setFiltroHospital}>
                     <SelectTrigger className="w-[200px]">
@@ -442,6 +499,9 @@ const GerenteOperacionesDashboard = () => {
                   </Select>
                 </div>
               </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Los mínimos se configuran desde el dashboard del Almacenista en cada hospital (menú Inventario → editar insumo)
+              </p>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -452,36 +512,40 @@ const GerenteOperacionesDashboard = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Prioridad</TableHead>
                       <TableHead>Hospital</TableHead>
                       <TableHead>Insumo</TableHead>
                       <TableHead className="text-right">Existencia</TableHead>
                       <TableHead className="text-right">Mínimo</TableHead>
-                      <TableHead>Prioridad</TableHead>
+                      <TableHead className="text-right">Faltante</TableHead>
                       <TableHead>Estado</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {alertas.map((alerta) => (
-                      <TableRow key={alerta.id}>
+                      <TableRow key={alerta.id} className={alerta.prioridad === 'critica' ? 'bg-red-50/50' : ''}>
+                        <TableCell>
+                          <Badge variant={getPrioridadColor(alerta.prioridad)} className="uppercase text-xs">
+                            {alerta.prioridad}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="font-medium">
                           {alerta.hospital?.display_name || alerta.hospital?.nombre}
                         </TableCell>
                         <TableCell>
                           <div>
                             <div className="font-medium">{alerta.insumo?.nombre}</div>
-                            <div className="text-sm text-muted-foreground">{alerta.insumo?.clave}</div>
+                            <div className="text-xs text-muted-foreground font-mono">{alerta.insumo?.clave}</div>
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          <span className={alerta.cantidad_actual === 0 ? 'text-destructive' : ''}>
+                          <span className={alerta.cantidad_actual === 0 ? 'text-destructive font-bold' : ''}>
                             {alerta.cantidad_actual}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right font-mono">{alerta.minimo_permitido}</TableCell>
-                        <TableCell>
-                          <Badge variant={getPrioridadColor(alerta.prioridad)}>
-                            {alerta.prioridad}
-                          </Badge>
+                        <TableCell className="text-right font-mono text-muted-foreground">{alerta.minimo_permitido}</TableCell>
+                        <TableCell className="text-right font-mono font-bold text-destructive">
+                          {Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual)}
                         </TableCell>
                         <TableCell>
                           <Badge variant={getEstadoColor(alerta.estado)}>

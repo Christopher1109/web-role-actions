@@ -155,28 +155,57 @@ const GerenteAlmacenDashboard = () => {
       return;
     }
 
-    const data = documento.detalles.map(d => ({
-      'ID Insumo': d.insumo_catalogo_id,
+    const data = documento.detalles.map((d, index) => ({
+      'No.': index + 1,
       'Clave': d.insumo?.clave || 'N/A',
-      'Nombre Insumo': d.insumo?.nombre || 'N/A',
+      'Nombre del Insumo': d.insumo?.nombre || 'N/A',
       'Cantidad Requerida': d.total_faltante_requerido,
       'Cantidad Proveedor': '',
-      'Precio Unitario': ''
+      'Precio Unitario ($)': '',
+      'ID Sistema': d.insumo_catalogo_id
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
+    
+    // Set column widths with generous spacing
     ws['!cols'] = [
-      { wch: 40 },
-      { wch: 15 },
-      { wch: 50 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 15 }
+      { wch: 6 },   // No.
+      { wch: 18 },  // Clave
+      { wch: 55 },  // Nombre del Insumo
+      { wch: 22 },  // Cantidad Requerida
+      { wch: 22 },  // Cantidad Proveedor
+      { wch: 20 },  // Precio Unitario
+      { wch: 40 }   // ID Sistema
     ];
+
+    // Style header row
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const address = XLSX.utils.encode_col(C) + '1';
+      if (!ws[address]) continue;
+      ws[address].s = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: 'E0E0E0' } },
+        alignment: { horizontal: 'center' }
+      };
+    }
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Solicitud Proveedor');
-    XLSX.writeFile(wb, `Solicitud_Proveedor_${documento.id.slice(0, 8)}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+    // Add info sheet
+    const infoData = [
+      { Campo: 'Fecha de Generación', Valor: new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) },
+      { Campo: 'Total de Items', Valor: documento.detalles.length },
+      { Campo: 'ID Documento', Valor: documento.id },
+      { Campo: '', Valor: '' },
+      { Campo: 'Instrucciones', Valor: 'Complete las columnas "Cantidad Proveedor" y "Precio Unitario" y suba el archivo de vuelta.' }
+    ];
+    const wsInfo = XLSX.utils.json_to_sheet(infoData);
+    wsInfo['!cols'] = [{ wch: 25 }, { wch: 50 }];
+    XLSX.utils.book_append_sheet(wb, wsInfo, 'Información');
+    
+    XLSX.writeFile(wb, `Solicitud_Proveedor_${new Date().toISOString().split('T')[0]}_${documento.id.slice(0, 8)}.xlsx`);
     
     toast.success('Excel descargado correctamente');
   };

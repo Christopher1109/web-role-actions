@@ -11,10 +11,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 
 const loginSchema = z.object({
-  email: z.string()
+  username: z.string()
     .trim()
-    .email({ message: "Correo electrónico inválido" })
-    .max(255, { message: "Máximo 255 caracteres" }),
+    .min(3, { message: "El usuario debe tener al menos 3 caracteres" })
+    .max(50, { message: "Máximo 50 caracteres" })
+    .regex(/^[a-zA-Z0-9_]+$/, { message: "Solo letras, números y guiones bajos" }),
   password: z.string()
     .min(6, { message: "La contraseña debe tener al menos 6 caracteres" })
     .max(100, { message: "Máximo 100 caracteres" }),
@@ -34,19 +35,22 @@ const Auth = () => {
     setIsLoading(true);
     
     try {
+      // Convert username to email format for Supabase auth
+      const email = `${data.username.toLowerCase()}@sistema.local`;
+      
       const { error } = await supabase.auth.signInWithPassword({
-        email: data.email,
+        email: email,
         password: data.password,
       });
 
       if (error) {
         if (error.message.includes('Invalid login credentials')) {
           toast.error('Credenciales inválidas', {
-            description: 'Verifica tu correo y contraseña',
+            description: 'Verifica tu usuario y contraseña',
           });
         } else if (error.message.includes('Email not confirmed')) {
-          toast.error('Email no confirmado', {
-            description: 'Por favor confirma tu email',
+          toast.error('Usuario no confirmado', {
+            description: 'Contacta al administrador',
           });
         } else {
           toast.error('Error al iniciar sesión', {
@@ -69,27 +73,28 @@ const Auth = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-4xl space-y-4">
+      <div className="w-full max-w-md space-y-4">
         <Card>
-          <CardHeader>
+          <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold">Sistema de Gestión de Anestesia</CardTitle>
             <CardDescription>
-              Inicia sesión con tus credenciales asignadas
+              Ingresa tu usuario y contraseña
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="login-email">Correo Electrónico</Label>
+                <Label htmlFor="login-username">Usuario</Label>
                 <Input
-                  id="login-email"
-                  type="email"
-                  placeholder="tu@email.com"
-                  {...loginForm.register('email')}
+                  id="login-username"
+                  type="text"
+                  placeholder="Ej: auxiliar01, lider05, operaciones01"
+                  autoComplete="username"
+                  {...loginForm.register('username')}
                 />
-                {loginForm.formState.errors.email && (
+                {loginForm.formState.errors.username && (
                   <p className="text-sm text-destructive">
-                    {loginForm.formState.errors.email.message}
+                    {loginForm.formState.errors.username.message}
                   </p>
                 )}
               </div>
@@ -100,6 +105,7 @@ const Auth = () => {
                   id="login-password"
                   type="password"
                   placeholder="••••••••"
+                  autoComplete="current-password"
                   {...loginForm.register('password')}
                 />
                 {loginForm.formState.errors.password && (
@@ -113,6 +119,20 @@ const Auth = () => {
                 {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
               </Button>
             </form>
+
+            <div className="mt-6 p-4 bg-muted rounded-lg">
+              <p className="text-sm font-medium mb-2">Usuarios de ejemplo:</p>
+              <ul className="text-xs text-muted-foreground space-y-1">
+                <li><code className="bg-background px-1 rounded">auxiliar01</code> - Auxiliar Hospital 1</li>
+                <li><code className="bg-background px-1 rounded">lider01</code> - Líder Hospital 1</li>
+                <li><code className="bg-background px-1 rounded">almacenista01</code> - Almacenista Hospital 1</li>
+                <li><code className="bg-background px-1 rounded">supervisor01</code> - Supervisor Zona 1</li>
+                <li><code className="bg-background px-1 rounded">operaciones01</code> - Gerente Operaciones</li>
+                <li><code className="bg-background px-1 rounded">almacen_gral01</code> - Gerente Almacén</li>
+                <li><code className="bg-background px-1 rounded">suministros01</code> - Cadena Suministros</li>
+              </ul>
+              <p className="text-xs text-muted-foreground mt-2">Contraseña: <code className="bg-background px-1 rounded">Imss2024!</code></p>
+            </div>
           </CardContent>
         </Card>
       </div>

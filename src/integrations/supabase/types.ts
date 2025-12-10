@@ -29,6 +29,7 @@ export type Database = {
           motivo_merma: string | null
           notas: string | null
           notificado: boolean | null
+          tirada_id: string | null
           transferencia_id: string
         }
         Insert: {
@@ -45,6 +46,7 @@ export type Database = {
           motivo_merma?: string | null
           notas?: string | null
           notificado?: boolean | null
+          tirada_id?: string | null
           transferencia_id: string
         }
         Update: {
@@ -61,6 +63,7 @@ export type Database = {
           motivo_merma?: string | null
           notas?: string | null
           notificado?: boolean | null
+          tirada_id?: string | null
           transferencia_id?: string
         }
         Relationships: [
@@ -128,6 +131,48 @@ export type Database = {
           },
         ]
       }
+      almacen_provisional_inventario: {
+        Row: {
+          almacen_provisional_id: string
+          cantidad_disponible: number | null
+          created_at: string | null
+          id: string
+          insumo_catalogo_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          almacen_provisional_id: string
+          cantidad_disponible?: number | null
+          created_at?: string | null
+          id?: string
+          insumo_catalogo_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          almacen_provisional_id?: string
+          cantidad_disponible?: number | null
+          created_at?: string | null
+          id?: string
+          insumo_catalogo_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "almacen_provisional_inventario_almacen_provisional_id_fkey"
+            columns: ["almacen_provisional_id"]
+            isOneToOne: false
+            referencedRelation: "almacenes_provisionales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "almacen_provisional_inventario_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       almacenes: {
         Row: {
           activo: boolean | null
@@ -164,6 +209,50 @@ export type Database = {
             foreignKeyName: "almacenes_hospital_id_fkey"
             columns: ["hospital_id"]
             isOneToOne: true
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      almacenes_provisionales: {
+        Row: {
+          activo: boolean | null
+          created_at: string | null
+          created_by: string | null
+          descripcion: string | null
+          es_principal: boolean | null
+          hospital_id: string
+          id: string
+          nombre: string
+          updated_at: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          descripcion?: string | null
+          es_principal?: boolean | null
+          hospital_id: string
+          id?: string
+          nombre: string
+          updated_at?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          descripcion?: string | null
+          es_principal?: boolean | null
+          hospital_id?: string
+          id?: string
+          nombre?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "almacenes_provisionales_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
             referencedRelation: "hospitales"
             referencedColumns: ["id"]
           },
@@ -239,6 +328,8 @@ export type Database = {
       }
       documento_agrupado_detalle: {
         Row: {
+          cantidad_cubierta: number | null
+          cantidad_pendiente: number | null
           created_at: string
           documento_id: string
           id: string
@@ -246,6 +337,8 @@ export type Database = {
           total_faltante_requerido: number
         }
         Insert: {
+          cantidad_cubierta?: number | null
+          cantidad_pendiente?: number | null
           created_at?: string
           documento_id: string
           id?: string
@@ -253,6 +346,8 @@ export type Database = {
           total_faltante_requerido?: number
         }
         Update: {
+          cantidad_cubierta?: number | null
+          cantidad_pendiente?: number | null
           created_at?: string
           documento_id?: string
           id?: string
@@ -670,6 +765,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "formatos_generados_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hospital_procedimientos: {
+        Row: {
+          activo: boolean | null
+          created_at: string | null
+          created_by: string | null
+          hospital_id: string
+          id: string
+          procedimiento_clave: string
+          procedimiento_nombre: string
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          hospital_id: string
+          id?: string
+          procedimiento_clave: string
+          procedimiento_nombre: string
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          hospital_id?: string
+          id?: string
+          procedimiento_clave?: string
+          procedimiento_nombre?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hospital_procedimientos_hospital_id_fkey"
             columns: ["hospital_id"]
             isOneToOne: false
             referencedRelation: "hospitales"
@@ -1165,6 +1298,135 @@ export type Database = {
           },
         ]
       }
+      mermas_transferencia: {
+        Row: {
+          alerta_transferencia_id: string | null
+          cantidad_enviada: number
+          cantidad_merma: number
+          cantidad_recibida: number
+          created_at: string | null
+          id: string
+          insumo_catalogo_id: string
+          motivo: string | null
+          registrado_por: string | null
+          transferencia_id: string | null
+        }
+        Insert: {
+          alerta_transferencia_id?: string | null
+          cantidad_enviada: number
+          cantidad_merma: number
+          cantidad_recibida: number
+          created_at?: string | null
+          id?: string
+          insumo_catalogo_id: string
+          motivo?: string | null
+          registrado_por?: string | null
+          transferencia_id?: string | null
+        }
+        Update: {
+          alerta_transferencia_id?: string | null
+          cantidad_enviada?: number
+          cantidad_merma?: number
+          cantidad_recibida?: number
+          created_at?: string | null
+          id?: string
+          insumo_catalogo_id?: string
+          motivo?: string | null
+          registrado_por?: string | null
+          transferencia_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mermas_transferencia_alerta_transferencia_id_fkey"
+            columns: ["alerta_transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "alertas_transferencia"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mermas_transferencia_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mermas_transferencia_transferencia_id_fkey"
+            columns: ["transferencia_id"]
+            isOneToOne: false
+            referencedRelation: "transferencias_central_hospital"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      movimientos_almacen_provisional: {
+        Row: {
+          almacen_provisional_id: string
+          cantidad: number
+          created_at: string | null
+          folio_id: string | null
+          hospital_id: string
+          id: string
+          insumo_catalogo_id: string
+          observaciones: string | null
+          tipo: string
+          usuario_id: string | null
+        }
+        Insert: {
+          almacen_provisional_id: string
+          cantidad: number
+          created_at?: string | null
+          folio_id?: string | null
+          hospital_id: string
+          id?: string
+          insumo_catalogo_id: string
+          observaciones?: string | null
+          tipo: string
+          usuario_id?: string | null
+        }
+        Update: {
+          almacen_provisional_id?: string
+          cantidad?: number
+          created_at?: string | null
+          folio_id?: string | null
+          hospital_id?: string
+          id?: string
+          insumo_catalogo_id?: string
+          observaciones?: string | null
+          tipo?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movimientos_almacen_provisional_almacen_provisional_id_fkey"
+            columns: ["almacen_provisional_id"]
+            isOneToOne: false
+            referencedRelation: "almacenes_provisionales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_almacen_provisional_folio_id_fkey"
+            columns: ["folio_id"]
+            isOneToOne: false
+            referencedRelation: "folios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_almacen_provisional_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimientos_almacen_provisional_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       movimientos_inventario: {
         Row: {
           cantidad: number
@@ -1316,34 +1578,40 @@ export type Database = {
       }
       pedido_items: {
         Row: {
+          cantidad_merma: number | null
           cantidad_recibida: number
           cantidad_solicitada: number
           created_at: string
           estado: string
           id: string
           insumo_catalogo_id: string
+          motivo_merma: string | null
           notas: string | null
           pedido_id: string
           precio_unitario: number | null
         }
         Insert: {
+          cantidad_merma?: number | null
           cantidad_recibida?: number
           cantidad_solicitada?: number
           created_at?: string
           estado?: string
           id?: string
           insumo_catalogo_id: string
+          motivo_merma?: string | null
           notas?: string | null
           pedido_id: string
           precio_unitario?: number | null
         }
         Update: {
+          cantidad_merma?: number | null
           cantidad_recibida?: number
           cantidad_solicitada?: number
           created_at?: string
           estado?: string
           id?: string
           insumo_catalogo_id?: string
+          motivo_merma?: string | null
           notas?: string | null
           pedido_id?: string
           precio_unitario?: number | null
@@ -1508,6 +1776,72 @@ export type Database = {
         }
         Relationships: []
       }
+      rutas_distribucion: {
+        Row: {
+          activo: boolean | null
+          created_at: string | null
+          descripcion: string | null
+          id: string
+          nombre_ruta: string
+          tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string | null
+          descripcion?: string | null
+          id?: string
+          nombre_ruta: string
+          tipo: string
+          updated_at?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string | null
+          descripcion?: string | null
+          id?: string
+          nombre_ruta?: string
+          tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      rutas_hospitales: {
+        Row: {
+          created_at: string | null
+          hospital_id: string
+          id: string
+          ruta_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          hospital_id: string
+          id?: string
+          ruta_id: string
+        }
+        Update: {
+          created_at?: string | null
+          hospital_id?: string
+          id?: string
+          ruta_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rutas_hospitales_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rutas_hospitales_ruta_id_fkey"
+            columns: ["ruta_id"]
+            isOneToOne: false
+            referencedRelation: "rutas_distribucion"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       states: {
         Row: {
           created_at: string | null
@@ -1575,6 +1909,8 @@ export type Database = {
           notas: string | null
           recibido_at: string | null
           recibido_por: string | null
+          ruta_id: string | null
+          tirada_id: string | null
           updated_at: string
         }
         Insert: {
@@ -1590,6 +1926,8 @@ export type Database = {
           notas?: string | null
           recibido_at?: string | null
           recibido_por?: string | null
+          ruta_id?: string | null
+          tirada_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -1605,6 +1943,8 @@ export type Database = {
           notas?: string | null
           recibido_at?: string | null
           recibido_por?: string | null
+          ruta_id?: string | null
+          tirada_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1620,6 +1960,13 @@ export type Database = {
             columns: ["insumo_catalogo_id"]
             isOneToOne: false
             referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transferencias_central_hospital_ruta_id_fkey"
+            columns: ["ruta_id"]
+            isOneToOne: false
+            referencedRelation: "rutas_distribucion"
             referencedColumns: ["id"]
           },
         ]

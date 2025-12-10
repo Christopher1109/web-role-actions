@@ -4,14 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { RefreshCw, Package, CheckCircle, AlertTriangle, XCircle, Settings2, Layers, ChevronRight, Warehouse, Plus, ArrowRight, ArrowLeft } from 'lucide-react';
+import { RefreshCw, Package, CheckCircle, AlertTriangle, Settings2, Layers, ChevronRight } from 'lucide-react';
 import { useHospital } from '@/contexts/HospitalContext';
 import EdicionMasivaMínimos from '@/components/forms/EdicionMasivaMínimos';
 
@@ -39,32 +38,11 @@ interface TiradaAgrupada {
   total_insumos: number;
 }
 
-interface AlmacenProvisional {
-  id: string;
-  nombre: string;
-  descripcion: string | null;
-  activo: boolean;
-  es_principal: boolean;
-}
-
-interface InventarioProvisional {
-  id: string;
-  almacen_provisional_id: string;
-  insumo_catalogo_id: string;
-  cantidad_disponible: number;
-  insumo?: { id: string; nombre: string; clave: string };
-}
-
 const AlmacenistaAlertasTransferencia = () => {
   const { selectedHospital } = useHospital();
   const [alertas, setAlertas] = useState<AlertaTransferencia[]>([]);
   const [tiradasAgrupadas, setTiradasAgrupadas] = useState<TiradaAgrupada[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Almacenes provisionales state
-  const [almacenesProvisionales, setAlmacenesProvisionales] = useState<AlmacenProvisional[]>([]);
-  const [inventarioProvisional, setInventarioProvisional] = useState<InventarioProvisional[]>([]);
-  const [selectedAlmacenProv, setSelectedAlmacenProv] = useState<AlmacenProvisional | null>(null);
   
   // Dialog states
   const [dialogTiradaOpen, setDialogTiradaOpen] = useState(false);
@@ -74,25 +52,9 @@ const AlmacenistaAlertasTransferencia = () => {
   const [motivosMerma, setMotivosMerma] = useState<Record<string, string>>({});
   const [procesando, setProcesando] = useState(false);
 
-  // Dialog para crear almacén provisional
-  const [dialogCrearAlmacen, setDialogCrearAlmacen] = useState(false);
-  const [nuevoAlmacenNombre, setNuevoAlmacenNombre] = useState('');
-  const [nuevoAlmacenDesc, setNuevoAlmacenDesc] = useState('');
-
-  // Dialog para traspasar a provisional
-  const [dialogTraspasoOpen, setDialogTraspasoOpen] = useState(false);
-  const [inventarioGeneral, setInventarioGeneral] = useState<any[]>([]);
-  const [cantidadesTraspaso, setCantidadesTraspaso] = useState<Record<string, number>>({});
-  const [almacenDestinoId, setAlmacenDestinoId] = useState<string>('');
-
-  // Dialog para devolución
-  const [dialogDevolucionOpen, setDialogDevolucionOpen] = useState(false);
-  const [cantidadesDevolucion, setCantidadesDevolucion] = useState<Record<string, number>>({});
-
   useEffect(() => {
     if (selectedHospital) {
       fetchAlertas();
-      fetchAlmacenesProvisionales();
     }
   }, [selectedHospital]);
 
@@ -174,40 +136,6 @@ const AlmacenistaAlertasTransferencia = () => {
         new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
       )
     );
-  };
-
-  const fetchAlmacenesProvisionales = async () => {
-    if (!selectedHospital) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('almacenes_provisionales')
-        .select('*')
-        .eq('hospital_id', selectedHospital.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setAlmacenesProvisionales(data || []);
-    } catch (error) {
-      console.error('Error fetching provisional warehouses:', error);
-    }
-  };
-
-  const fetchInventarioProvisional = async (almacenId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('almacen_provisional_inventario')
-        .select(`
-          *,
-          insumo:insumos_catalogo(id, nombre, clave)
-        `)
-        .eq('almacen_provisional_id', almacenId);
-
-      if (error) throw error;
-      setInventarioProvisional(data || []);
-    } catch (error) {
-      console.error('Error fetching provisional inventory:', error);
-    }
   };
 
   const abrirDialogTirada = (tirada: TiradaAgrupada) => {
@@ -367,199 +295,6 @@ const AlmacenistaAlertasTransferencia = () => {
     }
   };
 
-  const crearAlmacenProvisional = async () => {
-    if (!selectedHospital || !nuevoAlmacenNombre.trim()) return;
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const { error } = await supabase
-        .from('almacenes_provisionales')
-        .insert({
-          hospital_id: selectedHospital.id,
-          nombre: nuevoAlmacenNombre.trim(),
-          descripcion: nuevoAlmacenDesc.trim() || null,
-          created_by: user?.id
-        });
-
-      if (error) throw error;
-
-      toast.success('Almacén provisional creado');
-      setDialogCrearAlmacen(false);
-      setNuevoAlmacenNombre('');
-      setNuevoAlmacenDesc('');
-      fetchAlmacenesProvisionales();
-    } catch (error) {
-      console.error('Error creating provisional warehouse:', error);
-      toast.error('Error al crear almacén provisional');
-    }
-  };
-
-  const abrirDialogTraspaso = async (almacen: AlmacenProvisional) => {
-    if (!selectedHospital) return;
-    
-    setAlmacenDestinoId(almacen.id);
-    
-    // Fetch inventario general del hospital
-    const { data } = await supabase
-      .from('inventario_hospital')
-      .select(`
-        *,
-        insumo:insumos_catalogo(id, nombre, clave)
-      `)
-      .eq('hospital_id', selectedHospital.id)
-      .gt('cantidad_actual', 0);
-
-    setInventarioGeneral(data || []);
-    setCantidadesTraspaso({});
-    setDialogTraspasoOpen(true);
-  };
-
-  const ejecutarTraspaso = async () => {
-    if (!selectedHospital || !almacenDestinoId) return;
-
-    setProcesando(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      for (const item of inventarioGeneral) {
-        const cantidad = cantidadesTraspaso[item.id] || 0;
-        if (cantidad <= 0) continue;
-
-        // Descontar del inventario general
-        await supabase
-          .from('inventario_hospital')
-          .update({
-            cantidad_actual: item.cantidad_actual - cantidad,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', item.id);
-
-        // Agregar al inventario provisional
-        const { data: existente } = await supabase
-          .from('almacen_provisional_inventario')
-          .select('*')
-          .eq('almacen_provisional_id', almacenDestinoId)
-          .eq('insumo_catalogo_id', item.insumo_catalogo_id)
-          .maybeSingle();
-
-        if (existente) {
-          await supabase
-            .from('almacen_provisional_inventario')
-            .update({
-              cantidad_disponible: existente.cantidad_disponible + cantidad,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existente.id);
-        } else {
-          await supabase
-            .from('almacen_provisional_inventario')
-            .insert({
-              almacen_provisional_id: almacenDestinoId,
-              insumo_catalogo_id: item.insumo_catalogo_id,
-              cantidad_disponible: cantidad
-            });
-        }
-
-        // Registrar movimiento
-        await supabase
-          .from('movimientos_almacen_provisional')
-          .insert({
-            almacen_provisional_id: almacenDestinoId,
-            hospital_id: selectedHospital.id,
-            insumo_catalogo_id: item.insumo_catalogo_id,
-            cantidad: cantidad,
-            tipo: 'entrada',
-            usuario_id: user?.id,
-            observaciones: 'Traspaso desde almacén general'
-          });
-      }
-
-      const totalItems = Object.values(cantidadesTraspaso).filter(c => c > 0).length;
-      toast.success(`${totalItems} insumos traspasados al almacén provisional`);
-      setDialogTraspasoOpen(false);
-      if (selectedAlmacenProv) {
-        fetchInventarioProvisional(selectedAlmacenProv.id);
-      }
-    } catch (error) {
-      console.error('Error executing transfer:', error);
-      toast.error('Error al realizar traspaso');
-    } finally {
-      setProcesando(false);
-    }
-  };
-
-  const abrirDialogDevolucion = async (almacen: AlmacenProvisional) => {
-    setSelectedAlmacenProv(almacen);
-    await fetchInventarioProvisional(almacen.id);
-    setCantidadesDevolucion({});
-    setDialogDevolucionOpen(true);
-  };
-
-  const ejecutarDevolucion = async () => {
-    if (!selectedHospital || !selectedAlmacenProv) return;
-
-    setProcesando(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      for (const item of inventarioProvisional) {
-        const cantidad = cantidadesDevolucion[item.id] || 0;
-        if (cantidad <= 0) continue;
-
-        // Descontar del provisional
-        await supabase
-          .from('almacen_provisional_inventario')
-          .update({
-            cantidad_disponible: item.cantidad_disponible - cantidad,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', item.id);
-
-        // Agregar al inventario general
-        const { data: inventarioGenItem } = await supabase
-          .from('inventario_hospital')
-          .select('*')
-          .eq('hospital_id', selectedHospital.id)
-          .eq('insumo_catalogo_id', item.insumo_catalogo_id)
-          .maybeSingle();
-
-        if (inventarioGenItem) {
-          await supabase
-            .from('inventario_hospital')
-            .update({
-              cantidad_actual: inventarioGenItem.cantidad_actual + cantidad,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', inventarioGenItem.id);
-        }
-
-        // Registrar movimiento
-        await supabase
-          .from('movimientos_almacen_provisional')
-          .insert({
-            almacen_provisional_id: selectedAlmacenProv.id,
-            hospital_id: selectedHospital.id,
-            insumo_catalogo_id: item.insumo_catalogo_id,
-            cantidad: cantidad,
-            tipo: 'devolucion',
-            usuario_id: user?.id,
-            observaciones: 'Devolución a almacén general'
-          });
-      }
-
-      const totalItems = Object.values(cantidadesDevolucion).filter(c => c > 0).length;
-      toast.success(`${totalItems} insumos devueltos al almacén general`);
-      setDialogDevolucionOpen(false);
-      fetchInventarioProvisional(selectedAlmacenProv.id);
-    } catch (error) {
-      console.error('Error executing return:', error);
-      toast.error('Error al realizar devolución');
-    } finally {
-      setProcesando(false);
-    }
-  };
-
   const getEstadoColor = (estado: string) => {
     switch (estado) {
       case 'pendiente': return 'destructive';
@@ -584,8 +319,8 @@ const AlmacenistaAlertasTransferencia = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Gestión de Almacén</h1>
-          <p className="text-muted-foreground">Recepción de transferencias y almacenes provisionales</p>
+          <h1 className="text-3xl font-bold text-foreground">Recepción de Insumos</h1>
+          <p className="text-muted-foreground">Recepción de transferencias desde Almacén Central</p>
         </div>
         <Button onClick={fetchAlertas} variant="outline" size="sm">
           <RefreshCw className="mr-2 h-4 w-4" />
@@ -601,10 +336,6 @@ const AlmacenistaAlertasTransferencia = () => {
             {tiradasPendientes.length > 0 && (
               <Badge variant="destructive" className="ml-1">{tiradasPendientes.length}</Badge>
             )}
-          </TabsTrigger>
-          <TabsTrigger value="provisionales" className="flex items-center gap-1">
-            <Warehouse className="h-3.5 w-3.5" />
-            Almacenes Provisionales
           </TabsTrigger>
           <TabsTrigger value="minimos" className="flex items-center gap-1">
             <Settings2 className="h-3.5 w-3.5" />
@@ -761,72 +492,6 @@ const AlmacenistaAlertasTransferencia = () => {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {/* Tab: Almacenes Provisionales */}
-        <TabsContent value="provisionales" className="space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Warehouse className="h-5 w-5" />
-                  Almacenes Provisionales
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Gestiona almacenes temporales para quirófanos o áreas específicas
-                </p>
-              </div>
-              <Button onClick={() => setDialogCrearAlmacen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Crear Almacén
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {almacenesProvisionales.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No hay almacenes provisionales configurados
-                </div>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {almacenesProvisionales.map((almacen) => (
-                    <Card key={almacen.id} className="border-l-4 border-l-primary">
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-base">{almacen.nombre}</CardTitle>
-                          <Badge variant={almacen.activo ? 'outline' : 'secondary'}>
-                            {almacen.activo ? 'Activo' : 'Inactivo'}
-                          </Badge>
-                        </div>
-                        {almacen.descripcion && (
-                          <p className="text-sm text-muted-foreground">{almacen.descripcion}</p>
-                        )}
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full"
-                          onClick={() => abrirDialogTraspaso(almacen)}
-                        >
-                          <ArrowRight className="mr-2 h-4 w-4" />
-                          Traspasar Insumos
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full"
-                          onClick={() => abrirDialogDevolucion(almacen)}
-                        >
-                          <ArrowLeft className="mr-2 h-4 w-4" />
-                          Devolver al General
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
         
         {/* Tab: Configurar Mínimos */}
         <TabsContent value="minimos" className="space-y-4">
@@ -918,160 +583,6 @@ const AlmacenistaAlertasTransferencia = () => {
             <Button onClick={procesarTirada} disabled={procesando}>
               <CheckCircle className="mr-2 h-4 w-4" />
               {procesando ? 'Procesando...' : 'Aceptar Tirada Completa'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog: Crear Almacén Provisional */}
-      <Dialog open={dialogCrearAlmacen} onOpenChange={setDialogCrearAlmacen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Crear Almacén Provisional</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="nombre">Nombre del Almacén</Label>
-              <Input
-                id="nombre"
-                value={nuevoAlmacenNombre}
-                onChange={(e) => setNuevoAlmacenNombre(e.target.value)}
-                placeholder="Ej: Quirófano 1, Área de Recuperación"
-              />
-            </div>
-            <div>
-              <Label htmlFor="descripcion">Descripción (opcional)</Label>
-              <Textarea
-                id="descripcion"
-                value={nuevoAlmacenDesc}
-                onChange={(e) => setNuevoAlmacenDesc(e.target.value)}
-                placeholder="Descripción del almacén provisional..."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogCrearAlmacen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={crearAlmacenProvisional} disabled={!nuevoAlmacenNombre.trim()}>
-              Crear Almacén
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog: Traspaso a Provisional */}
-      <Dialog open={dialogTraspasoOpen} onOpenChange={setDialogTraspasoOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ArrowRight className="h-5 w-5" />
-              Traspasar a Almacén Provisional
-            </DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-3 pr-4">
-              {inventarioGeneral.map((item) => (
-                <Card key={item.id}>
-                  <CardContent className="py-3">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="font-medium">{item.insumo?.nombre}</p>
-                        <p className="text-sm text-muted-foreground">{item.insumo?.clave}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Disponible</p>
-                        <p className="font-mono font-bold text-green-600">{item.cantidad_actual}</p>
-                      </div>
-                      <div className="w-24">
-                        <Label className="text-xs">Traspasar</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={item.cantidad_actual}
-                          value={cantidadesTraspaso[item.id] || 0}
-                          onChange={(e) => setCantidadesTraspaso(prev => ({
-                            ...prev,
-                            [item.id]: Math.min(parseInt(e.target.value) || 0, item.cantidad_actual)
-                          }))}
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogTraspasoOpen(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={ejecutarTraspaso} 
-              disabled={procesando || Object.values(cantidadesTraspaso).every(v => v <= 0)}
-            >
-              {procesando ? 'Traspasando...' : 'Confirmar Traspaso'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog: Devolución */}
-      <Dialog open={dialogDevolucionOpen} onOpenChange={setDialogDevolucionOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ArrowLeft className="h-5 w-5" />
-              Devolver al Almacén General
-            </DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-3 pr-4">
-              {inventarioProvisional.filter(i => i.cantidad_disponible > 0).map((item) => (
-                <Card key={item.id}>
-                  <CardContent className="py-3">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="font-medium">{item.insumo?.nombre}</p>
-                        <p className="text-sm text-muted-foreground">{item.insumo?.clave}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground">En Provisional</p>
-                        <p className="font-mono font-bold">{item.cantidad_disponible}</p>
-                      </div>
-                      <div className="w-24">
-                        <Label className="text-xs">Devolver</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={item.cantidad_disponible}
-                          value={cantidadesDevolucion[item.id] || 0}
-                          onChange={(e) => setCantidadesDevolucion(prev => ({
-                            ...prev,
-                            [item.id]: Math.min(parseInt(e.target.value) || 0, item.cantidad_disponible)
-                          }))}
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              {inventarioProvisional.filter(i => i.cantidad_disponible > 0).length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  No hay insumos en este almacén provisional
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogDevolucionOpen(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={ejecutarDevolucion} 
-              disabled={procesando || Object.values(cantidadesDevolucion).every(v => v <= 0)}
-            >
-              {procesando ? 'Devolviendo...' : 'Confirmar Devolución'}
             </Button>
           </DialogFooter>
         </DialogContent>

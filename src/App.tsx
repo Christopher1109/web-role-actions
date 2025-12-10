@@ -76,7 +76,7 @@ const AppContent = () => {
               {(userRole === 'auxiliar' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <Route path="/folios" element={<Folios userRole={userRole} />} />
               )}
-              {userRole === 'auxiliar' && (
+              {(userRole === 'almacenista' || userRole === 'gerente_operaciones') && (
                 <Route path="/almacenes-provisionales" element={<AlmacenesProvisionales />} />
               )}
               {(userRole === 'almacenista' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (

@@ -59,23 +59,57 @@ const SupervisorAsignaciones = () => {
     setLoading(true);
     try {
       // Fetch supervisors from user_roles
-      const { data: rolesData } = await supabase
+      const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role')
         .eq('role', 'supervisor');
 
-      // Get profiles for supervisors
-      const supervisorIds = rolesData?.map(r => r.user_id) || [];
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('id, nombre, username')
-        .in('id', supervisorIds);
+      console.log('Roles data:', rolesData, 'Error:', rolesError);
 
-      setSupervisores(profilesData?.map(p => ({
-        user_id: p.id,
-        username: p.username || 'Sin username',
-        nombre: p.nombre
-      })) || []);
+      // Get profiles for supervisors - even if no user_roles found, check users table
+      let supervisorsList: Supervisor[] = [];
+      
+      if (rolesData && rolesData.length > 0) {
+        const supervisorIds = rolesData.map(r => r.user_id);
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id, nombre, username')
+          .in('id', supervisorIds);
+
+        supervisorsList = profilesData?.map(p => ({
+          user_id: p.id,
+          username: p.username || 'Sin username',
+          nombre: p.nombre
+        })) || [];
+      }
+      
+      // Fallback: If no supervisors in user_roles, get from users table with role supervisor
+      if (supervisorsList.length === 0) {
+        const { data: usersData } = await supabase
+          .from('users')
+          .select('id, username, role')
+          .eq('role', 'supervisor');
+        
+        console.log('Users fallback data:', usersData);
+        
+        // Check profiles for these usernames
+        if (usersData && usersData.length > 0) {
+          const { data: profilesFromUsers } = await supabase
+            .from('profiles')
+            .select('id, nombre, username')
+            .in('username', usersData.map(u => u.username));
+          
+          console.log('Profiles from users:', profilesFromUsers);
+          
+          supervisorsList = profilesFromUsers?.map(p => ({
+            user_id: p.id,
+            username: p.username || 'Sin username',
+            nombre: p.nombre
+          })) || [];
+        }
+      }
+
+      setSupervisores(supervisorsList);
 
       // Fetch states
       const { data: statesData } = await supabase
@@ -106,8 +140,8 @@ const SupervisorAsignaciones = () => {
 
       setAssignments(assignmentsData || []);
 
-      if (profilesData && profilesData.length > 0) {
-        setSelectedSupervisor(profilesData[0].id);
+      if (supervisorsList.length > 0) {
+        setSelectedSupervisor(supervisorsList[0].user_id);
       }
     } catch (error) {
       console.error('Error fetching data:', error);

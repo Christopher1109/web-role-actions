@@ -266,7 +266,7 @@ const AlmacenistaAlertasTransferencia = () => {
             });
         }
 
-        // Update hospital inventory
+        // Update hospital inventory - ALWAYS ADD to existing quantity, never replace
         const { data: inventarioExistente } = await supabase
           .from('inventario_hospital')
           .select('*')
@@ -275,14 +275,31 @@ const AlmacenistaAlertasTransferencia = () => {
           .maybeSingle();
 
         if (inventarioExistente) {
+          // SUM the received quantity to the existing inventory
+          const nuevaCantidad = (inventarioExistente.cantidad_actual || 0) + cantidadRecibida;
+          
           await supabase
             .from('inventario_hospital')
             .update({
-              cantidad_actual: inventarioExistente.cantidad_actual + cantidadRecibida,
+              cantidad_actual: nuevaCantidad,
               updated_at: new Date().toISOString()
             })
             .eq('id', inventarioExistente.id);
+
+          // Record the movement in kardex
+          await supabase
+            .from('movimientos_inventario')
+            .insert({
+              hospital_id: selectedHospital.id,
+              inventario_id: inventarioExistente.id,
+              cantidad: cantidadRecibida,
+              cantidad_anterior: inventarioExistente.cantidad_actual || 0,
+              cantidad_nueva: nuevaCantidad,
+              tipo_movimiento: 'entrada_transferencia',
+              observaciones: `Recepción de tirada desde Almacén Central. Merma: ${merma}`
+            });
         } else {
+          // Create new inventory record if doesn't exist
           const { data: almacenHospital } = await supabase
             .from('almacenes')
             .select('id')
@@ -290,7 +307,7 @@ const AlmacenistaAlertasTransferencia = () => {
             .maybeSingle();
 
           if (almacenHospital) {
-            await supabase
+            const { data: nuevoInventario } = await supabase
               .from('inventario_hospital')
               .insert({
                 hospital_id: selectedHospital.id,
@@ -299,7 +316,24 @@ const AlmacenistaAlertasTransferencia = () => {
                 cantidad_actual: cantidadRecibida,
                 cantidad_inicial: cantidadRecibida,
                 cantidad_minima: 10
-              });
+              })
+              .select()
+              .single();
+
+            // Record the movement
+            if (nuevoInventario) {
+              await supabase
+                .from('movimientos_inventario')
+                .insert({
+                  hospital_id: selectedHospital.id,
+                  inventario_id: nuevoInventario.id,
+                  cantidad: cantidadRecibida,
+                  cantidad_anterior: 0,
+                  cantidad_nueva: cantidadRecibida,
+                  tipo_movimiento: 'entrada_transferencia',
+                  observaciones: `Primera recepción desde Almacén Central`
+                });
+            }
           }
         }
 

@@ -52,7 +52,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/rutas-distribucion', icon: Route, label: 'Rutas de Distribución', roles: ['cadena_suministros'] },
     { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['finanzas'] },
     { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
-    { path: '/almacenes-provisionales', icon: Warehouse, label: 'Almacenes Provisionales', roles: ['auxiliar'] },
+    { path: '/almacenes-provisionales', icon: Warehouse, label: 'Almacenes Provisionales', roles: ['almacenista', 'gerente_operaciones'] },
     { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/alertas-transferencia', icon: AlertTriangle, label: 'Recepción Insumos', roles: ['almacenista', 'lider', 'supervisor'] },
     { path: '/kardex', icon: History, label: 'Kardex', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },

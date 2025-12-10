@@ -83,45 +83,68 @@ const Folios = ({ userRole }: FoliosProps) => {
         return;
       }
 
+      // PASO 1.5: Buscar almacenes provisionales activos
+      const { data: almacenesProvisionales } = await supabase
+        .from('almacenes_provisionales')
+        .select('id, nombre')
+        .eq('hospital_id', selectedHospital.id)
+        .eq('activo', true)
+        .order('created_at', { ascending: false });
+
+      const tieneProvisional = almacenesProvisionales && almacenesProvisionales.length > 0;
+      const almacenProvisional = tieneProvisional ? almacenesProvisionales[0] : null;
+
       // PASO 2: VALIDAR EXISTENCIAS antes de crear el folio
       if (data.insumos && data.insumos.length > 0) {
         const validacionErrors: string[] = [];
         
         for (const item of data.insumos) {
-          // Buscar el insumo en inventario_hospital por nombre
-          const { data: inventarioItems, error: searchError } = await supabase
-            .from('inventario_hospital')
-            .select(`
-              id,
-              cantidad_actual,
-              lote,
-              insumos_catalogo (
-                id,
-                nombre
-              )
-            `)
-            .eq('almacen_id', almacen.id)
-            .eq('estatus', 'activo')
-            .order('fecha_caducidad', { ascending: true });
+          let stockDisponible = 0;
 
-          if (searchError) throw searchError;
+          // Primero buscar en almacén provisional si existe
+          if (almacenProvisional) {
+            const { data: provisionalStock } = await supabase
+              .from('almacen_provisional_inventario')
+              .select(`
+                cantidad_disponible,
+                insumo:insumos_catalogo(id, nombre)
+              `)
+              .eq('almacen_provisional_id', almacenProvisional.id);
 
-          // Buscar el insumo que coincida con el nombre
-          const insumoEncontrado = inventarioItems?.find(
-            (inv: any) => inv.insumos_catalogo?.nombre === item.insumo.nombre
-          );
-
-          if (!insumoEncontrado) {
-            validacionErrors.push(
-              `❌ ${item.insumo.nombre}: No disponible en inventario`
+            const insumoProvisional = provisionalStock?.find(
+              (inv: any) => inv.insumo?.nombre === item.insumo.nombre
             );
-            continue;
+            stockDisponible = insumoProvisional?.cantidad_disponible || 0;
           }
 
-          // Verificar stock suficiente
-          if (insumoEncontrado.cantidad_actual < item.cantidad) {
+          // Si no hay suficiente en provisional, buscar en general
+          if (stockDisponible < item.cantidad) {
+            const { data: inventarioItems, error: searchError } = await supabase
+              .from('inventario_hospital')
+              .select(`
+                id,
+                cantidad_actual,
+                lote,
+                insumos_catalogo (
+                  id,
+                  nombre
+                )
+              `)
+              .eq('almacen_id', almacen.id)
+              .eq('estatus', 'activo')
+              .order('fecha_caducidad', { ascending: true });
+
+            if (searchError) throw searchError;
+
+            const insumoGeneral = inventarioItems?.find(
+              (inv: any) => inv.insumos_catalogo?.nombre === item.insumo.nombre
+            );
+            stockDisponible += insumoGeneral?.cantidad_actual || 0;
+          }
+
+          if (stockDisponible < item.cantidad) {
             validacionErrors.push(
-              `❌ ${item.insumo.nombre}: Stock insuficiente (Disponible: ${insumoEncontrado.cantidad_actual}, Requerido: ${item.cantidad})`
+              `❌ ${item.insumo.nombre}: Stock insuficiente (Disponible: ${stockDisponible}, Requerido: ${item.cantidad})`
             );
           }
         }
@@ -187,80 +210,127 @@ const Folios = ({ userRole }: FoliosProps) => {
       if (folioError) throw folioError;
 
       // PASO 5: Insertar relación folios_insumos y DESCONTAR INVENTARIO
+      // Priorizar almacén provisional si existe
       if (data.insumos && data.insumos.length > 0) {
         for (const item of data.insumos) {
-          // Buscar el insumo en inventario nuevamente para obtener el ID correcto
-          const { data: inventarioItems } = await supabase
-            .from('inventario_hospital')
-            .select(`
-              id,
-              cantidad_actual,
-              insumo_catalogo_id,
-              lote,
-              insumos_catalogo (
+          let cantidadRestante = item.cantidad;
+          let insumo_catalogo_id: string | null = null;
+
+          // Primero intentar descontar del almacén provisional
+          if (almacenProvisional && cantidadRestante > 0) {
+            const { data: provisionalItems } = await supabase
+              .from('almacen_provisional_inventario')
+              .select(`
                 id,
-                nombre
-              )
-            `)
-            .eq('almacen_id', almacen.id)
-            .eq('estatus', 'activo')
-            .order('fecha_caducidad', { ascending: true });
+                cantidad_disponible,
+                insumo_catalogo_id,
+                insumo:insumos_catalogo(id, nombre)
+              `)
+              .eq('almacen_provisional_id', almacenProvisional.id);
 
-          const insumoInventario = inventarioItems?.find(
-            (inv: any) => inv.insumos_catalogo?.nombre === item.insumo.nombre
-          );
+            const insumoProvisional = provisionalItems?.find(
+              (inv: any) => inv.insumo?.nombre === item.insumo.nombre
+            );
 
-          if (!insumoInventario) continue;
+            if (insumoProvisional && insumoProvisional.cantidad_disponible > 0) {
+              insumo_catalogo_id = insumoProvisional.insumo_catalogo_id;
+              const cantidadDesdeProvisional = Math.min(cantidadRestante, insumoProvisional.cantidad_disponible);
+              
+              // Descontar del provisional
+              await supabase
+                .from('almacen_provisional_inventario')
+                .update({
+                  cantidad_disponible: insumoProvisional.cantidad_disponible - cantidadDesdeProvisional,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', insumoProvisional.id);
+
+              // Registrar movimiento provisional
+              await supabase
+                .from('movimientos_almacen_provisional')
+                .insert({
+                  almacen_provisional_id: almacenProvisional.id,
+                  hospital_id: selectedHospital.id,
+                  insumo_catalogo_id: insumoProvisional.insumo_catalogo_id,
+                  cantidad: cantidadDesdeProvisional,
+                  tipo: 'salida',
+                  folio_id: folioData.id,
+                  usuario_id: user.id,
+                  observaciones: `Consumo en folio ${numeroFolio} desde ${almacenProvisional.nombre}`
+                });
+
+              cantidadRestante -= cantidadDesdeProvisional;
+            }
+          }
+
+          // Si aún queda cantidad, descontar del inventario general
+          if (cantidadRestante > 0) {
+            const { data: inventarioItems } = await supabase
+              .from('inventario_hospital')
+              .select(`
+                id,
+                cantidad_actual,
+                insumo_catalogo_id,
+                lote,
+                insumos_catalogo (
+                  id,
+                  nombre
+                )
+              `)
+              .eq('almacen_id', almacen.id)
+              .eq('estatus', 'activo')
+              .order('fecha_caducidad', { ascending: true });
+
+            const insumoInventario = inventarioItems?.find(
+              (inv: any) => inv.insumos_catalogo?.nombre === item.insumo.nombre
+            );
+
+            if (insumoInventario) {
+              insumo_catalogo_id = insumoInventario.insumo_catalogo_id;
+              const cantidadAnterior = insumoInventario.cantidad_actual;
+              const cantidadNueva = cantidadAnterior - cantidadRestante;
+
+              // Actualizar inventario general
+              await supabase
+                .from('inventario_hospital')
+                .update({ 
+                  cantidad_actual: cantidadNueva,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', insumoInventario.id);
+
+              // Registrar movimiento en kardex
+              await supabase
+                .from('movimientos_inventario')
+                .insert({
+                  inventario_id: insumoInventario.id,
+                  hospital_id: selectedHospital.id,
+                  tipo_movimiento: 'salida_por_folio',
+                  cantidad: cantidadRestante,
+                  cantidad_anterior: cantidadAnterior,
+                  cantidad_nueva: cantidadNueva,
+                  folio_id: folioData.id,
+                  usuario_id: user.id,
+                  observaciones: `Consumo en folio ${numeroFolio} - ${data.procedimientoQuirurgico}`
+                });
+            }
+          }
 
           // Insertar en folios_insumos
-          const { error: insumosError } = await supabase
-            .from('folios_insumos')
-            .insert({
-              folio_id: folioData.id,
-              insumo_id: insumoInventario.insumo_catalogo_id,
-              cantidad: item.cantidad,
-            });
-
-          if (insumosError) throw insumosError;
-
-          // Calcular nueva cantidad
-          const cantidadAnterior = insumoInventario.cantidad_actual;
-          const cantidadNueva = cantidadAnterior - item.cantidad;
-
-          // Actualizar inventario
-          const { error: updateError } = await supabase
-            .from('inventario_hospital')
-            .update({ 
-              cantidad_actual: cantidadNueva,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', insumoInventario.id);
-
-          if (updateError) throw updateError;
-
-          // Registrar movimiento en kardex
-          const { error: kardexError } = await supabase
-            .from('movimientos_inventario')
-            .insert({
-              inventario_id: insumoInventario.id,
-              hospital_id: selectedHospital.id,
-              tipo_movimiento: 'salida_por_folio',
-              cantidad: item.cantidad,
-              cantidad_anterior: cantidadAnterior,
-              cantidad_nueva: cantidadNueva,
-              folio_id: folioData.id,
-              usuario_id: user.id,
-              observaciones: `Consumo en folio ${numeroFolio} - ${data.procedimientoQuirurgico}`
-            });
-
-          if (kardexError) {
-            console.error('Error al registrar en kardex:', kardexError);
+          if (insumo_catalogo_id) {
+            await supabase
+              .from('folios_insumos')
+              .insert({
+                folio_id: folioData.id,
+                insumo_id: insumo_catalogo_id,
+                cantidad: item.cantidad,
+              });
           }
         }
       }
 
       toast.success('Folio creado exitosamente', {
-        description: `Número de folio: ${numeroFolio}`
+        description: `Número de folio: ${numeroFolio}${almacenProvisional ? ` (consumido de ${almacenProvisional.nombre})` : ''}`
       });
       setShowForm(false);
       fetchFolios();

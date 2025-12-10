@@ -58,6 +58,49 @@ const Insumos = () => {
     }
   }, [user, selectedHospital]);
 
+  // Suscripción en tiempo real para actualizaciones de inventario
+  useEffect(() => {
+    if (!selectedHospital) return;
+
+    const channel = supabase
+      .channel(`inventario-hospital-${selectedHospital.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inventario_hospital',
+          filter: `hospital_id=eq.${selectedHospital.id}`
+        },
+        (payload) => {
+          console.log('Cambio en inventario detectado:', payload);
+          
+          if (payload.eventType === 'UPDATE') {
+            // Actualizar el item específico en el estado local
+            setInventario(prev => prev.map(item => 
+              item.id === payload.new.id 
+                ? { ...item, ...payload.new }
+                : item
+            ));
+            toast.info('Inventario actualizado', {
+              description: 'Se detectó un cambio en el inventario del hospital',
+              duration: 3000
+            });
+          } else if (payload.eventType === 'INSERT') {
+            // Recargar todo para obtener los datos completos con joins
+            fetchInventario();
+          } else if (payload.eventType === 'DELETE') {
+            setInventario(prev => prev.filter(item => item.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedHospital]);
+
   const fetchInventario = async () => {
     try {
       if (!selectedHospital) return;

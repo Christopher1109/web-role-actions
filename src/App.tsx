@@ -29,6 +29,7 @@ import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
 import CadenaSuministrosDashboard from './pages/CadenaSuministrosDashboard';
 import FinanzasDashboard from './pages/FinanzasDashboard';
 import AlmacenistaAlertasTransferencia from './pages/AlmacenistaAlertasTransferencia';
+import AlmacenesProvisionales from './pages/AlmacenesProvisionales';
 import SupervisorProcedimientos from './pages/SupervisorProcedimientos';
 import SupervisorAsignaciones from './pages/SupervisorAsignaciones';
 import RutasDistribucion from './pages/RutasDistribucion';
@@ -74,6 +75,9 @@ const AppContent = () => {
               <Route path="/dashboard" element={<Dashboard userRole={userRole} />} />
               {(userRole === 'auxiliar' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <Route path="/folios" element={<Folios userRole={userRole} />} />
+              )}
+              {userRole === 'auxiliar' && (
+                <Route path="/almacenes-provisionales" element={<AlmacenesProvisionales />} />
               )}
               {(userRole === 'almacenista' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>

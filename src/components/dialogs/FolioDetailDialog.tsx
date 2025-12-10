@@ -180,17 +180,24 @@ const FolioDetailDialog = ({ open, onOpenChange, folio, tiposAnestesiaLabels, in
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <span className="font-medium">{item.insumos?.nombre || 'Sin nombre'}</span>
+                          {item.insumos?.clave && (
+                            <span className="ml-2 text-xs text-muted-foreground">({item.insumos.clave})</span>
+                          )}
                           {item.insumos?.descripcion && (
                             <div className="text-muted-foreground text-xs mt-1">{item.insumos.descripcion}</div>
                           )}
-                          {item.insumos?.clave && (
-                            <div className="text-muted-foreground text-xs">Clave: {item.insumos.clave}</div>
-                          )}
-                          {item.insumos?.lote && (
-                            <div className="text-muted-foreground text-xs">Lote: {item.insumos.lote}</div>
-                          )}
+                          <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                            {item.insumos?.presentacion && (
+                              <span>Presentación: {item.insumos.presentacion}</span>
+                            )}
+                            {item.insumos?.tipo && (
+                              <span>Tipo: {item.insumos.tipo}</span>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-muted-foreground whitespace-nowrap ml-4">Cantidad: {item.cantidad}</span>
+                        <span className="text-primary font-semibold whitespace-nowrap ml-4">
+                          Cantidad: {item.cantidad}
+                        </span>
                       </div>
                     </div>
                   ))}

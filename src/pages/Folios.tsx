@@ -525,20 +525,34 @@ const Folios = ({ userRole }: FoliosProps) => {
                             size="sm"
                             onClick={async () => {
                               setSelectedFolio(folio);
-                              // Fetch insumos for this folio with JOIN to get insumo details
-                              const { data: insumosData } = await (supabase as any)
+                              // Fetch insumos for this folio with JOIN to insumos_catalogo
+                              const { data: insumosData } = await supabase
                                 .from('folios_insumos')
                                 .select(`
                                   cantidad,
-                                  insumos (
+                                  insumos_catalogo:insumo_id (
+                                    id,
                                     nombre,
                                     descripcion,
-                                    lote,
-                                    clave
+                                    clave,
+                                    presentacion,
+                                    tipo
                                   )
                                 `)
                                 .eq('folio_id', folio.id);
-                              setSelectedFolioInsumos(insumosData || []);
+                              
+                              // Transformar datos para el dialog
+                              const insumosFormatted = (insumosData || []).map((item: any) => ({
+                                cantidad: item.cantidad,
+                                insumos: {
+                                  nombre: item.insumos_catalogo?.nombre || 'Sin nombre',
+                                  descripcion: item.insumos_catalogo?.descripcion || '',
+                                  clave: item.insumos_catalogo?.clave || '',
+                                  presentacion: item.insumos_catalogo?.presentacion || '',
+                                  tipo: item.insumos_catalogo?.tipo || ''
+                                }
+                              }));
+                              setSelectedFolioInsumos(insumosFormatted);
                               setShowDetail(true);
                             }}
                           >
@@ -549,26 +563,26 @@ const Folios = ({ userRole }: FoliosProps) => {
                             size="sm" 
                             className="gap-2"
                             onClick={async () => {
-                              // Fetch insumos for this folio with JOIN to get insumo details
-                              const { data: insumosData } = await (supabase as any)
+                              // Fetch insumos for this folio with JOIN to insumos_catalogo
+                              const { data: insumosData } = await supabase
                                 .from('folios_insumos')
                                 .select(`
                                   cantidad,
-                                  insumos (
+                                  insumos_catalogo:insumo_id (
                                     nombre,
                                     descripcion,
-                                    lote,
-                                    clave
+                                    clave,
+                                    presentacion
                                   )
                                 `)
                                 .eq('folio_id', folio.id);
                               
                               // Aplanar la estructura de datos para el PDF
                               const insumosFlat = (insumosData || []).map((item: any) => ({
-                                nombre: item.insumos?.nombre || '',
-                                descripcion: item.insumos?.descripcion || '',
-                                lote: item.insumos?.lote || '',
-                                clave: item.insumos?.clave || '',
+                                nombre: item.insumos_catalogo?.nombre || '',
+                                descripcion: item.insumos_catalogo?.descripcion || '',
+                                clave: item.insumos_catalogo?.clave || '',
+                                presentacion: item.insumos_catalogo?.presentacion || '',
                                 cantidad: item.cantidad
                               }));
                               

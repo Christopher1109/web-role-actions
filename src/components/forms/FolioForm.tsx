@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-// import { InsumoCombobox } from "./InsumoCombobox"; // actualmente no se usa
+import { InsumoSearchCombobox } from "./InsumoSearchCombobox";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -1129,25 +1129,19 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
       {/* Modal para agregar insumo */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[550px]">
           <DialogHeader>
             <DialogTitle>Agregar Insumo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Seleccionar Insumo</Label>
-              <Select value={selectedInsumoId} onValueChange={setSelectedInsumoId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {insumosParaAgregar.map((insumo) => (
-                    <SelectItem key={insumo.id} value={insumo.id}>
-                      {insumo.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="mb-2 block">Buscar y seleccionar insumo</Label>
+              <InsumoSearchCombobox
+                value={selectedInsumoId}
+                onSelect={(insumo) => setSelectedInsumoId(insumo?.id || "")}
+                insumosDisponibles={insumosParaAgregar}
+                placeholder="Escribe el nombre del insumo..."
+              />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>

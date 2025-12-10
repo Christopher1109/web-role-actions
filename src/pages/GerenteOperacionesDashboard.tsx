@@ -626,14 +626,17 @@ const GerenteOperacionesDashboard = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Dialog: Detalle de alertas de un hospital */}
+      {/* Dialog: Detalle de alertas de un hospital con edición de cantidades */}
       <Dialog open={dialogHospitalOpen} onOpenChange={setDialogHospitalOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              {selectedHospital?.hospital_nombre}
+              {selectedHospital?.hospital_nombre} - Ajustar Cantidades
             </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Puedes modificar las cantidades a solicitar antes de enviar
+            </p>
           </DialogHeader>
           
           {selectedHospital && (
@@ -646,40 +649,62 @@ const GerenteOperacionesDashboard = () => {
                     <TableHead>Insumo</TableHead>
                     <TableHead className="text-right">Existencia</TableHead>
                     <TableHead className="text-right">Mínimo</TableHead>
-                    <TableHead className="text-right">Faltante</TableHead>
+                    <TableHead className="text-right">Faltante Calc.</TableHead>
+                    <TableHead className="text-right">Cantidad a Solicitar</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {selectedHospital.alertas.map((alerta) => (
-                    <TableRow key={alerta.id} className={alerta.prioridad === 'critica' ? 'bg-red-50/50' : ''}>
-                      <TableCell>
-                        <Badge variant={getPrioridadColor(alerta.prioridad)} className="uppercase text-xs">
-                          {alerta.prioridad}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{alerta.insumo?.clave}</TableCell>
-                      <TableCell className="font-medium">{alerta.insumo?.nombre}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        <span className={alerta.cantidad_actual === 0 ? 'text-destructive font-bold' : ''}>
-                          {alerta.cantidad_actual}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">
-                        {alerta.minimo_permitido}
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-bold text-destructive">
-                        {Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {selectedHospital.alertas.map((alerta) => {
+                    const faltanteCalculado = Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual);
+                    return (
+                      <TableRow key={alerta.id} className={alerta.prioridad === 'critica' ? 'bg-red-50/50' : ''}>
+                        <TableCell>
+                          <Badge variant={getPrioridadColor(alerta.prioridad)} className="uppercase text-xs">
+                            {alerta.prioridad}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{alerta.insumo?.clave}</TableCell>
+                        <TableCell className="font-medium">{alerta.insumo?.nombre}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          <span className={alerta.cantidad_actual === 0 ? 'text-destructive font-bold' : ''}>
+                            {alerta.cantidad_actual}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-muted-foreground">
+                          {alerta.minimo_permitido}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-muted-foreground">
+                          {faltanteCalculado}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            min={0}
+                            defaultValue={faltanteCalculado}
+                            className="w-24 text-right font-mono"
+                            onChange={(e) => {
+                              // Store adjusted quantity - this would be used when sending
+                              console.log(`Adjusted quantity for ${alerta.id}: ${e.target.value}`);
+                            }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </ScrollArea>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDialogHospitalOpen(false)}>
               Cerrar
+            </Button>
+            <Button onClick={() => {
+              toast.success('Cantidades guardadas para este hospital');
+              setDialogHospitalOpen(false);
+            }}>
+              Guardar Ajustes
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -17,7 +17,9 @@ import {
   AlertTriangle,
   Warehouse,
   Truck,
-  DollarSign
+  DollarSign,
+  ClipboardList,
+  Route
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HospitalSelector } from '@/components/HospitalSelector';
@@ -47,6 +49,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/alertas-operaciones', icon: AlertTriangle, label: 'Alertas y Necesidades', roles: ['gerente_operaciones'] },
     { path: '/almacen-central', icon: Warehouse, label: 'Almacén Central', roles: ['gerente_almacen'] },
     { path: '/distribucion', icon: Truck, label: 'Distribución', roles: ['cadena_suministros'] },
+    { path: '/rutas-distribucion', icon: Route, label: 'Rutas de Distribución', roles: ['cadena_suministros'] },
     { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['finanzas'] },
     { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
@@ -54,6 +57,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/kardex', icon: History, label: 'Kardex', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/medicos', icon: Users, label: 'Médicos', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/paquetes', icon: Database, label: 'Paquetes Anestesia', roles: ['supervisor', 'gerente', 'gerente_operaciones'] },
+    { path: '/procedimientos-hospital', icon: ClipboardList, label: 'Procedimientos', roles: ['supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente', 'gerente_operaciones'] },

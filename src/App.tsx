@@ -29,6 +29,8 @@ import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
 import CadenaSuministrosDashboard from './pages/CadenaSuministrosDashboard';
 import FinanzasDashboard from './pages/FinanzasDashboard';
 import AlmacenistaAlertasTransferencia from './pages/AlmacenistaAlertasTransferencia';
+import SupervisorProcedimientos from './pages/SupervisorProcedimientos';
+import RutasDistribucion from './pages/RutasDistribucion';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -86,6 +88,9 @@ const AppContent = () => {
                   <Route path="/reportes" element={<Reportes />} />
                 </>
               )}
+              {(userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
+                <Route path="/procedimientos-hospital" element={<SupervisorProcedimientos />} />
+              )}
               {(userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>
                   <Route path="/alertas-operaciones" element={<GerenteOperacionesDashboard />} />
@@ -110,7 +115,10 @@ const AppContent = () => {
                 </>
               )}
               {userRole === 'cadena_suministros' && (
-                <Route path="/distribucion" element={<CadenaSuministrosDashboard />} />
+                <>
+                  <Route path="/distribucion" element={<CadenaSuministrosDashboard />} />
+                  <Route path="/rutas-distribucion" element={<RutasDistribucion />} />
+                </>
               )}
               {userRole === 'finanzas' && (
                 <Route path="/finanzas" element={<FinanzasDashboard />} />

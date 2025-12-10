@@ -29,6 +29,8 @@ interface DetalleAgrupado {
   id: string;
   insumo_catalogo_id: string;
   total_faltante_requerido: number;
+  cantidad_cubierta?: number;
+  cantidad_pendiente?: number;
   insumo?: { id: string; nombre: string; clave: string };
 }
 
@@ -155,11 +157,24 @@ const GerenteAlmacenDashboard = () => {
       return;
     }
 
-    const data = documento.detalles.map((d, index) => ({
+    // Filter only items with pending quantities (total - covered > 0)
+    const detallesPendientes = documento.detalles.filter(d => {
+      const pendiente = d.total_faltante_requerido - (d.cantidad_cubierta || 0);
+      return pendiente > 0;
+    });
+
+    if (detallesPendientes.length === 0) {
+      toast.info('Todos los insumos de este documento ya están cubiertos');
+      return;
+    }
+
+    const data = detallesPendientes.map((d, index) => ({
       'No.': index + 1,
       'Clave': d.insumo?.clave || 'N/A',
       'Nombre del Insumo': d.insumo?.nombre || 'N/A',
-      'Cantidad Requerida': d.total_faltante_requerido,
+      'Cantidad Total Requerida': d.total_faltante_requerido,
+      'Ya Cubierto': d.cantidad_cubierta || 0,
+      'Cantidad Pendiente': d.total_faltante_requerido - (d.cantidad_cubierta || 0),
       'Cantidad Proveedor': '',
       'Precio Unitario ($)': '',
       'ID Sistema': d.insumo_catalogo_id
@@ -167,42 +182,30 @@ const GerenteAlmacenDashboard = () => {
 
     const ws = XLSX.utils.json_to_sheet(data);
     
-    // Set column widths with generous spacing
     ws['!cols'] = [
       { wch: 6 },   // No.
       { wch: 18 },  // Clave
       { wch: 55 },  // Nombre del Insumo
-      { wch: 22 },  // Cantidad Requerida
+      { wch: 22 },  // Cantidad Total Requerida
+      { wch: 15 },  // Ya Cubierto
+      { wch: 20 },  // Cantidad Pendiente
       { wch: 22 },  // Cantidad Proveedor
       { wch: 20 },  // Precio Unitario
       { wch: 40 }   // ID Sistema
     ];
 
-    // Style header row
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-    for (let C = range.s.c; C <= range.e.c; ++C) {
-      const address = XLSX.utils.encode_col(C) + '1';
-      if (!ws[address]) continue;
-      ws[address].s = {
-        font: { bold: true },
-        fill: { fgColor: { rgb: 'E0E0E0' } },
-        alignment: { horizontal: 'center' }
-      };
-    }
-
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Solicitud Proveedor');
     
-    // Add info sheet
     const infoData = [
       { Campo: 'Fecha de Generación', Valor: new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) },
-      { Campo: 'Total de Items', Valor: documento.detalles.length },
+      { Campo: 'Items Pendientes', Valor: detallesPendientes.length },
       { Campo: 'ID Documento', Valor: documento.id },
       { Campo: '', Valor: '' },
-      { Campo: 'Instrucciones', Valor: 'Complete las columnas "Cantidad Proveedor" y "Precio Unitario" y suba el archivo de vuelta.' }
+      { Campo: 'Instrucciones', Valor: 'Complete "Cantidad Proveedor" y "Precio Unitario". Puede crear múltiples órdenes parciales.' }
     ];
     const wsInfo = XLSX.utils.json_to_sheet(infoData);
-    wsInfo['!cols'] = [{ wch: 25 }, { wch: 50 }];
+    wsInfo['!cols'] = [{ wch: 25 }, { wch: 60 }];
     XLSX.utils.book_append_sheet(wb, wsInfo, 'Información');
     
     XLSX.writeFile(wb, `Solicitud_Proveedor_${new Date().toISOString().split('T')[0]}_${documento.id.slice(0, 8)}.xlsx`);
@@ -280,14 +283,47 @@ const GerenteAlmacenDashboard = () => {
 
         if (itemsError) throw itemsError;
 
-        // Mark document as processed
-        await supabase
-          .from('documentos_necesidades_agrupado')
-          .update({
-            procesado_por_almacen: true,
-            procesado_at: new Date().toISOString()
-          })
-          .eq('id', selectedDocId);
+        // Update cantidad_cubierta for each detail item
+        for (const row of itemsConCantidad) {
+          const insumoId = row['ID Sistema'];
+          const cantidadProveedor = row['Cantidad Proveedor'];
+          
+          const { data: det } = await supabase
+            .from('documento_agrupado_detalle')
+            .select('id, cantidad_cubierta')
+            .eq('documento_id', selectedDocId)
+            .eq('insumo_catalogo_id', insumoId)
+            .single();
+
+          if (det) {
+            await supabase
+              .from('documento_agrupado_detalle')
+              .update({ 
+                cantidad_cubierta: (det.cantidad_cubierta || 0) + cantidadProveedor 
+              })
+              .eq('id', det.id);
+          }
+        }
+
+        // Check if all items are fully covered - only then mark as processed
+        const { data: allDetails } = await supabase
+          .from('documento_agrupado_detalle')
+          .select('total_faltante_requerido, cantidad_cubierta')
+          .eq('documento_id', selectedDocId);
+
+        const allCovered = allDetails?.every(d => 
+          (d.cantidad_cubierta || 0) >= d.total_faltante_requerido
+        );
+
+        if (allCovered) {
+          await supabase
+            .from('documentos_necesidades_agrupado')
+            .update({
+              procesado_por_almacen: true,
+              procesado_at: new Date().toISOString()
+            })
+            .eq('id', selectedDocId);
+        }
 
         toast.success(`Orden de compra ${numeroPedido} creada con ${itemsConCantidad.length} items`);
         setSelectedDocId(null);

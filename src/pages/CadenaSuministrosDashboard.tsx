@@ -231,10 +231,18 @@ const CadenaSuministrosDashboard = () => {
   };
 
   // Group document details by hospital, with optional route filtering
+  // Now considers what has already been sent via transferencias
   const agruparPorHospital = (doc: DocumentoSegmentado, rutaFilter?: string): HospitalNecesidades[] => {
     if (!doc.detalles) return [];
     
     const hospitalesEnRuta = rutaFilter && rutaFilter !== 'all' ? getHospitalesEnRuta(rutaFilter) : null;
+    
+    // Calculate what has already been sent for each hospital/insumo combination
+    const enviados: Record<string, number> = {};
+    transferencias.forEach(t => {
+      const key = `${t.hospital_destino_id}_${t.insumo_catalogo_id}`;
+      enviados[key] = (enviados[key] || 0) + t.cantidad_enviada;
+    });
     
     const grouped: Record<string, HospitalNecesidades> = {};
     
@@ -243,6 +251,16 @@ const CadenaSuministrosDashboard = () => {
       
       // Filter by route if selected
       if (hospitalesEnRuta && !hospitalesEnRuta.includes(hospitalId)) {
+        return;
+      }
+      
+      // Calculate remaining need after what has been sent
+      const key = `${hospitalId}_${det.insumo_catalogo_id}`;
+      const yaEnviado = enviados[key] || 0;
+      const faltanteRestante = Math.max(0, det.faltante_requerido - yaEnviado);
+      
+      // Skip if already fully covered
+      if (faltanteRestante <= 0) {
         return;
       }
       
@@ -260,13 +278,14 @@ const CadenaSuministrosDashboard = () => {
         insumo_catalogo_id: det.insumo_catalogo_id,
         nombre: det.insumo?.nombre || '',
         clave: det.insumo?.clave || '',
-        faltante: det.faltante_requerido,
-        cantidadEnviar: Math.min(det.faltante_requerido, stockCentral),
+        faltante: faltanteRestante, // Updated to remaining need
+        cantidadEnviar: Math.min(faltanteRestante, stockCentral),
         stockCentral
       });
     });
     
-    return Object.values(grouped);
+    // Filter out hospitals with no remaining insumos to send
+    return Object.values(grouped).filter(h => h.insumos.length > 0);
   };
 
   const abrirDialogHospital = (hospital: HospitalNecesidades) => {
@@ -650,31 +669,35 @@ const CadenaSuministrosDashboard = () => {
                         {/* Show items preview */}
                         <div className="mb-4">
                           <p className="text-sm font-medium text-muted-foreground mb-2">Items a recibir:</p>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Clave</TableHead>
-                                <TableHead>Insumo</TableHead>
-                                <TableHead className="text-right">Cantidad Solicitada</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {orden.items?.slice(0, 5).map(item => (
-                                <TableRow key={item.id}>
-                                  <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
-                                  <TableCell>{item.insumo?.nombre}</TableCell>
-                                  <TableCell className="text-right font-mono font-bold">{item.cantidad_solicitada}</TableCell>
-                                </TableRow>
-                              ))}
-                              {(orden.items?.length || 0) > 5 && (
+                          {orden.items && orden.items.length > 0 ? (
+                            <Table>
+                              <TableHeader>
                                 <TableRow>
-                                  <TableCell colSpan={3} className="text-center text-muted-foreground text-sm">
-                                    ... y {(orden.items?.length || 0) - 5} items más
-                                  </TableCell>
+                                  <TableHead>Clave</TableHead>
+                                  <TableHead>Insumo</TableHead>
+                                  <TableHead className="text-right">Cantidad Solicitada</TableHead>
                                 </TableRow>
-                              )}
-                            </TableBody>
-                          </Table>
+                              </TableHeader>
+                              <TableBody>
+                                {orden.items.slice(0, 5).map(item => (
+                                  <TableRow key={item.id}>
+                                    <TableCell className="font-mono text-sm">{item.insumo?.clave || 'N/A'}</TableCell>
+                                    <TableCell>{item.insumo?.nombre || 'Sin nombre'}</TableCell>
+                                    <TableCell className="text-right font-mono font-bold">{item.cantidad_solicitada}</TableCell>
+                                  </TableRow>
+                                ))}
+                                {orden.items.length > 5 && (
+                                  <TableRow>
+                                    <TableCell colSpan={3} className="text-center text-muted-foreground text-sm">
+                                      ... y {orden.items.length - 5} items más
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          ) : (
+                            <p className="text-muted-foreground text-sm py-2">Cargando items...</p>
+                          )}
                         </div>
                         <div className="flex justify-end">
                           <Button onClick={() => abrirRecibirDialog(orden)} size="lg">

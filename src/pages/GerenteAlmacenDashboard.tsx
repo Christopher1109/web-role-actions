@@ -151,15 +151,23 @@ const GerenteAlmacenDashboard = () => {
     }
   };
 
-  const descargarExcelParaProveedor = (documento: DocumentoAgrupado) => {
-    if (!documento.detalles || documento.detalles.length === 0) {
-      toast.error('El documento no tiene detalles');
+  const descargarExcelParaProveedor = async (documento: DocumentoAgrupado) => {
+    // Always fetch fresh data from database to get updated cantidad_cubierta
+    const { data: freshDetalles, error } = await supabase
+      .from('documento_agrupado_detalle')
+      .select(`
+        *,
+        insumo:insumos_catalogo(id, nombre, clave)
+      `)
+      .eq('documento_id', documento.id);
+
+    if (error || !freshDetalles || freshDetalles.length === 0) {
+      toast.error('Error al obtener datos actualizados del documento');
       return;
     }
 
     // Filter only items with pending quantities (total - covered > 0)
-    // Use cantidad_pendiente which is the remaining amount needed
-    const detallesPendientes = documento.detalles.filter(d => {
+    const detallesPendientes = freshDetalles.filter(d => {
       const pendiente = d.total_faltante_requerido - (d.cantidad_cubierta || 0);
       return pendiente > 0;
     });
@@ -176,10 +184,10 @@ const GerenteAlmacenDashboard = () => {
         'No.': index + 1,
         'Clave': d.insumo?.clave || 'N/A',
         'Nombre del Insumo': d.insumo?.nombre || 'N/A',
-        'Cantidad Pendiente Requerida': cantidadPendiente, // This is the ACTUAL remaining need
+        'Cantidad Pendiente Requerida': cantidadPendiente,
         'Cantidad Proveedor': '',
         'Precio Unitario ($)': '',
-        'Cantidad Faltante': '', // Will be calculated by formula
+        'Cantidad Faltante': '',
         'ID Sistema': d.insumo_catalogo_id
       };
     });
@@ -199,14 +207,13 @@ const GerenteAlmacenDashboard = () => {
     ];
 
     // Add formulas for "Cantidad Faltante" column (column G)
-    // Formula: Cantidad Pendiente Requerida (D) - Cantidad Proveedor (E)
     for (let i = 0; i < data.length; i++) {
-      const rowNum = i + 2; // +2 because row 1 is header
+      const rowNum = i + 2;
       const cellRef = `G${rowNum}`;
       ws[cellRef] = { 
         t: 'n', 
         f: `D${rowNum}-E${rowNum}`,
-        z: '0' // Number format
+        z: '0'
       };
     }
 
@@ -233,7 +240,7 @@ const GerenteAlmacenDashboard = () => {
     
     XLSX.writeFile(wb, `Solicitud_Proveedor_${new Date().toISOString().split('T')[0]}_${documento.id.slice(0, 8)}.xlsx`);
     
-    toast.success('Excel descargado con cantidades actualizadas. Solo llene "Cantidad Proveedor" y "Precio Unitario".');
+    toast.success('Excel descargado con cantidades actualizadas');
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {

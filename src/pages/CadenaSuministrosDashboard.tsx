@@ -682,7 +682,11 @@ const CadenaSuministrosDashboard = () => {
                                 {orden.items.slice(0, 5).map(item => (
                                   <TableRow key={item.id}>
                                     <TableCell className="font-mono text-sm">{item.insumo?.clave || 'N/A'}</TableCell>
-                                    <TableCell>{item.insumo?.nombre || 'Sin nombre'}</TableCell>
+                                    <TableCell className="max-w-[200px]">
+                                      <span className="block truncate" title={item.insumo?.nombre || 'Sin nombre'}>
+                                        {item.insumo?.nombre || 'Sin nombre'}
+                                      </span>
+                                    </TableCell>
                                     <TableCell className="text-right font-mono font-bold">{item.cantidad_solicitada}</TableCell>
                                   </TableRow>
                                 ))}
@@ -1032,14 +1036,20 @@ const CadenaSuministrosDashboard = () => {
                 </p>
                 {ordenRecibiendo.items?.map((item) => {
                   const mermaData = mermas[item.id] || { cantidad: 0, motivo: '' };
+                  // Truncate name to 60 characters
+                  const nombreCorto = item.insumo?.nombre && item.insumo.nombre.length > 60
+                    ? item.insumo.nombre.substring(0, 60) + '...'
+                    : item.insumo?.nombre;
                   return (
                     <Card key={item.id} className={mermaData.cantidad > 0 ? 'border-amber-300 bg-amber-50/30' : ''}>
                       <CardContent className="py-3">
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{item.insumo?.nombre}</p>
-                              <p className="text-sm text-muted-foreground">{item.insumo?.clave}</p>
+                            <div className="flex-1 min-w-0 max-w-[300px]">
+                              <p className="font-medium text-sm leading-tight" title={item.insumo?.nombre}>
+                                {nombreCorto}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{item.insumo?.clave}</p>
                             </div>
                             <div className="flex items-center gap-4 text-sm">
                               <div className="text-center">

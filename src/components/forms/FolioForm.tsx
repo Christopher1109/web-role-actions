@@ -164,7 +164,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     }
   }, [selectedHospital, form]);
 
-  // Cargar tipos de anestesia disponibles para el hospital seleccionado
+  // Cargar tipos de anestesia disponibles para el hospital seleccionado (usando hospital_procedimientos)
   useEffect(() => {
     const loadProcedimientosHospital = async () => {
       if (!selectedHospital?.id) {
@@ -174,21 +174,23 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
       setLoadingProcedimientos(true);
       try {
-        const { data: procedimientos, error } = await supabase
-          .from("procedimientos")
-          .select("nombre, descripcion")
-          .eq("hospital_id", selectedHospital.id);
+        // First check hospital_procedimientos for authorized procedures
+        const { data: hospitalProcs, error: hpError } = await supabase
+          .from("hospital_procedimientos")
+          .select("procedimiento_clave, procedimiento_nombre")
+          .eq("hospital_id", selectedHospital.id)
+          .eq("activo", true);
 
-        if (error) throw error;
+        if (hpError) throw hpError;
 
-        if (procedimientos && procedimientos.length > 0) {
-          // Mapear los procedimientos a formato de select
-          const tiposDisponibles = procedimientos.map((proc) => ({
-            value: proc.nombre,
-            label: tipoAnestesiaLabels[proc.nombre] || proc.descripcion || proc.nombre,
+        if (hospitalProcs && hospitalProcs.length > 0) {
+          // Use authorized procedures from hospital_procedimientos
+          const tiposDisponibles = hospitalProcs.map((proc) => ({
+            value: proc.procedimiento_nombre,
+            label: tipoAnestesiaLabels[proc.procedimiento_nombre] || proc.procedimiento_nombre,
           }));
 
-          // Agregar la opción de anestesia mixta si hay más de un tipo disponible
+          // Add mixed anesthesia option if multiple types available
           if (tiposDisponibles.length > 1) {
             tiposDisponibles.push({
               value: "anestesia_mixta",
@@ -197,11 +199,35 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           }
 
           setTiposAnestesiaDisponibles(tiposDisponibles);
-          console.log(`✅ Tipos de anestesia cargados para ${selectedHospital.display_name}:`, tiposDisponibles.length);
+          console.log(`✅ Procedimientos autorizados para ${selectedHospital.display_name}:`, tiposDisponibles.length);
         } else {
-          console.warn(`⚠️ No hay procedimientos configurados para ${selectedHospital.display_name}`);
-          setTiposAnestesiaDisponibles([]);
-          toast.error("Este hospital no tiene tipos de anestesia configurados");
+          // Fallback: try legacy procedimientos table
+          const { data: procedimientos, error } = await supabase
+            .from("procedimientos")
+            .select("nombre, descripcion")
+            .eq("hospital_id", selectedHospital.id);
+
+          if (error) throw error;
+
+          if (procedimientos && procedimientos.length > 0) {
+            const tiposDisponibles = procedimientos.map((proc) => ({
+              value: proc.nombre,
+              label: tipoAnestesiaLabels[proc.nombre] || proc.descripcion || proc.nombre,
+            }));
+
+            if (tiposDisponibles.length > 1) {
+              tiposDisponibles.push({
+                value: "anestesia_mixta",
+                label: tipoAnestesiaLabels.anestesia_mixta,
+              });
+            }
+
+            setTiposAnestesiaDisponibles(tiposDisponibles);
+          } else {
+            console.warn(`⚠️ No hay procedimientos configurados para ${selectedHospital.display_name}`);
+            setTiposAnestesiaDisponibles([]);
+            toast.error("Este hospital no tiene tipos de anestesia autorizados. Contacte al Supervisor.");
+          }
         }
       } catch (error) {
         console.error("Error al cargar procedimientos del hospital:", error);

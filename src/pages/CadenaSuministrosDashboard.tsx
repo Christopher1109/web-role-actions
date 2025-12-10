@@ -9,9 +9,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { RefreshCw, Warehouse, Send, Building2, Package, TrendingUp, FileText, Clock, CheckCircle, Truck, Edit, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Warehouse, Send, Building2, Package, TrendingUp, FileText, Clock, CheckCircle, Truck, Edit, AlertTriangle, Filter, MapPin } from 'lucide-react';
 import { StatusTimeline } from '@/components/StatusTimeline';
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 
@@ -51,6 +52,7 @@ interface Transferencia {
   estado: string;
   fecha: string;
   alerta_creada: boolean;
+  ruta_id?: string;
   hospital?: { id: string; nombre: string; display_name: string };
   insumo?: { id: string; nombre: string; clave: string };
 }
@@ -84,17 +86,28 @@ interface HospitalNecesidades {
   }[];
 }
 
+interface RutaDistribucion {
+  id: string;
+  nombre_ruta: string;
+  tipo: string;
+  descripcion: string | null;
+  hospitales?: { hospital_id: string }[];
+}
+
 const CadenaSuministrosDashboard = () => {
   const [documentos, setDocumentos] = useState<DocumentoSegmentado[]>([]);
   const [almacenCentral, setAlmacenCentral] = useState<AlmacenCentralItem[]>([]);
   const [transferencias, setTransferencias] = useState<Transferencia[]>([]);
   const [ordenesParaRecibir, setOrdenesParaRecibir] = useState<OrdenRecibir[]>([]);
+  const [rutas, setRutas] = useState<RutaDistribucion[]>([]);
+  const [selectedRutaFilter, setSelectedRutaFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   
   // Dialog state for bulk hospital transfer
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedHospital, setSelectedHospital] = useState<HospitalNecesidades | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [selectedRutaForTransfer, setSelectedRutaForTransfer] = useState<string>('');
 
   // Dialog for receiving orders
   const [recibirDialogOpen, setRecibirDialogOpen] = useState(false);
@@ -114,6 +127,7 @@ const CadenaSuministrosDashboard = () => {
 
   useEffect(() => {
     fetchData();
+    fetchRutas();
   }, []);
 
   const fetchData = async () => {
@@ -188,19 +202,50 @@ const CadenaSuministrosDashboard = () => {
     }
   };
 
+  const fetchRutas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('rutas_distribucion')
+        .select(`
+          *,
+          hospitales:rutas_hospitales(hospital_id)
+        `)
+        .eq('activo', true)
+        .order('nombre_ruta');
+
+      if (error) throw error;
+      setRutas(data || []);
+    } catch (error) {
+      console.error('Error fetching rutas:', error);
+    }
+  };
+
+  const getHospitalesEnRuta = (rutaId: string): string[] => {
+    const ruta = rutas.find(r => r.id === rutaId);
+    return ruta?.hospitales?.map(h => h.hospital_id) || [];
+  };
+
   const getDisponibilidadCentral = (insumoId: string) => {
     const item = almacenCentral.find(a => a.insumo_catalogo_id === insumoId);
     return item?.cantidad_disponible || 0;
   };
 
-  // Group document details by hospital
-  const agruparPorHospital = (doc: DocumentoSegmentado): HospitalNecesidades[] => {
+  // Group document details by hospital, with optional route filtering
+  const agruparPorHospital = (doc: DocumentoSegmentado, rutaFilter?: string): HospitalNecesidades[] => {
     if (!doc.detalles) return [];
+    
+    const hospitalesEnRuta = rutaFilter && rutaFilter !== 'all' ? getHospitalesEnRuta(rutaFilter) : null;
     
     const grouped: Record<string, HospitalNecesidades> = {};
     
     doc.detalles.forEach(det => {
       const hospitalId = det.hospital_id;
+      
+      // Filter by route if selected
+      if (hospitalesEnRuta && !hospitalesEnRuta.includes(hospitalId)) {
+        return;
+      }
+      
       if (!grouped[hospitalId]) {
         grouped[hospitalId] = {
           hospital_id: hospitalId,
@@ -282,7 +327,7 @@ const CadenaSuministrosDashboard = () => {
           continue;
         }
 
-        // 1. Create transfer record with tirada_id
+        // 1. Create transfer record with tirada_id and optional ruta_id
         const { data: transferencia, error: transError } = await supabase
           .from('transferencias_central_hospital')
           .insert({
@@ -292,7 +337,8 @@ const CadenaSuministrosDashboard = () => {
             estado: 'enviado',
             enviado_por: user?.id,
             alerta_creada: true,
-            tirada_id: tiradaId
+            tirada_id: tiradaId,
+            ruta_id: selectedRutaForTransfer || null
           })
           .select()
           .single();
@@ -625,8 +671,41 @@ const CadenaSuministrosDashboard = () => {
           </Card>
         </TabsContent>
 
-        {/* Tab: Distribución - Cards por Hospital */}
+        {/* Tab: Distribución - Cards por Hospital with Route Filter */}
         <TabsContent value="distribucion" className="space-y-4">
+          {/* Route Filter */}
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <Label>Filtrar por Ruta:</Label>
+                </div>
+                <Select value={selectedRutaFilter} onValueChange={setSelectedRutaFilter}>
+                  <SelectTrigger className="w-[250px]">
+                    <SelectValue placeholder="Todas las rutas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las rutas</SelectItem>
+                    {rutas.map(ruta => (
+                      <SelectItem key={ruta.id} value={ruta.id}>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-3 w-3" />
+                          {ruta.nombre_ruta} ({ruta.tipo})
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedRutaFilter !== 'all' && (
+                  <Badge variant="secondary">
+                    {getHospitalesEnRuta(selectedRutaFilter).length} hospitales en ruta
+                  </Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Cargando...</div>
           ) : documentos.length === 0 ? (
@@ -637,7 +716,7 @@ const CadenaSuministrosDashboard = () => {
             </Card>
           ) : (
             documentos.map(doc => {
-              const hospitalesAgrupados = agruparPorHospital(doc);
+              const hospitalesAgrupados = agruparPorHospital(doc, selectedRutaFilter);
               
               return (
                 <Card key={doc.id}>
@@ -672,7 +751,9 @@ const CadenaSuministrosDashboard = () => {
                   </CardHeader>
                   <CardContent>
                     {hospitalesAgrupados.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-4">Sin detalles</p>
+                      <p className="text-muted-foreground text-center py-4">
+                        {selectedRutaFilter !== 'all' ? 'No hay hospitales en esta ruta con necesidades' : 'Sin detalles'}
+                      </p>
                     ) : (
                       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                         {hospitalesAgrupados.map(hospital => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { RefreshCw, CheckCircle2, Building2, ClipboardList, Save } from 'lucide-react';
+import { RefreshCw, CheckCircle2, Building2, ClipboardList, Save, AlertTriangle } from 'lucide-react';
 
 interface Hospital {
   id: string;
@@ -30,13 +30,14 @@ interface HospitalProcedimiento {
 }
 
 const SupervisorProcedimientos = () => {
-  const [hospitales, setHospitales] = useState<Hospital[]>([]);
+  const [hospitalesAsignados, setHospitalesAsignados] = useState<Hospital[]>([]);
   const [procedimientos, setProcedimientos] = useState<Procedimiento[]>([]);
   const [hospitalProcedimientos, setHospitalProcedimientos] = useState<HospitalProcedimiento[]>([]);
   const [selectedHospital, setSelectedHospital] = useState<string>('');
   const [selectedProcedimientos, setSelectedProcedimientos] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [userRole, setUserRole] = useState<string>('');
 
   useEffect(() => {
     fetchData();
@@ -51,13 +52,50 @@ const SupervisorProcedimientos = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch hospitals for supervisor
-      const { data: hospitalesData } = await supabase
-        .from('hospitales')
-        .select('id, nombre, display_name')
-        .order('display_name');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      setHospitales(hospitalesData || []);
+      // Check user role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
+
+      const role = roleData?.role || '';
+      setUserRole(role);
+
+      let hospitalesData: Hospital[] = [];
+
+      // If supervisor, only show assigned hospitals
+      if (role === 'supervisor') {
+        const { data: assignments } = await supabase
+          .from('supervisor_hospital_assignments')
+          .select('hospital_id')
+          .eq('supervisor_user_id', user.id);
+
+        const hospitalIds = assignments?.map(a => a.hospital_id) || [];
+
+        if (hospitalIds.length > 0) {
+          const { data } = await supabase
+            .from('hospitales')
+            .select('id, nombre, display_name')
+            .in('id', hospitalIds)
+            .order('display_name');
+
+          hospitalesData = data || [];
+        }
+      } else if (role === 'gerente' || role === 'gerente_operaciones') {
+        // Gerentes see all hospitals
+        const { data } = await supabase
+          .from('hospitales')
+          .select('id, nombre, display_name')
+          .order('display_name');
+
+        hospitalesData = data || [];
+      }
+
+      setHospitalesAsignados(hospitalesData);
 
       // Fetch unique procedure types from anestesia_insumos
       const { data: tiposAnestesia } = await supabase
@@ -65,7 +103,6 @@ const SupervisorProcedimientos = () => {
         .select('tipo_anestesia')
         .order('tipo_anestesia');
 
-      // Get unique types
       const uniqueTipos = [...new Set(tiposAnestesia?.map(t => t.tipo_anestesia) || [])];
       const procs = uniqueTipos.map((tipo, idx) => ({
         id: `proc-${idx}`,
@@ -74,7 +111,7 @@ const SupervisorProcedimientos = () => {
       }));
       setProcedimientos(procs);
 
-      if (hospitalesData && hospitalesData.length > 0) {
+      if (hospitalesData.length > 0) {
         setSelectedHospital(hospitalesData[0].id);
       }
     } catch (error) {
@@ -94,7 +131,6 @@ const SupervisorProcedimientos = () => {
 
       setHospitalProcedimientos(data || []);
       
-      // Set selected based on existing
       const selected = new Set(data?.map(hp => hp.procedimiento_clave) || []);
       setSelectedProcedimientos(selected);
     } catch (error) {
@@ -164,7 +200,35 @@ const SupervisorProcedimientos = () => {
     }
   };
 
-  const selectedHospitalData = hospitales.find(h => h.id === selectedHospital);
+  const selectedHospitalData = hospitalesAsignados.find(h => h.id === selectedHospital);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Cargando...</p>
+      </div>
+    );
+  }
+
+  if (hospitalesAsignados.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Selección de Procedimientos</h1>
+          <p className="text-muted-foreground">Define qué procedimientos están autorizados para cada hospital</p>
+        </div>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Sin hospitales asignados</h3>
+            <p className="text-muted-foreground">
+              No tienes hospitales asignados. Contacta al Gerente de Operaciones para que te asigne hospitales.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -184,6 +248,9 @@ const SupervisorProcedimientos = () => {
           <CardTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5" />
             Seleccionar Hospital
+            <Badge variant="secondary" className="ml-2">
+              {hospitalesAsignados.length} hospitales disponibles
+            </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -192,7 +259,7 @@ const SupervisorProcedimientos = () => {
               <SelectValue placeholder="Selecciona un hospital" />
             </SelectTrigger>
             <SelectContent>
-              {hospitales.map(h => (
+              {hospitalesAsignados.map(h => (
                 <SelectItem key={h.id} value={h.id}>
                   {h.display_name || h.nombre}
                 </SelectItem>
@@ -223,42 +290,38 @@ const SupervisorProcedimientos = () => {
             </p>
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <div className="text-center py-8 text-muted-foreground">Cargando...</div>
-            ) : (
-              <ScrollArea className="max-h-[60vh]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">Activo</TableHead>
-                      <TableHead>Procedimiento</TableHead>
-                      <TableHead>Clave</TableHead>
+            <ScrollArea className="max-h-[60vh]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">Activo</TableHead>
+                    <TableHead>Procedimiento</TableHead>
+                    <TableHead>Clave</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {procedimientos.map(proc => (
+                    <TableRow 
+                      key={proc.tipo_anestesia}
+                      className={selectedProcedimientos.has(proc.tipo_anestesia) ? 'bg-primary/5' : ''}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedProcedimientos.has(proc.tipo_anestesia)}
+                          onCheckedChange={() => toggleProcedimiento(proc.tipo_anestesia)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {proc.nombre}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm text-muted-foreground">
+                        {proc.tipo_anestesia}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {procedimientos.map(proc => (
-                      <TableRow 
-                        key={proc.tipo_anestesia}
-                        className={selectedProcedimientos.has(proc.tipo_anestesia) ? 'bg-primary/5' : ''}
-                      >
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedProcedimientos.has(proc.tipo_anestesia)}
-                            onCheckedChange={() => toggleProcedimiento(proc.tipo_anestesia)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {proc.nombre}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm text-muted-foreground">
-                          {proc.tipo_anestesia}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            )}
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
           </CardContent>
         </Card>
       )}

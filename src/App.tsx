@@ -30,6 +30,7 @@ import CadenaSuministrosDashboard from './pages/CadenaSuministrosDashboard';
 import FinanzasDashboard from './pages/FinanzasDashboard';
 import AlmacenistaAlertasTransferencia from './pages/AlmacenistaAlertasTransferencia';
 import SupervisorProcedimientos from './pages/SupervisorProcedimientos';
+import SupervisorAsignaciones from './pages/SupervisorAsignaciones';
 import RutasDistribucion from './pages/RutasDistribucion';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
@@ -94,6 +95,7 @@ const AppContent = () => {
               {(userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>
                   <Route path="/alertas-operaciones" element={<GerenteOperacionesDashboard />} />
+                  <Route path="/supervisor-asignaciones" element={<SupervisorAsignaciones />} />
                   <Route path="/finanzas" element={<FinanzasDashboard />} />
                   <Route path="/traspasos" element={<Traspasos />} />
                   <Route path="/usuarios" element={<Usuarios />} />

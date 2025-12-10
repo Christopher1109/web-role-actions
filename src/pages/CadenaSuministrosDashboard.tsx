@@ -307,7 +307,11 @@ const CadenaSuministrosDashboard = () => {
   const ejecutarTransferenciaMasiva = async () => {
     if (!selectedHospital) return;
 
-    const insumosAEnviar = selectedHospital.insumos.filter(i => i.cantidadEnviar > 0);
+    // Only send items with stock available and quantity > 0
+    const insumosAEnviar = selectedHospital.insumos.filter(i => 
+      i.cantidadEnviar > 0 && i.stockCentral > 0
+    );
+    
     if (insumosAEnviar.length === 0) {
       toast.error('No hay insumos para enviar');
       return;
@@ -319,11 +323,17 @@ const CadenaSuministrosDashboard = () => {
       
       // Generate unique tirada_id for this batch
       const tiradaId = crypto.randomUUID();
+      let enviados = 0;
+      let omitidos = 0;
 
       for (const insumo of insumosAEnviar) {
         const stockItem = almacenCentral.find(a => a.insumo_catalogo_id === insumo.insumo_catalogo_id);
-        if (!stockItem || stockItem.cantidad_disponible < insumo.cantidadEnviar) {
-          toast.error(`Stock insuficiente para ${insumo.nombre}`);
+        
+        // Calculate actual quantity to send (limited by available stock)
+        const cantidadReal = Math.min(insumo.cantidadEnviar, stockItem?.cantidad_disponible || 0);
+        
+        if (cantidadReal <= 0) {
+          omitidos++;
           continue;
         }
 
@@ -333,7 +343,7 @@ const CadenaSuministrosDashboard = () => {
           .insert({
             hospital_destino_id: selectedHospital.hospital_id,
             insumo_catalogo_id: insumo.insumo_catalogo_id,
-            cantidad_enviada: insumo.cantidadEnviar,
+            cantidad_enviada: cantidadReal,
             estado: 'enviado',
             enviado_por: user?.id,
             alerta_creada: true,
@@ -352,25 +362,35 @@ const CadenaSuministrosDashboard = () => {
             transferencia_id: transferencia.id,
             hospital_id: selectedHospital.hospital_id,
             insumo_catalogo_id: insumo.insumo_catalogo_id,
-            cantidad_enviada: insumo.cantidadEnviar,
+            cantidad_enviada: cantidadReal,
             estado: 'pendiente',
             tirada_id: tiradaId
           });
 
-        // 3. Decrease almacen central
-        await supabase
-          .from('almacen_central')
-          .update({
-            cantidad_disponible: stockItem.cantidad_disponible - insumo.cantidadEnviar,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', stockItem.id);
+        // 3. Decrease almacen central immediately
+        if (stockItem) {
+          await supabase
+            .from('almacen_central')
+            .update({
+              cantidad_disponible: stockItem.cantidad_disponible - cantidadReal,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', stockItem.id);
+        }
+
+        enviados++;
       }
 
-      toast.success(`${insumosAEnviar.length} insumos enviados a ${selectedHospital.hospital_nombre}`);
+      const mensaje = omitidos > 0 
+        ? `${enviados} insumos enviados a ${selectedHospital.hospital_nombre} (${omitidos} omitidos por falta de stock)`
+        : `${enviados} insumos enviados a ${selectedHospital.hospital_nombre}`;
+      
+      toast.success(mensaje);
       setDialogOpen(false);
       setSelectedHospital(null);
-      fetchData();
+      
+      // Refresh data to update cards
+      await fetchData();
 
     } catch (error) {
       console.error('Error executing bulk transfer:', error);

@@ -168,31 +168,43 @@ const GerenteAlmacenDashboard = () => {
       return;
     }
 
+    // Simplified columns as requested
     const data = detallesPendientes.map((d, index) => ({
       'No.': index + 1,
       'Clave': d.insumo?.clave || 'N/A',
       'Nombre del Insumo': d.insumo?.nombre || 'N/A',
       'Cantidad Total Requerida': d.total_faltante_requerido,
-      'Ya Cubierto': d.cantidad_cubierta || 0,
-      'Cantidad Pendiente': d.total_faltante_requerido - (d.cantidad_cubierta || 0),
       'Cantidad Proveedor': '',
       'Precio Unitario ($)': '',
+      'Cantidad Pendiente': '', // Will be calculated by formula
       'ID Sistema': d.insumo_catalogo_id
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
     
+    // Set column widths
     ws['!cols'] = [
       { wch: 6 },   // No.
       { wch: 18 },  // Clave
-      { wch: 55 },  // Nombre del Insumo
+      { wch: 50 },  // Nombre del Insumo
       { wch: 22 },  // Cantidad Total Requerida
-      { wch: 15 },  // Ya Cubierto
-      { wch: 20 },  // Cantidad Pendiente
       { wch: 22 },  // Cantidad Proveedor
       { wch: 20 },  // Precio Unitario
+      { wch: 22 },  // Cantidad Pendiente
       { wch: 40 }   // ID Sistema
     ];
+
+    // Add formulas for "Cantidad Pendiente" column (column G)
+    // Formula: Cantidad Requerida (D) - Cantidad Proveedor (E)
+    for (let i = 0; i < data.length; i++) {
+      const rowNum = i + 2; // +2 because row 1 is header
+      const cellRef = `G${rowNum}`;
+      ws[cellRef] = { 
+        t: 'n', 
+        f: `D${rowNum}-E${rowNum}`,
+        z: '0' // Number format
+      };
+    }
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Solicitud Proveedor');
@@ -202,15 +214,17 @@ const GerenteAlmacenDashboard = () => {
       { Campo: 'Items Pendientes', Valor: detallesPendientes.length },
       { Campo: 'ID Documento', Valor: documento.id },
       { Campo: '', Valor: '' },
-      { Campo: 'Instrucciones', Valor: 'Complete "Cantidad Proveedor" y "Precio Unitario". Puede crear múltiples órdenes parciales.' }
+      { Campo: 'Instrucciones', Valor: 'Complete SOLO la columna "Cantidad Proveedor" y "Precio Unitario".' },
+      { Campo: '', Valor: 'La columna "Cantidad Pendiente" se calcula automáticamente.' },
+      { Campo: '', Valor: 'Puede crear múltiples órdenes parciales.' }
     ];
     const wsInfo = XLSX.utils.json_to_sheet(infoData);
-    wsInfo['!cols'] = [{ wch: 25 }, { wch: 60 }];
+    wsInfo['!cols'] = [{ wch: 25 }, { wch: 70 }];
     XLSX.utils.book_append_sheet(wb, wsInfo, 'Información');
     
     XLSX.writeFile(wb, `Solicitud_Proveedor_${new Date().toISOString().split('T')[0]}_${documento.id.slice(0, 8)}.xlsx`);
     
-    toast.success('Excel descargado correctamente');
+    toast.success('Excel descargado. El proveedor solo debe llenar "Cantidad Proveedor" y "Precio Unitario".');
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {

@@ -173,6 +173,9 @@ const GerenteOperacionesDashboard = () => {
     alertasActivas.forEach(alerta => {
       const faltante = Math.max(0, alerta.minimo_permitido - alerta.cantidad_actual);
       
+      // Skip items with zero faltante
+      if (faltante === 0) return;
+      
       if (insumoMap.has(alerta.insumo_catalogo_id)) {
         const existing = insumoMap.get(alerta.insumo_catalogo_id)!;
         existing.total_faltante += faltante;
@@ -198,8 +201,11 @@ const GerenteOperacionesDashboard = () => {
       }
     });
 
+    // Filter out any with zero total faltante and sort by highest faltante
     setNecesidadesConsolidadas(
-      Array.from(insumoMap.values()).sort((a, b) => b.total_faltante - a.total_faltante)
+      Array.from(insumoMap.values())
+        .filter(n => n.total_faltante > 0)
+        .sort((a, b) => b.total_faltante - a.total_faltante)
     );
   };
 

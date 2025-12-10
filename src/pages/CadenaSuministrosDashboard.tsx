@@ -334,15 +334,28 @@ const CadenaSuministrosDashboard = () => {
     }
   };
 
+  // State for merma tracking
+  const [mermas, setMermas] = useState<Record<string, { cantidad: number; motivo: string }>>({});
+
   // Functions for receiving orders
   const abrirRecibirDialog = (orden: OrdenRecibir) => {
     setOrdenRecibiendo(orden);
     const initialCantidades: Record<string, number> = {};
+    const initialMermas: Record<string, { cantidad: number; motivo: string }> = {};
     orden.items?.forEach(item => {
       initialCantidades[item.id] = item.cantidad_solicitada;
+      initialMermas[item.id] = { cantidad: 0, motivo: '' };
     });
     setCantidadesRecibidas(initialCantidades);
+    setMermas(initialMermas);
     setRecibirDialogOpen(true);
+  };
+
+  const actualizarCantidadRecibida = (itemId: string, cantidad: number, solicitada: number) => {
+    setCantidadesRecibidas(prev => ({ ...prev, [itemId]: cantidad }));
+    // Auto-calculate merma
+    const merma = Math.max(0, solicitada - cantidad);
+    setMermas(prev => ({ ...prev, [itemId]: { ...prev[itemId], cantidad: merma } }));
   };
 
   const confirmarRecepcion = async () => {
@@ -350,40 +363,44 @@ const CadenaSuministrosDashboard = () => {
 
     setEnviando(true);
     try {
-      // 1. Update almacen_central with received quantities
+      // 1. Update almacen_central with received quantities and track mermas
       for (const item of ordenRecibiendo.items || []) {
         const cantidadRecibida = cantidadesRecibidas[item.id] || 0;
-        if (cantidadRecibida <= 0) continue;
-
-        const { data: existingItem } = await supabase
-          .from('almacen_central')
-          .select()
-          .eq('insumo_catalogo_id', item.insumo_catalogo_id)
-          .maybeSingle();
-
-        if (existingItem) {
-          await supabase
+        const mermaData = mermas[item.id] || { cantidad: 0, motivo: '' };
+        
+        if (cantidadRecibida > 0) {
+          const { data: existingItem } = await supabase
             .from('almacen_central')
-            .update({
-              cantidad_disponible: existingItem.cantidad_disponible + cantidadRecibida,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingItem.id);
-        } else {
-          await supabase
-            .from('almacen_central')
-            .insert({
-              insumo_catalogo_id: item.insumo_catalogo_id,
-              cantidad_disponible: cantidadRecibida,
-              lote: `LOTE-${Date.now().toString(36).toUpperCase()}`
-            });
+            .select()
+            .eq('insumo_catalogo_id', item.insumo_catalogo_id)
+            .maybeSingle();
+
+          if (existingItem) {
+            await supabase
+              .from('almacen_central')
+              .update({
+                cantidad_disponible: existingItem.cantidad_disponible + cantidadRecibida,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingItem.id);
+          } else {
+            await supabase
+              .from('almacen_central')
+              .insert({
+                insumo_catalogo_id: item.insumo_catalogo_id,
+                cantidad_disponible: cantidadRecibida,
+                lote: `LOTE-${Date.now().toString(36).toUpperCase()}`
+              });
+          }
         }
 
-        // Update pedido_items
+        // Update pedido_items with merma info
         await supabase
           .from('pedido_items')
           .update({
             cantidad_recibida: cantidadRecibida,
+            cantidad_merma: mermaData.cantidad,
+            motivo_merma: mermaData.motivo || null,
             estado: 'recibido'
           })
           .eq('id', item.id);
@@ -887,39 +904,64 @@ const CadenaSuministrosDashboard = () => {
             <ScrollArea className="max-h-[60vh]">
               <div className="space-y-3 pr-4">
                 <p className="text-sm text-muted-foreground mb-4">
-                  Ajusta las cantidades recibidas si difieren de las solicitadas:
+                  Ajusta las cantidades recibidas. Las diferencias se registrarán como merma:
                 </p>
-                {ordenRecibiendo.items?.map((item) => (
-                  <Card key={item.id}>
-                    <CardContent className="py-3">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{item.insumo?.nombre}</p>
-                          <p className="text-sm text-muted-foreground">{item.insumo?.clave}</p>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <div className="text-center">
-                            <p className="text-muted-foreground">Solicitado</p>
-                            <p className="font-mono font-bold">{item.cantidad_solicitada}</p>
+                {ordenRecibiendo.items?.map((item) => {
+                  const mermaData = mermas[item.id] || { cantidad: 0, motivo: '' };
+                  return (
+                    <Card key={item.id} className={mermaData.cantidad > 0 ? 'border-amber-300 bg-amber-50/30' : ''}>
+                      <CardContent className="py-3">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{item.insumo?.nombre}</p>
+                              <p className="text-sm text-muted-foreground">{item.insumo?.clave}</p>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm">
+                              <div className="text-center">
+                                <p className="text-muted-foreground">Solicitado</p>
+                                <p className="font-mono font-bold">{item.cantidad_solicitada}</p>
+                              </div>
+                              <div className="w-24">
+                                <Label className="text-xs text-muted-foreground">Recibido</Label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={cantidadesRecibidas[item.id] || 0}
+                                  onChange={(e) => actualizarCantidadRecibida(
+                                    item.id, 
+                                    Number(e.target.value), 
+                                    item.cantidad_solicitada
+                                  )}
+                                  className="h-8"
+                                />
+                              </div>
+                              <div className="text-center">
+                                <p className="text-muted-foreground">Merma</p>
+                                <p className={`font-mono font-bold ${mermaData.cantidad > 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                                  {mermaData.cantidad}
+                                </p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="w-24">
-                            <Label className="text-xs text-muted-foreground">Recibido</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={cantidadesRecibidas[item.id] || 0}
-                              onChange={(e) => setCantidadesRecibidas({
-                                ...cantidadesRecibidas,
-                                [item.id]: Number(e.target.value)
-                              })}
-                              className="h-8"
-                            />
-                          </div>
+                          {mermaData.cantidad > 0 && (
+                            <div className="pl-0">
+                              <Input
+                                placeholder="Motivo de la merma (opcional)"
+                                value={mermaData.motivo}
+                                onChange={(e) => setMermas(prev => ({
+                                  ...prev,
+                                  [item.id]: { ...prev[item.id], motivo: e.target.value }
+                                }))}
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </ScrollArea>
           )}

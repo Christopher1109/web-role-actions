@@ -271,6 +271,9 @@ const CadenaSuministrosDashboard = () => {
     setEnviando(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      
+      // Generate unique tirada_id for this batch
+      const tiradaId = crypto.randomUUID();
 
       for (const insumo of insumosAEnviar) {
         const stockItem = almacenCentral.find(a => a.insumo_catalogo_id === insumo.insumo_catalogo_id);
@@ -279,7 +282,7 @@ const CadenaSuministrosDashboard = () => {
           continue;
         }
 
-        // 1. Create transfer record
+        // 1. Create transfer record with tirada_id
         const { data: transferencia, error: transError } = await supabase
           .from('transferencias_central_hospital')
           .insert({
@@ -288,14 +291,15 @@ const CadenaSuministrosDashboard = () => {
             cantidad_enviada: insumo.cantidadEnviar,
             estado: 'enviado',
             enviado_por: user?.id,
-            alerta_creada: true
+            alerta_creada: true,
+            tirada_id: tiradaId
           })
           .select()
           .single();
 
         if (transError) throw transError;
 
-        // 2. Create alert for almacenista
+        // 2. Create alert for almacenista with tirada_id
         await supabase
           .from('alertas_transferencia')
           .insert({
@@ -303,7 +307,8 @@ const CadenaSuministrosDashboard = () => {
             hospital_id: selectedHospital.hospital_id,
             insumo_catalogo_id: insumo.insumo_catalogo_id,
             cantidad_enviada: insumo.cantidadEnviar,
-            estado: 'pendiente'
+            estado: 'pendiente',
+            tirada_id: tiradaId
           });
 
         // 3. Decrease almacen central

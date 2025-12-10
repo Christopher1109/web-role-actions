@@ -76,21 +76,34 @@ const Insumos = () => {
           console.log('Cambio en inventario detectado:', payload);
           
           if (payload.eventType === 'UPDATE') {
-            // Actualizar el item específico en el estado local
+            const newData = payload.new as any;
+            // Actualizar el item específico en el estado local, preservando insumos_catalogo
             setInventario(prev => prev.map(item => 
-              item.id === payload.new.id 
-                ? { ...item, ...payload.new }
+              item.id === newData.id 
+                ? { 
+                    ...item, 
+                    cantidad_actual: newData.cantidad_actual,
+                    cantidad_inicial: newData.cantidad_inicial,
+                    cantidad_minima: newData.cantidad_minima,
+                    cantidad_maxima: newData.cantidad_maxima,
+                    lote: newData.lote,
+                    fecha_caducidad: newData.fecha_caducidad,
+                    ubicacion: newData.ubicacion,
+                    estatus: newData.estatus,
+                    updated_at: newData.updated_at
+                  }
                 : item
             ));
-            toast.info('Inventario actualizado', {
-              description: 'Se detectó un cambio en el inventario del hospital',
-              duration: 3000
+            toast.info('📦 Inventario actualizado', {
+              description: `Stock modificado - Recarga para ver detalles completos`,
+              duration: 4000
             });
           } else if (payload.eventType === 'INSERT') {
             // Recargar todo para obtener los datos completos con joins
             fetchInventario();
           } else if (payload.eventType === 'DELETE') {
-            setInventario(prev => prev.filter(item => item.id !== payload.old.id));
+            const oldData = payload.old as any;
+            setInventario(prev => prev.filter(item => item.id !== oldData.id));
           }
         }
       )

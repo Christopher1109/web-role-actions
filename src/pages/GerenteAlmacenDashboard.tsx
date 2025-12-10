@@ -309,22 +309,35 @@ const GerenteAlmacenDashboard = () => {
         // Update cantidad_cubierta for each detail item
         for (const row of itemsConCantidad) {
           const insumoId = row['ID Sistema'];
-          const cantidadProveedor = row['Cantidad Proveedor'];
+          const cantidadProveedor = Number(row['Cantidad Proveedor']) || 0;
           
-          const { data: det } = await supabase
+          if (!insumoId || cantidadProveedor === 0) continue;
+          
+          // Use maybeSingle() instead of single() to handle no results
+          const { data: det, error: detError } = await supabase
             .from('documento_agrupado_detalle')
             .select('id, cantidad_cubierta')
             .eq('documento_id', selectedDocId)
             .eq('insumo_catalogo_id', insumoId)
-            .single();
+            .maybeSingle();
+
+          if (detError) {
+            console.error('Error fetching detail for update:', detError);
+            continue;
+          }
 
           if (det) {
-            await supabase
+            const nuevaCantidad = (det.cantidad_cubierta || 0) + cantidadProveedor;
+            const { error: updateError } = await supabase
               .from('documento_agrupado_detalle')
-              .update({ 
-                cantidad_cubierta: (det.cantidad_cubierta || 0) + cantidadProveedor 
-              })
+              .update({ cantidad_cubierta: nuevaCantidad })
               .eq('id', det.id);
+            
+            if (updateError) {
+              console.error('Error updating cantidad_cubierta:', updateError);
+            } else {
+              console.log(`Updated cantidad_cubierta for ${insumoId}: ${nuevaCantidad}`);
+            }
           }
         }
 

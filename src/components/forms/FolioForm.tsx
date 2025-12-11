@@ -258,13 +258,22 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   /**
    * Combina insumos de dos anestesias en modo mixta.
    * Si un insumo está en ambas, suma las cantidades.
-   * Muestra hasta 10 insumos (5 de cada tipo).
+   * Respeta grupos exclusivos (solo 1 de cada grupo).
    */
   const combinarInsumosAnestesiaMixta = (principal: Insumo[], secundaria: Insumo[]) => {
     const insumosMap = new Map<string, FolioInsumo>();
+    const gruposUsados = new Set<string>();
 
-    // Agregar los primeros 5 de la principal
-    principal.slice(0, 5).forEach((insumo) => {
+    // Seleccionar de la principal (hasta 5 respetando grupos)
+    let countPrincipal = 0;
+    for (const insumo of principal) {
+      if (countPrincipal >= 5) break;
+
+      if (insumo.grupoExclusivo) {
+        if (gruposUsados.has(insumo.grupoExclusivo)) continue;
+        gruposUsados.add(insumo.grupoExclusivo);
+      }
+
       insumosMap.set(insumo.id, {
         insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
         cantidad: insumo.cantidadDefault,
@@ -273,28 +282,49 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         condicionante: insumo.condicionante,
         grupoExclusivo: insumo.grupoExclusivo,
       });
-    });
+      countPrincipal++;
+    }
 
-    // Agregar los primeros 5 de la secundaria (o sumar si ya existe)
-    secundaria.slice(0, 5).forEach((insumo) => {
+    // Agregar de la secundaria (hasta 5 más, respetando grupos)
+    let countSecundaria = 0;
+    for (const insumo of secundaria) {
+      if (countSecundaria >= 5) break;
+
       const existing = insumosMap.get(insumo.id);
       if (existing) {
         // Si ya existe, sumar la cantidad
         existing.cantidad += insumo.cantidadDefault;
-      } else {
-        // Si no existe, agregarlo
-        insumosMap.set(insumo.id, {
-          insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
-          cantidad: insumo.cantidadDefault,
-          cantidadMinima: insumo.cantidadMinima,
-          cantidadMaxima: insumo.cantidadMaxima,
-          condicionante: insumo.condicionante,
-          grupoExclusivo: insumo.grupoExclusivo,
-        });
+        continue;
       }
-    });
+
+      if (insumo.grupoExclusivo) {
+        if (gruposUsados.has(insumo.grupoExclusivo)) continue;
+        gruposUsados.add(insumo.grupoExclusivo);
+      }
+
+      insumosMap.set(insumo.id, {
+        insumo: { id: insumo.id, nombre: insumo.nombre, lote: insumo.lote },
+        cantidad: insumo.cantidadDefault,
+        cantidadMinima: insumo.cantidadMinima,
+        cantidadMaxima: insumo.cantidadMaxima,
+        condicionante: insumo.condicionante,
+        grupoExclusivo: insumo.grupoExclusivo,
+      });
+      countSecundaria++;
+    }
 
     setInsumosFolio(Array.from(insumosMap.values()));
+  };
+
+  /**
+   * Normaliza un texto eliminando acentos y convirtiendo a mayúsculas
+   */
+  const normalizarTexto = (texto: string): string => {
+    return texto
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase()
+      .trim();
   };
 
   /**
@@ -306,96 +336,88 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     if (!clave) return [];
 
     try {
-      // Convertir la clave del procedimiento al tipo_anestesia key
-      const tipoDb = getClaveToTipoAnestesia(clave);
+      // Determinar el tipo_anestesia a buscar
+      // Si es una clave con formato 19.01.XXX, buscar directamente
+      // Si no, convertir usando el mapeo
+      let tipoDb = clave;
+      if (!clave.startsWith("19.01.")) {
+        tipoDb = getClaveToTipoAnestesia(clave);
+      }
 
       console.log(`🔍 Buscando insumos para clave: "${clave}" → tipo: "${tipoDb}"`);
 
-      const { data: anestesiaInsumos, error } = (await supabase
+      // Buscar configuración de insumos en anestesia_insumos
+      const { data: anestesiaInsumos, error } = await supabase
         .from("anestesia_insumos")
-        .select(
-          `
+        .select(`
+          nota,
           cantidad_default,
           cantidad_minima,
           cantidad_maxima,
           condicionante,
           grupo_exclusivo,
           orden,
-          insumo_id,
-          insumos (
-            id,
-            nombre,
-            lote
-          )
-        `,
-        )
+          insumo_id
+        `)
         .eq("tipo_anestesia", tipoDb)
-        .order("orden", { ascending: true })) as {
-        data: any[] | null;
-        error: any;
-      };
+        .eq("activo", true)
+        .order("orden", { ascending: true });
 
       if (error) throw error;
 
-      // Obtener los nombres de los insumos para buscar en insumos_catalogo
-      const nombresInsumos = (anestesiaInsumos || [])
-        .filter((ai: any) => ai.insumos)
-        .map((ai: any) => ai.insumos.nombre);
-
-      if (nombresInsumos.length === 0) {
+      if (!anestesiaInsumos || anestesiaInsumos.length === 0) {
         console.log(`⚠️ No se encontraron insumos para ${tipoDb}`);
         return [];
       }
 
-      // Buscar los IDs correctos en insumos_catalogo por nombre
-      // Ordenamos por created_at para priorizar el registro más antiguo (que generalmente tiene el inventario)
+      // Extraer nombres de insumos desde el campo 'nota'
+      const nombresInsumos = anestesiaInsumos
+        .filter((ai: any) => ai.nota)
+        .map((ai: any) => normalizarTexto(ai.nota));
+
+      // Buscar todos los insumos del catálogo
       const { data: catalogoItems, error: catalogoError } = await supabase
         .from("insumos_catalogo")
         .select("id, nombre")
-        .in("nombre", nombresInsumos)
-        .order("created_at", { ascending: true });
+        .eq("activo", true);
 
       if (catalogoError) throw catalogoError;
 
-      // Para cada nombre, verificar cuál ID tiene inventario
-      // Esto maneja duplicados eligiendo el que tiene stock
-      const catalogoMap = new Map<string, string>();
-      
-      // Agrupar por nombre (puede haber duplicados)
-      const itemsByName = new Map<string, string[]>();
+      // Crear mapa de nombre normalizado a ID del catálogo
+      const catalogoMap = new Map<string, { id: string; nombre: string }>();
       (catalogoItems || []).forEach((item: any) => {
-        const existing = itemsByName.get(item.nombre) || [];
-        existing.push(item.id);
-        itemsByName.set(item.nombre, existing);
+        const nombreNorm = normalizarTexto(item.nombre);
+        if (!catalogoMap.has(nombreNorm)) {
+          catalogoMap.set(nombreNorm, { id: item.id, nombre: item.nombre });
+        }
       });
 
-      // Para cada nombre, usar el primer ID (si solo hay uno) o verificar cuál tiene inventario
-      for (const [nombre, ids] of itemsByName.entries()) {
-        if (ids.length === 1) {
-          catalogoMap.set(nombre, ids[0]);
+      // Mapear insumos de anestesia_insumos a insumos del catálogo
+      const insumos: Insumo[] = [];
+      
+      for (const ai of anestesiaInsumos) {
+        if (!ai.nota) continue;
+        
+        const notaNorm = normalizarTexto(ai.nota);
+        const catalogoItem = catalogoMap.get(notaNorm);
+        
+        if (catalogoItem) {
+          insumos.push({
+            id: catalogoItem.id,
+            nombre: catalogoItem.nombre,
+            lote: "",
+            cantidadDefault: ai.cantidad_default ?? 1,
+            cantidadMinima: ai.cantidad_minima ?? null,
+            cantidadMaxima: ai.cantidad_maxima ?? null,
+            condicionante: ai.condicionante ?? null,
+            grupoExclusivo: ai.grupo_exclusivo ?? null,
+          });
         } else {
-          // Hay duplicados - usar el primero por ahora (el más antiguo)
-          // El orden de la consulta es por defecto el de inserción
-          catalogoMap.set(nombre, ids[0]);
-          console.log(`⚠️ Duplicado encontrado para "${nombre}", usando ID: ${ids[0]}`);
+          console.log(`⚠️ Insumo no encontrado en catálogo: "${ai.nota}"`);
         }
       }
 
-      const insumos: Insumo[] = (anestesiaInsumos || [])
-        .filter((ai: any) => ai.insumos && catalogoMap.has(ai.insumos.nombre))
-        .map((ai: any) => ({
-          // USAR el ID de insumos_catalogo, no de insumos
-          id: catalogoMap.get(ai.insumos.nombre)!,
-          nombre: ai.insumos.nombre,
-          lote: ai.insumos.lote || "",
-          cantidadDefault: ai.cantidad_default ?? 1,
-          cantidadMinima: ai.cantidad_minima ?? null,
-          cantidadMaxima: ai.cantidad_maxima ?? null,
-          condicionante: ai.condicionante ?? null,
-          grupoExclusivo: ai.grupo_exclusivo ?? null,
-        }));
-
-      console.log(`✅ Insumos cargados: ${insumos.length} (con IDs de catálogo)`);
+      console.log(`✅ Insumos cargados: ${insumos.length} de ${anestesiaInsumos.length} configurados`);
       return insumos;
     } catch (error) {
       console.error("Error loading insumos:", error);
@@ -403,28 +425,25 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     }
   };
 
-  // Efecto: cuando cambia 'tipoAnestesia' en modo normal
-  useEffect(() => {
-    const loadInsumosForAnestesia = async () => {
-      // Limpiar al cambiar o si no hay tipo
-      if (!tipoAnestesia) {
-        setInsumosDisponibles([]);
-        setInsumosFolio([]);
-        return;
+  /**
+   * Selecciona 5 insumos respetando grupos exclusivos (solo 1 de cada grupo)
+   */
+  const seleccionarInsumosIniciales = (insumos: Insumo[]): FolioInsumo[] => {
+    const selected: FolioInsumo[] = [];
+    const gruposUsados = new Set<string>();
+
+    for (const insumo of insumos) {
+      if (selected.length >= 5) break;
+
+      // Si tiene grupo exclusivo, verificar que no hayamos seleccionado otro del mismo grupo
+      if (insumo.grupoExclusivo) {
+        if (gruposUsados.has(insumo.grupoExclusivo)) {
+          continue; // Ya hay uno de este grupo, saltar
+        }
+        gruposUsados.add(insumo.grupoExclusivo);
       }
 
-      if (tipoAnestesia === "anestesia_mixta") {
-        // Si es mixta, limpiar y esperar a que se seleccionen los dos tipos
-        setInsumosDisponibles([]);
-        setInsumosFolio([]);
-        return;
-      }
-
-      const insumosData = await loadInsumosForTipo(tipoAnestesia);
-      setInsumosDisponibles(insumosData);
-
-      // REEMPLAZAR con los primeros 5 insumos básicos
-      const preselected: FolioInsumo[] = insumosData.slice(0, 5).map((insumo) => ({
+      selected.push({
         insumo: {
           id: insumo.id,
           nombre: insumo.nombre,
@@ -435,8 +454,38 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         cantidadMaxima: insumo.cantidadMaxima,
         condicionante: insumo.condicionante,
         grupoExclusivo: insumo.grupoExclusivo,
-      }));
+      });
+    }
+
+    return selected;
+  };
+
+  // Efecto: cuando cambia 'tipoAnestesia' en modo normal
+  useEffect(() => {
+    const loadInsumosForAnestesia = async () => {
+      // Limpiar al cambiar o si no hay tipo
+      if (!tipoAnestesia) {
+        setInsumosDisponibles([]);
+        setInsumosFolio([]);
+        setInsumosAdicionales([]);
+        return;
+      }
+
+      if (tipoAnestesia === "anestesia_mixta") {
+        // Si es mixta, limpiar y esperar a que se seleccionen los dos tipos
+        setInsumosDisponibles([]);
+        setInsumosFolio([]);
+        setInsumosAdicionales([]);
+        return;
+      }
+
+      const insumosData = await loadInsumosForTipo(tipoAnestesia);
+      setInsumosDisponibles(insumosData);
+
+      // Seleccionar 5 insumos iniciales respetando grupos exclusivos
+      const preselected = seleccionarInsumosIniciales(insumosData);
       setInsumosFolio(preselected);
+      setInsumosAdicionales([]);
     };
 
     loadInsumosForAnestesia();
@@ -455,19 +504,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         const secundariaData = await loadInsumosForTipo(anestesiaSecundaria);
         combinarInsumosAnestesiaMixta(insumosData, secundariaData);
       } else {
-        // Solo principal, mostrar sus 5 insumos
-        const preselected: FolioInsumo[] = insumosData.slice(0, 5).map((insumo) => ({
-          insumo: {
-            id: insumo.id,
-            nombre: insumo.nombre,
-            lote: insumo.lote,
-          },
-          cantidad: insumo.cantidadDefault,
-          cantidadMinima: insumo.cantidadMinima,
-          cantidadMaxima: insumo.cantidadMaxima,
-          condicionante: insumo.condicionante,
-          grupoExclusivo: insumo.grupoExclusivo,
-        }));
+        // Solo principal, mostrar sus 5 insumos respetando grupos exclusivos
+        const preselected = seleccionarInsumosIniciales(insumosData);
         setInsumosFolio(preselected);
       }
     };
@@ -488,19 +526,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         const principalData = await loadInsumosForTipo(anestesiaPrincipal);
         combinarInsumosAnestesiaMixta(principalData, insumosData);
       } else {
-        // Solo secundaria, mostrar sus 5 insumos
-        const preselected: FolioInsumo[] = insumosData.slice(0, 5).map((insumo) => ({
-          insumo: {
-            id: insumo.id,
-            nombre: insumo.nombre,
-            lote: insumo.lote,
-          },
-          cantidad: insumo.cantidadDefault,
-          cantidadMinima: insumo.cantidadMinima,
-          cantidadMaxima: insumo.cantidadMaxima,
-          condicionante: insumo.condicionante,
-          grupoExclusivo: insumo.grupoExclusivo,
-        }));
+        // Solo secundaria, mostrar sus 5 insumos respetando grupos exclusivos
+        const preselected = seleccionarInsumosIniciales(insumosData);
         setInsumosFolio(preselected);
       }
     };
@@ -508,7 +535,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     loadInsumosSecundaria();
   }, [anestesiaSecundaria, tipoAnestesia]);
 
-  // Calcula insumos para agregar en la UI.  En modo mixta usa la unión de insumos de ambas anestesias
+  // Calcula insumos para agregar en la UI. En modo mixta usa la unión de insumos de ambas anestesias
+  // Filtra los que ya están seleccionados y los de grupos exclusivos ya usados
   const insumosParaAgregar = React.useMemo(() => {
     let availableInsumos: Insumo[] = [];
     if (tipoAnestesia === "anestesia_mixta") {
@@ -520,13 +548,46 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     } else {
       availableInsumos = insumosDisponibles;
     }
-    return availableInsumos.filter((insumo) => !insumosFolio.some((fi) => fi.insumo.id === insumo.id));
+
+    // Obtener grupos exclusivos ya en uso
+    const gruposEnUso = new Set<string>();
+    insumosFolio.forEach((fi) => {
+      if (fi.grupoExclusivo) {
+        gruposEnUso.add(fi.grupoExclusivo);
+      }
+    });
+
+    // Filtrar insumos ya seleccionados y los de grupos exclusivos ya usados
+    return availableInsumos.filter((insumo) => {
+      // No mostrar si ya está seleccionado
+      if (insumosFolio.some((fi) => fi.insumo.id === insumo.id)) {
+        return false;
+      }
+      // No mostrar si su grupo exclusivo ya tiene un insumo seleccionado
+      if (insumo.grupoExclusivo && gruposEnUso.has(insumo.grupoExclusivo)) {
+        return false;
+      }
+      return true;
+    });
   }, [tipoAnestesia, insumosDisponibles, insumosDisponiblesPrincipal, insumosDisponiblesSecundaria, insumosFolio]);
 
   // Agrega un insumo manualmente desde el modal
   const handleAgregarInsumo = () => {
     const insumo = insumosParaAgregar.find((i) => i.id === selectedInsumoId);
     if (!insumo) return;
+
+    // Validar grupo exclusivo
+    if (insumo.grupoExclusivo) {
+      const existeDelMismoGrupo = insumosFolio.find(
+        (fi) => fi.grupoExclusivo === insumo.grupoExclusivo
+      );
+      if (existeDelMismoGrupo) {
+        toast.error(
+          `Ya existe un insumo del grupo "${insumo.grupoExclusivo}". Solo puede seleccionar uno del grupo.`
+        );
+        return;
+      }
+    }
 
     const defaultCantidad = insumo.cantidadDefault ?? insumo.cantidadMinima ?? 1;
 
@@ -1164,7 +1225,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
               <TableHeader>
                 <TableRow>
                   <TableHead className="py-2">Nombre</TableHead>
-                  <TableHead className="py-2">Lote</TableHead>
+                  <TableHead className="py-2 w-24">Min/Max</TableHead>
                   <TableHead className="w-32 py-2">Cantidad</TableHead>
                   <TableHead className="w-20 py-2"></TableHead>
                 </TableRow>
@@ -1172,12 +1233,37 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
               <TableBody>
                 {insumosFolio.map((fi) => (
                   <TableRow key={fi.insumo.id}>
-                    <TableCell className="py-2">{fi.insumo.nombre}</TableCell>
-                    <TableCell className="py-2">{fi.insumo.lote}</TableCell>
+                    <TableCell className="py-2">
+                      <div className="space-y-1">
+                        <div className="font-medium">{fi.insumo.nombre}</div>
+                        <div className="flex gap-1 flex-wrap">
+                          {fi.grupoExclusivo && (
+                            <Badge variant="secondary" className="text-xs">
+                              {fi.grupoExclusivo}
+                            </Badge>
+                          )}
+                          {fi.condicionante && (
+                            <Badge variant="outline" className="text-xs text-muted-foreground">
+                              {fi.condicionante}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-2 text-sm text-muted-foreground">
+                      {fi.cantidadMinima != null && fi.cantidadMaxima != null 
+                        ? `${fi.cantidadMinima}-${fi.cantidadMaxima}`
+                        : fi.cantidadMinima != null 
+                        ? `Mín: ${fi.cantidadMinima}`
+                        : fi.cantidadMaxima != null
+                        ? `Máx: ${fi.cantidadMaxima}`
+                        : '-'}
+                    </TableCell>
                     <TableCell className="py-2">
                       <Input
                         type="number"
                         min={fi.cantidadMinima ?? 0}
+                        max={fi.cantidadMaxima ?? undefined}
                         value={fi.cantidad}
                         onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
                         className="w-20 h-8"

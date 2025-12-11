@@ -344,10 +344,13 @@ const AlmacenesProvisionales = () => {
   };
 
   const ejecutarTraspaso = async () => {
-    if (!selectedHospital || !selectedAlmacen) return;
+    if (!selectedHospital || !selectedAlmacen) {
+      toast.error('No hay almacén seleccionado');
+      setProcesando(false);
+      return;
+    }
 
     // Filtrar solo items seleccionados con cantidad > 0
-    // Ahora el key es insumo_catalogo_id (porque consolidamos)
     const itemsTraspaso = Object.entries(cantidadesTraspaso)
       .filter(([insumoCatalogoId, cantidad]) => seleccionados.has(insumoCatalogoId) && cantidad > 0);
     
@@ -361,6 +364,7 @@ const AlmacenesProvisionales = () => {
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      const almacenId = selectedAlmacen.id;
 
       for (const [insumoCatalogoId, cantidadSolicitada] of itemsTraspaso) {
         const item = inventarioGeneral.find(i => i.insumo_catalogo_id === insumoCatalogoId);
@@ -369,7 +373,7 @@ const AlmacenesProvisionales = () => {
           continue;
         }
 
-        // Buscar TODOS los lotes de este insumo y descontar (FIFO - del más viejo primero)
+        // Buscar TODOS los lotes y descontar (FIFO)
         const { data: lotes } = await supabase
           .from('inventario_hospital')
           .select('id, cantidad_actual')
@@ -383,7 +387,7 @@ const AlmacenesProvisionales = () => {
           if (cantidadRestante <= 0) break;
           
           const aDescontar = Math.min(cantidadRestante, lote.cantidad_actual);
-          const { error: errorUpdate } = await supabase
+          await supabase
             .from('inventario_hospital')
             .update({
               cantidad_actual: lote.cantidad_actual - aDescontar,
@@ -391,52 +395,40 @@ const AlmacenesProvisionales = () => {
             })
             .eq('id', lote.id);
           
-          if (!errorUpdate) {
-            cantidadRestante -= aDescontar;
-          }
+          cantidadRestante -= aDescontar;
         }
 
         // Agregar al inventario provisional
         const { data: existente } = await supabase
           .from('almacen_provisional_inventario')
           .select('*')
-          .eq('almacen_provisional_id', selectedAlmacen.id)
+          .eq('almacen_provisional_id', almacenId)
           .eq('insumo_catalogo_id', insumoCatalogoId)
           .maybeSingle();
 
         if (existente) {
-          const { error: errorUpdateProv } = await supabase
+          await supabase
             .from('almacen_provisional_inventario')
             .update({
               cantidad_disponible: (existente.cantidad_disponible || 0) + cantidadSolicitada,
               updated_at: new Date().toISOString()
             })
             .eq('id', existente.id);
-            
-          if (errorUpdateProv) {
-            console.error('Error actualizando provisional:', errorUpdateProv);
-            continue;
-          }
         } else {
-          const { error: errorInsertProv } = await supabase
+          await supabase
             .from('almacen_provisional_inventario')
             .insert({
-              almacen_provisional_id: selectedAlmacen.id,
+              almacen_provisional_id: almacenId,
               insumo_catalogo_id: insumoCatalogoId,
               cantidad_disponible: cantidadSolicitada
             });
-            
-          if (errorInsertProv) {
-            console.error('Error insertando provisional:', errorInsertProv);
-            continue;
-          }
         }
 
         // Registrar movimiento
-        const { error: errorMov } = await supabase
+        await supabase
           .from('movimientos_almacen_provisional')
           .insert({
-            almacen_provisional_id: selectedAlmacen.id,
+            almacen_provisional_id: almacenId,
             hospital_id: selectedHospital.id,
             insumo_catalogo_id: insumoCatalogoId,
             cantidad: cantidadSolicitada,
@@ -444,21 +436,15 @@ const AlmacenesProvisionales = () => {
             usuario_id: user?.id,
             observaciones: 'Traspaso desde almacén general'
           });
-          
-        if (errorMov) {
-          console.error('Error registrando movimiento:', errorMov);
-        }
         
         procesados++;
       }
 
-      if (procesados > 0) {
-        toast.success(`${procesados} insumos traspasados al almacén provisional`);
-        setDialogTraspasoOpen(false);
-        await fetchInventarioProvisional(selectedAlmacen.id);
-      } else {
-        toast.error('No se pudo traspasar ningún insumo');
-      }
+      toast.success(`${procesados} insumos traspasados al almacén provisional`);
+      setDialogTraspasoOpen(false);
+      setCantidadesTraspaso({});
+      setSeleccionados(new Set());
+      fetchInventarioProvisional(almacenId);
     } catch (error) {
       console.error('Error executing transfer:', error);
       toast.error('Error al realizar traspaso');
@@ -590,15 +576,19 @@ const AlmacenesProvisionales = () => {
   };
 
   const ejecutarEliminacion = async (devolverTodo: boolean) => {
-    if (!almacenAEliminar || !selectedHospital) return;
+    if (!almacenAEliminar || !selectedHospital) {
+      toast.error('Datos incompletos para eliminar');
+      return;
+    }
 
+    const almacenIdEliminar = almacenAEliminar.id;
     setProcesando(true);
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
       // Si hay inventario y se quiere devolver
       if (devolverTodo && inventarioAlmacenEliminar.length > 0) {
-        // Obtener almacén general
         const { data: almacenGeneral } = await supabase
           .from('almacenes')
           .select('id')
@@ -607,15 +597,14 @@ const AlmacenesProvisionales = () => {
 
         if (!almacenGeneral) {
           toast.error('No se encontró almacén general');
+          setProcesando(false);
           return;
         }
 
-        // Devolver cada insumo
         for (const item of inventarioAlmacenEliminar) {
           const cantidad = item.cantidad_disponible;
           if (cantidad <= 0) continue;
 
-          // Agregar al inventario general
           const { data: existenteGeneral } = await supabase
             .from('inventario_hospital')
             .select('*')
@@ -644,11 +633,10 @@ const AlmacenesProvisionales = () => {
               });
           }
 
-          // Registrar movimiento
           await supabase
             .from('movimientos_almacen_provisional')
             .insert({
-              almacen_provisional_id: almacenAEliminar.id,
+              almacen_provisional_id: almacenIdEliminar,
               hospital_id: selectedHospital.id,
               insumo_catalogo_id: item.insumo_catalogo_id,
               cantidad: cantidad,
@@ -663,21 +651,24 @@ const AlmacenesProvisionales = () => {
       const { error: updateError } = await supabase
         .from('almacenes_provisionales')
         .update({ activo: false, updated_at: new Date().toISOString() })
-        .eq('id', almacenAEliminar.id);
+        .eq('id', almacenIdEliminar);
 
       if (updateError) throw updateError;
 
-      toast.success('Almacén eliminado correctamente');
-      
-      if (selectedAlmacen?.id === almacenAEliminar.id) {
+      // Limpiar estado
+      if (selectedAlmacen?.id === almacenIdEliminar) {
         setSelectedAlmacen(null);
         setInventarioProvisional([]);
       }
       
+      // Actualizar lista de almacenes (quitar el eliminado)
+      setAlmacenes(prev => prev.filter(a => a.id !== almacenIdEliminar));
+      
       setDialogEliminarOpen(false);
       setAlmacenAEliminar(null);
       setInventarioAlmacenEliminar([]);
-      fetchAlmacenes();
+      
+      toast.success('Almacén eliminado correctamente');
     } catch (error) {
       console.error('Error deleting warehouse:', error);
       toast.error('Error al eliminar almacén');

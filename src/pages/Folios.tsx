@@ -141,36 +141,63 @@ const Folios = ({ userRole }: FoliosProps) => {
         }
       });
 
-      // PASO 3: VALIDAR EXISTENCIAS (sin consultas adicionales)
+      // PASO 3: VALIDAR EXISTENCIAS (insumos regulares + adicionales)
+      const validacionErrors: string[] = [];
+      
+      // Crear mapa de cantidades totales requeridas (regulares + adicionales)
+      const cantidadesRequeridas = new Map<string, { cantidad: number; nombre: string }>();
+      
+      // Agregar insumos regulares
       if (data.insumos && data.insumos.length > 0) {
-        const validacionErrors: string[] = [];
-        
         for (const item of data.insumos) {
-          // Usar insumo_catalogo_id directamente
           const insumo_id = item.insumo?.id || item.insumo_catalogo_id;
           if (!insumo_id) {
             validacionErrors.push(`❌ ${item.insumo?.nombre || 'Insumo'}: ID de insumo no encontrado`);
             continue;
           }
-
-          const stockProvisional = provisionalMap.get(insumo_id)?.cantidad_disponible || 0;
-          const stockGeneral = inventarioMap.get(insumo_id)?.cantidad_actual || 0;
-          const stockTotal = stockProvisional + stockGeneral;
-
-          if (stockTotal < item.cantidad) {
-            validacionErrors.push(
-              `❌ ${item.insumo.nombre}: Stock insuficiente (Disponible: ${stockTotal}, Requerido: ${item.cantidad})`
-            );
-          }
-        }
-
-        if (validacionErrors.length > 0) {
-          toast.error('No se puede crear el folio', {
-            description: validacionErrors.join('\n'),
-            duration: 8000
+          const existing = cantidadesRequeridas.get(insumo_id);
+          cantidadesRequeridas.set(insumo_id, {
+            cantidad: (existing?.cantidad || 0) + item.cantidad,
+            nombre: item.insumo?.nombre || existing?.nombre || 'Insumo'
           });
-          return;
         }
+      }
+
+      // Agregar insumos adicionales al total requerido
+      if (data.insumosAdicionales && data.insumosAdicionales.length > 0) {
+        for (const item of data.insumosAdicionales) {
+          const insumo_id = item.insumo?.id;
+          if (!insumo_id) {
+            validacionErrors.push(`❌ ${item.insumo?.nombre || 'Insumo adicional'}: ID de insumo no encontrado`);
+            continue;
+          }
+          const existing = cantidadesRequeridas.get(insumo_id);
+          cantidadesRequeridas.set(insumo_id, {
+            cantidad: (existing?.cantidad || 0) + item.cantidad,
+            nombre: item.insumo?.nombre || existing?.nombre || 'Insumo'
+          });
+        }
+      }
+
+      // Validar disponibilidad de stock total
+      for (const [insumo_id, { cantidad, nombre }] of cantidadesRequeridas) {
+        const stockProvisional = provisionalMap.get(insumo_id)?.cantidad_disponible || 0;
+        const stockGeneral = inventarioMap.get(insumo_id)?.cantidad_actual || 0;
+        const stockTotal = stockProvisional + stockGeneral;
+
+        if (stockTotal < cantidad) {
+          validacionErrors.push(
+            `❌ ${nombre}: Stock insuficiente (Disponible: ${stockTotal}, Requerido: ${cantidad})`
+          );
+        }
+      }
+
+      if (validacionErrors.length > 0) {
+        toast.error('No se puede crear el folio', {
+          description: validacionErrors.join('\n'),
+          duration: 8000
+        });
+        return;
       }
 
       // PASO 4: Generar número de folio
@@ -224,75 +251,98 @@ const Folios = ({ userRole }: FoliosProps) => {
       if (folioError) throw folioError;
 
       // PASO 6: Procesar insumos - Preparar todas las operaciones
-      if (data.insumos && data.insumos.length > 0) {
-        const inventarioUpdates: any[] = [];
-        const provisionalUpdates: any[] = [];
-        const movimientosInventario: any[] = [];
-        const movimientosProvisional: any[] = [];
-        const foliosInsumos: any[] = [];
+      const inventarioUpdates: any[] = [];
+      const provisionalUpdates: any[] = [];
+      const movimientosInventario: any[] = [];
+      const movimientosProvisional: any[] = [];
+      const foliosInsumos: any[] = [];
+      const foliosInsumosAdicionales: any[] = [];
 
-        for (const item of data.insumos) {
-          let cantidadRestante = item.cantidad;
-          const insumo_id = item.insumo?.id || item.insumo_catalogo_id;
-          
-          if (!insumo_id) continue;
+      // Función para procesar descuento de inventario
+      const procesarDescuentoInventario = (
+        insumo_id: string,
+        cantidad: number,
+        observacionExtra: string = ''
+      ) => {
+        let cantidadRestante = cantidad;
 
-          // Primero descontar del provisional si existe
-          if (almacenProvisional) {
-            const insumoProvisional = provisionalMap.get(insumo_id);
-            if (insumoProvisional && insumoProvisional.cantidad_disponible > 0) {
-              const cantidadDesdeProvisional = Math.min(cantidadRestante, insumoProvisional.cantidad_disponible);
-              
+        // Primero descontar del provisional si existe
+        if (almacenProvisional) {
+          const insumoProvisional = provisionalMap.get(insumo_id);
+          if (insumoProvisional && insumoProvisional.cantidad_disponible > 0) {
+            const cantidadDesdeProvisional = Math.min(cantidadRestante, insumoProvisional.cantidad_disponible);
+            
+            // Verificar si ya existe update para este item
+            const existingUpdate = provisionalUpdates.find(u => u.id === insumoProvisional.id);
+            if (existingUpdate) {
+              existingUpdate.cantidad_disponible -= cantidadDesdeProvisional;
+            } else {
               provisionalUpdates.push({
                 id: insumoProvisional.id,
                 cantidad_disponible: insumoProvisional.cantidad_disponible - cantidadDesdeProvisional
               });
-
-              movimientosProvisional.push({
-                almacen_provisional_id: almacenProvisional.id,
-                hospital_id: selectedHospital.id,
-                insumo_catalogo_id: insumo_id,
-                cantidad: cantidadDesdeProvisional,
-                tipo: 'salida',
-                folio_id: folioData.id,
-                usuario_id: user.id,
-                observaciones: `Consumo en folio ${numeroFolio} desde ${almacenProvisional.nombre}`
-              });
-
-              // Actualizar el mapa local
-              insumoProvisional.cantidad_disponible -= cantidadDesdeProvisional;
-              cantidadRestante -= cantidadDesdeProvisional;
             }
+
+            movimientosProvisional.push({
+              almacen_provisional_id: almacenProvisional.id,
+              hospital_id: selectedHospital.id,
+              insumo_catalogo_id: insumo_id,
+              cantidad: cantidadDesdeProvisional,
+              tipo: 'salida',
+              folio_id: folioData.id,
+              usuario_id: user.id,
+              observaciones: `Consumo en folio ${numeroFolio} desde ${almacenProvisional.nombre}${observacionExtra}`
+            });
+
+            // Actualizar el mapa local
+            insumoProvisional.cantidad_disponible -= cantidadDesdeProvisional;
+            cantidadRestante -= cantidadDesdeProvisional;
           }
+        }
 
-          // Si queda cantidad, descontar del general
-          if (cantidadRestante > 0) {
-            const insumoInventario = inventarioMap.get(insumo_id);
-            if (insumoInventario) {
-              const cantidadAnterior = insumoInventario.cantidad_actual;
-              const cantidadNueva = cantidadAnterior - cantidadRestante;
+        // Si queda cantidad, descontar del general
+        if (cantidadRestante > 0) {
+          const insumoInventario = inventarioMap.get(insumo_id);
+          if (insumoInventario) {
+            const cantidadAnterior = insumoInventario.cantidad_actual;
+            const cantidadNueva = cantidadAnterior - cantidadRestante;
 
+            // Verificar si ya existe update para este item
+            const existingUpdate = inventarioUpdates.find(u => u.id === insumoInventario.id);
+            if (existingUpdate) {
+              existingUpdate.cantidad_actual -= cantidadRestante;
+            } else {
               inventarioUpdates.push({
                 id: insumoInventario.id,
                 cantidad_actual: cantidadNueva
               });
-
-              movimientosInventario.push({
-                inventario_id: insumoInventario.id,
-                hospital_id: selectedHospital.id,
-                tipo_movimiento: 'salida_por_folio',
-                cantidad: cantidadRestante,
-                cantidad_anterior: cantidadAnterior,
-                cantidad_nueva: cantidadNueva,
-                folio_id: folioData.id,
-                usuario_id: user.id,
-                observaciones: `Consumo en folio ${numeroFolio} - ${data.procedimientoQuirurgico}`
-              });
-
-              // Actualizar mapa local
-              insumoInventario.cantidad_actual = cantidadNueva;
             }
+
+            movimientosInventario.push({
+              inventario_id: insumoInventario.id,
+              hospital_id: selectedHospital.id,
+              tipo_movimiento: 'salida_por_folio',
+              cantidad: cantidadRestante,
+              cantidad_anterior: cantidadAnterior,
+              cantidad_nueva: cantidadNueva,
+              folio_id: folioData.id,
+              usuario_id: user.id,
+              observaciones: `Consumo en folio ${numeroFolio} - ${data.procedimientoQuirurgico}${observacionExtra}`
+            });
+
+            // Actualizar mapa local
+            insumoInventario.cantidad_actual = cantidadNueva;
           }
+        }
+      };
+
+      // Procesar insumos regulares
+      if (data.insumos && data.insumos.length > 0) {
+        for (const item of data.insumos) {
+          const insumo_id = item.insumo?.id || item.insumo_catalogo_id;
+          if (!insumo_id) continue;
+
+          procesarDescuentoInventario(insumo_id, item.cantidad, '');
 
           foliosInsumos.push({
             folio_id: folioData.id,
@@ -300,65 +350,76 @@ const Folios = ({ userRole }: FoliosProps) => {
             cantidad: item.cantidad
           });
         }
+      }
 
-        // PASO 7: Ejecutar todas las operaciones en paralelo
-        const updatePromises: Promise<any>[] = [];
+      // Procesar insumos adicionales (también descontar inventario)
+      if (data.insumosAdicionales && data.insumosAdicionales.length > 0) {
+        for (const item of data.insumosAdicionales) {
+          const insumo_id = item.insumo?.id;
+          if (!insumo_id) continue;
 
-        // Actualizar inventario general
-        for (const upd of inventarioUpdates) {
-          updatePromises.push(
-            (async () => {
-              return await supabase
-                .from('inventario_hospital')
-                .update({ cantidad_actual: upd.cantidad_actual, updated_at: new Date().toISOString() })
-                .eq('id', upd.id);
-            })()
-          );
-        }
+          procesarDescuentoInventario(insumo_id, item.cantidad, ' [ADICIONAL]');
 
-        // Actualizar inventario provisional
-        for (const upd of provisionalUpdates) {
-          updatePromises.push(
-            (async () => {
-              return await supabase
-                .from('almacen_provisional_inventario')
-                .update({ cantidad_disponible: upd.cantidad_disponible, updated_at: new Date().toISOString() })
-                .eq('id', upd.id);
-            })()
-          );
-        }
-
-        // Insertar movimientos y folios_insumos en batch
-        if (movimientosInventario.length > 0) {
-          updatePromises.push(
-            (async () => await supabase.from('movimientos_inventario').insert(movimientosInventario))()
-          );
-        }
-        if (movimientosProvisional.length > 0) {
-          updatePromises.push(
-            (async () => await supabase.from('movimientos_almacen_provisional').insert(movimientosProvisional))()
-          );
-        }
-        if (foliosInsumos.length > 0) {
-          updatePromises.push(
-            (async () => await supabase.from('folios_insumos').insert(foliosInsumos))()
-          );
-        }
-
-        // Insertar insumos adicionales
-        if (data.insumosAdicionales && data.insumosAdicionales.length > 0) {
-          const adicionales = data.insumosAdicionales.map((ia: any) => ({
+          foliosInsumosAdicionales.push({
             folio_id: folioData.id,
-            insumo_id: ia.insumo.id,
-            cantidad: ia.cantidad,
-            motivo: ia.motivo || null,
+            insumo_id: insumo_id,
+            cantidad: item.cantidad,
+            motivo: item.motivo || null,
             created_by: user.id
-          }));
-          updatePromises.push(
-            (async () => await supabase.from('folios_insumos_adicionales').insert(adicionales))()
-          );
+          });
         }
+      }
 
+      // PASO 7: Ejecutar todas las operaciones en paralelo
+      const updatePromises: Promise<any>[] = [];
+
+      // Actualizar inventario general
+      for (const upd of inventarioUpdates) {
+        updatePromises.push(
+          (async () => {
+            return await supabase
+              .from('inventario_hospital')
+              .update({ cantidad_actual: upd.cantidad_actual, updated_at: new Date().toISOString() })
+              .eq('id', upd.id);
+          })()
+        );
+      }
+
+      // Actualizar inventario provisional
+      for (const upd of provisionalUpdates) {
+        updatePromises.push(
+          (async () => {
+            return await supabase
+              .from('almacen_provisional_inventario')
+              .update({ cantidad_disponible: upd.cantidad_disponible, updated_at: new Date().toISOString() })
+              .eq('id', upd.id);
+          })()
+        );
+      }
+
+      // Insertar movimientos y folios_insumos en batch
+      if (movimientosInventario.length > 0) {
+        updatePromises.push(
+          (async () => await supabase.from('movimientos_inventario').insert(movimientosInventario))()
+        );
+      }
+      if (movimientosProvisional.length > 0) {
+        updatePromises.push(
+          (async () => await supabase.from('movimientos_almacen_provisional').insert(movimientosProvisional))()
+        );
+      }
+      if (foliosInsumos.length > 0) {
+        updatePromises.push(
+          (async () => await supabase.from('folios_insumos').insert(foliosInsumos))()
+        );
+      }
+      if (foliosInsumosAdicionales.length > 0) {
+        updatePromises.push(
+          (async () => await supabase.from('folios_insumos_adicionales').insert(foliosInsumosAdicionales))()
+        );
+      }
+
+      if (updatePromises.length > 0) {
         await Promise.all(updatePromises);
       }
 

@@ -336,13 +336,10 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     if (!clave) return [];
 
     try {
-      // Determinar el tipo_anestesia a buscar
-      // Si es una clave con formato 19.01.XXX, buscar directamente
-      // Si no, convertir usando el mapeo
-      let tipoDb = clave;
-      if (!clave.startsWith("19.01.")) {
-        tipoDb = getClaveToTipoAnestesia(clave);
-      }
+      // SIEMPRE usar el mapeo para obtener el tipoAnestesiaKey correcto
+      // Por ejemplo: "19.01.002" → "alta_especialidad"
+      const tipoDb = getTipoAnestesiaKey(clave);
+      
 
       console.log(`🔍 Buscando insumos para clave: "${clave}" → tipo: "${tipoDb}"`);
 

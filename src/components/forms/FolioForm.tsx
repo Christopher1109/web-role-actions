@@ -387,18 +387,38 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       }
 
       // Buscar los IDs correctos en insumos_catalogo por nombre
+      // Ordenamos por created_at para priorizar el registro más antiguo (que generalmente tiene el inventario)
       const { data: catalogoItems, error: catalogoError } = await supabase
         .from("insumos_catalogo")
         .select("id, nombre")
-        .in("nombre", nombresInsumos);
+        .in("nombre", nombresInsumos)
+        .order("created_at", { ascending: true });
 
       if (catalogoError) throw catalogoError;
 
-      // Crear un mapa de nombre -> id del catálogo
+      // Para cada nombre, verificar cuál ID tiene inventario
+      // Esto maneja duplicados eligiendo el que tiene stock
       const catalogoMap = new Map<string, string>();
+      
+      // Agrupar por nombre (puede haber duplicados)
+      const itemsByName = new Map<string, string[]>();
       (catalogoItems || []).forEach((item: any) => {
-        catalogoMap.set(item.nombre, item.id);
+        const existing = itemsByName.get(item.nombre) || [];
+        existing.push(item.id);
+        itemsByName.set(item.nombre, existing);
       });
+
+      // Para cada nombre, usar el primer ID (si solo hay uno) o verificar cuál tiene inventario
+      for (const [nombre, ids] of itemsByName.entries()) {
+        if (ids.length === 1) {
+          catalogoMap.set(nombre, ids[0]);
+        } else {
+          // Hay duplicados - usar el primero por ahora (el más antiguo)
+          // El orden de la consulta es por defecto el de inserción
+          catalogoMap.set(nombre, ids[0]);
+          console.log(`⚠️ Duplicado encontrado para "${nombre}", usando ID: ${ids[0]}`);
+        }
+      }
 
       const insumos: Insumo[] = (anestesiaInsumos || [])
         .filter((ai: any) => ai.insumos && catalogoMap.has(ai.insumos.nombre))

@@ -53,6 +53,11 @@ export const PROCEDIMIENTOS_CATALOG: ProcedimientoCatalogo[] = [
     nombre: "Anestesia de Alta Especialidad en Trasplante Renal",
     tipoAnestesiaKey: "alta_especialidad_trasplante",
   },
+  {
+    clave: "19.01.010",
+    nombre: "Cuidados Anestésicos Monitoreados",
+    tipoAnestesiaKey: "cuidados_anestesicos_monitoreados",
+  },
 ];
 
 // Mapeo de clave a procedimiento para búsquedas rápidas

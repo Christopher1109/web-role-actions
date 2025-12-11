@@ -127,17 +127,36 @@ const Folios = ({ userRole }: FoliosProps) => {
       const inventarioProvisional = provisionalResult.data || [];
 
       // Crear mapas para búsqueda rápida por insumo_catalogo_id
-      const inventarioMap = new Map<string, any>();
+      // SUMAR cantidades de múltiples lotes del mismo insumo
+      const inventarioMap = new Map<string, { cantidad_actual: number; items: any[] }>();
       inventarioGeneral.forEach(inv => {
         if (inv.insumo_catalogo_id) {
-          inventarioMap.set(inv.insumo_catalogo_id, inv);
+          const existing = inventarioMap.get(inv.insumo_catalogo_id);
+          if (existing) {
+            existing.cantidad_actual += inv.cantidad_actual || 0;
+            existing.items.push(inv);
+          } else {
+            inventarioMap.set(inv.insumo_catalogo_id, {
+              cantidad_actual: inv.cantidad_actual || 0,
+              items: [inv]
+            });
+          }
         }
       });
 
-      const provisionalMap = new Map<string, any>();
+      const provisionalMap = new Map<string, { cantidad_disponible: number; items: any[] }>();
       inventarioProvisional.forEach((inv: any) => {
         if (inv.insumo_catalogo_id) {
-          provisionalMap.set(inv.insumo_catalogo_id, inv);
+          const existing = provisionalMap.get(inv.insumo_catalogo_id);
+          if (existing) {
+            existing.cantidad_disponible += inv.cantidad_disponible || 0;
+            existing.items.push(inv);
+          } else {
+            provisionalMap.set(inv.insumo_catalogo_id, {
+              cantidad_disponible: inv.cantidad_disponible || 0,
+              items: [inv]
+            });
+          }
         }
       });
 
@@ -258,7 +277,7 @@ const Folios = ({ userRole }: FoliosProps) => {
       const foliosInsumos: any[] = [];
       const foliosInsumosAdicionales: any[] = [];
 
-      // Función para procesar descuento de inventario
+      // Función para procesar descuento de inventario (maneja múltiples lotes FIFO)
       const procesarDescuentoInventario = (
         insumo_id: string,
         cantidad: number,
@@ -270,68 +289,86 @@ const Folios = ({ userRole }: FoliosProps) => {
         if (almacenProvisional) {
           const insumoProvisional = provisionalMap.get(insumo_id);
           if (insumoProvisional && insumoProvisional.cantidad_disponible > 0) {
-            const cantidadDesdeProvisional = Math.min(cantidadRestante, insumoProvisional.cantidad_disponible);
-            
-            // Verificar si ya existe update para este item
-            const existingUpdate = provisionalUpdates.find(u => u.id === insumoProvisional.id);
-            if (existingUpdate) {
-              existingUpdate.cantidad_disponible -= cantidadDesdeProvisional;
-            } else {
-              provisionalUpdates.push({
-                id: insumoProvisional.id,
-                cantidad_disponible: insumoProvisional.cantidad_disponible - cantidadDesdeProvisional
+            // Procesar cada item/lote del provisional
+            for (const item of insumoProvisional.items) {
+              if (cantidadRestante <= 0) break;
+              if (item.cantidad_disponible <= 0) continue;
+
+              const cantidadDesdeEsteItem = Math.min(cantidadRestante, item.cantidad_disponible);
+              
+              // Verificar si ya existe update para este item
+              const existingUpdate = provisionalUpdates.find(u => u.id === item.id);
+              if (existingUpdate) {
+                existingUpdate.cantidad_disponible -= cantidadDesdeEsteItem;
+              } else {
+                provisionalUpdates.push({
+                  id: item.id,
+                  cantidad_disponible: item.cantidad_disponible - cantidadDesdeEsteItem
+                });
+              }
+
+              movimientosProvisional.push({
+                almacen_provisional_id: almacenProvisional.id,
+                hospital_id: selectedHospital.id,
+                insumo_catalogo_id: insumo_id,
+                cantidad: cantidadDesdeEsteItem,
+                tipo: 'salida',
+                folio_id: folioData.id,
+                usuario_id: user.id,
+                observaciones: `Consumo en folio ${numeroFolio} desde ${almacenProvisional.nombre}${observacionExtra}`
               });
+
+              // Actualizar el item local
+              item.cantidad_disponible -= cantidadDesdeEsteItem;
+              cantidadRestante -= cantidadDesdeEsteItem;
             }
-
-            movimientosProvisional.push({
-              almacen_provisional_id: almacenProvisional.id,
-              hospital_id: selectedHospital.id,
-              insumo_catalogo_id: insumo_id,
-              cantidad: cantidadDesdeProvisional,
-              tipo: 'salida',
-              folio_id: folioData.id,
-              usuario_id: user.id,
-              observaciones: `Consumo en folio ${numeroFolio} desde ${almacenProvisional.nombre}${observacionExtra}`
-            });
-
-            // Actualizar el mapa local
-            insumoProvisional.cantidad_disponible -= cantidadDesdeProvisional;
-            cantidadRestante -= cantidadDesdeProvisional;
+            // Actualizar el total en el mapa
+            insumoProvisional.cantidad_disponible -= (cantidad - cantidadRestante);
           }
         }
 
-        // Si queda cantidad, descontar del general
+        // Si queda cantidad, descontar del general (múltiples lotes FIFO por caducidad)
         if (cantidadRestante > 0) {
           const insumoInventario = inventarioMap.get(insumo_id);
-          if (insumoInventario) {
-            const cantidadAnterior = insumoInventario.cantidad_actual;
-            const cantidadNueva = cantidadAnterior - cantidadRestante;
+          if (insumoInventario && insumoInventario.items.length > 0) {
+            // Procesar cada lote en orden (ya ordenados por fecha_caducidad)
+            for (const item of insumoInventario.items) {
+              if (cantidadRestante <= 0) break;
+              if (item.cantidad_actual <= 0) continue;
 
-            // Verificar si ya existe update para este item
-            const existingUpdate = inventarioUpdates.find(u => u.id === insumoInventario.id);
-            if (existingUpdate) {
-              existingUpdate.cantidad_actual -= cantidadRestante;
-            } else {
-              inventarioUpdates.push({
-                id: insumoInventario.id,
-                cantidad_actual: cantidadNueva
+              const cantidadDesdeEsteLote = Math.min(cantidadRestante, item.cantidad_actual);
+              const cantidadAnterior = item.cantidad_actual;
+              const cantidadNueva = cantidadAnterior - cantidadDesdeEsteLote;
+
+              // Verificar si ya existe update para este lote
+              const existingUpdate = inventarioUpdates.find(u => u.id === item.id);
+              if (existingUpdate) {
+                existingUpdate.cantidad_actual -= cantidadDesdeEsteLote;
+              } else {
+                inventarioUpdates.push({
+                  id: item.id,
+                  cantidad_actual: cantidadNueva
+                });
+              }
+
+              movimientosInventario.push({
+                inventario_id: item.id,
+                hospital_id: selectedHospital.id,
+                tipo_movimiento: 'salida_por_folio',
+                cantidad: cantidadDesdeEsteLote,
+                cantidad_anterior: cantidadAnterior,
+                cantidad_nueva: cantidadNueva,
+                folio_id: folioData.id,
+                usuario_id: user.id,
+                observaciones: `Consumo en folio ${numeroFolio} - ${data.procedimientoQuirurgico}${observacionExtra}${item.lote ? ` (Lote: ${item.lote})` : ''}`
               });
+
+              // Actualizar el item local
+              item.cantidad_actual = cantidadNueva;
+              cantidadRestante -= cantidadDesdeEsteLote;
             }
-
-            movimientosInventario.push({
-              inventario_id: insumoInventario.id,
-              hospital_id: selectedHospital.id,
-              tipo_movimiento: 'salida_por_folio',
-              cantidad: cantidadRestante,
-              cantidad_anterior: cantidadAnterior,
-              cantidad_nueva: cantidadNueva,
-              folio_id: folioData.id,
-              usuario_id: user.id,
-              observaciones: `Consumo en folio ${numeroFolio} - ${data.procedimientoQuirurgico}${observacionExtra}`
-            });
-
-            // Actualizar mapa local
-            insumoInventario.cantidad_actual = cantidadNueva;
+            // Actualizar el total en el mapa
+            insumoInventario.cantidad_actual -= (cantidad - cantidadRestante);
           }
         }
       };

@@ -317,12 +317,15 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   };
 
   /**
-   * Normaliza un texto eliminando acentos y convirtiendo a mayúsculas
+   * Normaliza un texto eliminando acentos, puntuación y convirtiendo a mayúsculas
+   * para mejorar el matching entre anestesia_insumos.nota e insumos_catalogo.nombre
    */
   const normalizarTexto = (texto: string): string => {
     return texto
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[\u0300-\u036f]/g, "") // Quitar acentos
+      .replace(/[:\-,;\.\/\\()]/g, " ") // Reemplazar puntuación por espacios
+      .replace(/\s+/g, " ") // Normalizar espacios múltiples
       .toUpperCase()
       .trim();
   };

@@ -5,14 +5,16 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useHospital } from '@/contexts/HospitalContext';
-import { Plus, Warehouse, ArrowRight, ArrowLeft, Package, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { Plus, Warehouse, ArrowRight, ArrowLeft, Package, RefreshCw, Search, Trash2, Zap, CheckSquare } from 'lucide-react';
 
 interface AlmacenProvisional {
   id: string;
@@ -37,6 +39,25 @@ interface InventarioGeneral {
   insumo?: { id: string; nombre: string; clave: string };
 }
 
+interface AnestesiaInsumo {
+  insumo_id: string;
+  cantidad_default: number;
+  insumo?: { id: string; nombre: string; clave: string };
+}
+
+const PROCEDIMIENTOS_LABELS: Record<string, string> = {
+  'general_balanceada_adulto': 'Anestesia General Balanceada Adulto',
+  'general_endovenosa': 'Anestesia General Endovenosa',
+  'general_balanceada_pediatrica': 'Anestesia General Balanceada Pediátrica',
+  'loco_regional': 'Anestesia Loco Regional',
+  'sedacion': 'Sedación',
+  'alta_especialidad': 'Alta Especialidad',
+  'alta_especialidad_neurocirugia': 'Alta Especialidad Neurocirugía',
+  '19.01.008': 'Trasplante Hepático (19.01.008)',
+  '19.01.009': 'Trasplante Renal (19.01.009)',
+  '19.01.010': 'Procedimiento 19.01.010',
+};
+
 const AlmacenesProvisionales = () => {
   const { selectedHospital } = useHospital();
   const [almacenes, setAlmacenes] = useState<AlmacenProvisional[]>([]);
@@ -55,8 +76,13 @@ const AlmacenesProvisionales = () => {
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevaDescripcion, setNuevaDescripcion] = useState('');
   const [cantidadesTraspaso, setCantidadesTraspaso] = useState<Record<string, number>>({});
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [cantidadesDevolucion, setCantidadesDevolucion] = useState<Record<string, number>>({});
   const [procesando, setProcesando] = useState(false);
+  
+  // Procedimiento selector
+  const [procedimientoSeleccionado, setProcedimientoSeleccionado] = useState<string>('');
+  const [procedimientosDisponibles, setProcedimientosDisponibles] = useState<string[]>([]);
 
   useEffect(() => {
     if (selectedHospital) {
@@ -138,6 +164,111 @@ const AlmacenesProvisionales = () => {
     }
   };
 
+  const fetchProcedimientosDisponibles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('anestesia_insumos')
+        .select('tipo_anestesia')
+        .eq('activo', true);
+
+      if (error) throw error;
+      
+      const tipos = [...new Set(data?.map(d => d.tipo_anestesia) || [])];
+      setProcedimientosDisponibles(tipos);
+    } catch (error) {
+      console.error('Error fetching procedures:', error);
+    }
+  };
+
+  const precargarInsumosProcedimiento = async () => {
+    if (!procedimientoSeleccionado) {
+      toast.error('Selecciona un procedimiento');
+      return;
+    }
+
+    try {
+      // Obtener insumos del procedimiento
+      const { data: anestesiaInsumos, error } = await supabase
+        .from('anestesia_insumos')
+        .select(`
+          insumo_id,
+          cantidad_default,
+          insumo:insumos(id, nombre, clave)
+        `)
+        .eq('tipo_anestesia', procedimientoSeleccionado)
+        .eq('activo', true);
+
+      if (error) throw error;
+
+      if (!anestesiaInsumos || anestesiaInsumos.length === 0) {
+        toast.info('No hay insumos configurados para este procedimiento');
+        return;
+      }
+
+      // Crear mapa de insumo_id a nombre para buscar en inventario
+      const insumoNombres = new Map<string, { nombre: string; cantidad: number }>();
+      anestesiaInsumos.forEach(ai => {
+        if (ai.insumo?.nombre) {
+          insumoNombres.set(ai.insumo.nombre.toUpperCase().trim(), {
+            nombre: ai.insumo.nombre,
+            cantidad: ai.cantidad_default || 1
+          });
+        }
+      });
+
+      // Buscar en inventario general por nombre (ya que los IDs pueden no coincidir)
+      const nuevasCantidades: Record<string, number> = { ...cantidadesTraspaso };
+      const nuevosSeleccionados = new Set(seleccionados);
+      let encontrados = 0;
+
+      for (const item of inventarioGeneral) {
+        const nombreUpper = item.insumo?.nombre?.toUpperCase().trim() || '';
+        const match = insumoNombres.get(nombreUpper);
+        
+        if (match) {
+          const cantidadRequerida = Math.min(match.cantidad, item.cantidad_actual);
+          if (cantidadRequerida > 0) {
+            nuevasCantidades[item.id] = cantidadRequerida;
+            nuevosSeleccionados.add(item.id);
+            encontrados++;
+          }
+        }
+      }
+
+      setCantidadesTraspaso(nuevasCantidades);
+      setSeleccionados(nuevosSeleccionados);
+      
+      toast.success(`${encontrados} insumos pre-cargados del procedimiento`);
+    } catch (error) {
+      console.error('Error loading procedure insumos:', error);
+      toast.error('Error al cargar insumos del procedimiento');
+    }
+  };
+
+  const toggleSeleccion = (id: string) => {
+    const nuevos = new Set(seleccionados);
+    if (nuevos.has(id)) {
+      nuevos.delete(id);
+      // También limpiar la cantidad
+      const nuevasCantidades = { ...cantidadesTraspaso };
+      delete nuevasCantidades[id];
+      setCantidadesTraspaso(nuevasCantidades);
+    } else {
+      nuevos.add(id);
+    }
+    setSeleccionados(nuevos);
+  };
+
+  const seleccionarTodos = () => {
+    const nuevos = new Set(filteredInventarioGeneral.map(item => item.id));
+    setSeleccionados(nuevos);
+  };
+
+  const deseleccionarTodos = () => {
+    setSeleccionados(new Set());
+    setCantidadesTraspaso({});
+  };
+
   const crearAlmacen = async () => {
     if (!selectedHospital || !nuevoNombre.trim()) return;
 
@@ -179,16 +310,23 @@ const AlmacenesProvisionales = () => {
   const abrirDialogTraspaso = () => {
     if (!selectedAlmacen) return;
     fetchInventarioGeneral();
+    fetchProcedimientosDisponibles();
     setCantidadesTraspaso({});
+    setSeleccionados(new Set());
+    setProcedimientoSeleccionado('');
+    setSearchTerm('');
     setDialogTraspasoOpen(true);
   };
 
   const ejecutarTraspaso = async () => {
     if (!selectedHospital || !selectedAlmacen) return;
 
-    const itemsTraspaso = Object.entries(cantidadesTraspaso).filter(([_, cantidad]) => cantidad > 0);
+    // Filtrar solo items seleccionados con cantidad > 0
+    const itemsTraspaso = Object.entries(cantidadesTraspaso)
+      .filter(([id, cantidad]) => seleccionados.has(id) && cantidad > 0);
+    
     if (itemsTraspaso.length === 0) {
-      toast.error('Selecciona al menos un insumo');
+      toast.error('Selecciona al menos un insumo y asigna cantidades');
       return;
     }
 
@@ -580,63 +718,150 @@ const AlmacenesProvisionales = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: Traspaso desde general */}
+      {/* Dialog: Traspaso desde general - Mejorado con selector de procedimiento */}
       <Dialog open={dialogTraspasoOpen} onOpenChange={setDialogTraspasoOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Agregar Insumos a {selectedAlmacen?.nombre}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar insumo..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
+            {/* Sección de pre-carga por procedimiento */}
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="py-3">
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <Label className="text-sm font-medium mb-1 block">
+                      <Zap className="inline h-4 w-4 mr-1" />
+                      Pre-cargar por Procedimiento
+                    </Label>
+                    <Select value={procedimientoSeleccionado} onValueChange={setProcedimientoSeleccionado}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un procedimiento..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {procedimientosDisponibles.map((tipo) => (
+                          <SelectItem key={tipo} value={tipo}>
+                            {PROCEDIMIENTOS_LABELS[tipo] || tipo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button 
+                    onClick={precargarInsumosProcedimiento}
+                    disabled={!procedimientoSeleccionado}
+                    variant="secondary"
+                  >
+                    <Zap className="mr-2 h-4 w-4" />
+                    Pre-cargar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Barra de búsqueda y acciones de selección */}
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar insumo por nombre o clave..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={seleccionarTodos}>
+                  <CheckSquare className="mr-1 h-4 w-4" />
+                  Todos
+                </Button>
+                <Button variant="outline" size="sm" onClick={deseleccionarTodos}>
+                  Limpiar
+                </Button>
+              </div>
             </div>
-            <ScrollArea className="h-[400px]">
+
+            {/* Badge con conteo de seleccionados */}
+            {seleccionados.size > 0 && (
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-sm">
+                  {seleccionados.size} insumos seleccionados
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  Total a traspasar: {Object.values(cantidadesTraspaso).reduce((a, b) => a + b, 0)} unidades
+                </span>
+              </div>
+            )}
+
+            {/* Tabla con checkboxes */}
+            <ScrollArea className="h-[350px] border rounded-md">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
-                    <TableHead>Clave</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead className="w-24">Clave</TableHead>
                     <TableHead>Insumo</TableHead>
-                    <TableHead className="text-right">Disponible</TableHead>
-                    <TableHead className="text-right w-24">Traspasar</TableHead>
+                    <TableHead className="text-right w-24">Disponible</TableHead>
+                    <TableHead className="text-right w-28">Traspasar</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInventarioGeneral.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{item.insumo?.nombre}</TableCell>
-                      <TableCell className="text-right font-mono">{item.cantidad_actual}</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={item.cantidad_actual}
-                          value={cantidadesTraspaso[item.id] || ''}
-                          onChange={(e) => setCantidadesTraspaso(prev => ({
-                            ...prev,
-                            [item.id]: Math.min(Number(e.target.value), item.cantidad_actual)
-                          }))}
-                          className="h-8 w-20"
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredInventarioGeneral.map((item) => {
+                    const isSelected = seleccionados.has(item.id);
+                    return (
+                      <TableRow 
+                        key={item.id}
+                        className={isSelected ? 'bg-primary/5' : ''}
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSeleccion(item.id)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{item.insumo?.clave}</TableCell>
+                        <TableCell className="max-w-[250px] truncate text-sm">
+                          {item.insumo?.nombre}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          {item.cantidad_actual}
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={item.cantidad_actual}
+                            value={cantidadesTraspaso[item.id] || ''}
+                            onChange={(e) => {
+                              const valor = Math.min(Number(e.target.value), item.cantidad_actual);
+                              setCantidadesTraspaso(prev => ({
+                                ...prev,
+                                [item.id]: valor
+                              }));
+                              if (valor > 0 && !seleccionados.has(item.id)) {
+                                setSeleccionados(prev => new Set([...prev, item.id]));
+                              }
+                            }}
+                            className="h-8 w-20"
+                            disabled={!isSelected}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </ScrollArea>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setDialogTraspasoOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={ejecutarTraspaso} disabled={procesando}>
-              {procesando ? 'Procesando...' : 'Traspasar Insumos'}
+            <Button 
+              onClick={ejecutarTraspaso} 
+              disabled={procesando || seleccionados.size === 0}
+            >
+              {procesando ? 'Procesando...' : `Traspasar ${seleccionados.size} Insumos`}
             </Button>
           </DialogFooter>
         </DialogContent>

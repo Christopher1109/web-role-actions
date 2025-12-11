@@ -13,7 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { InsumoSearchCombobox } from "./InsumoSearchCombobox";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, AlertTriangle } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 
 type Insumo = {
   id: string;
@@ -37,6 +39,15 @@ type FolioInsumo = {
   cantidadMaxima: number | null;
   condicionante: string | null;
   grupoExclusivo: string | null;
+};
+
+type InsumoAdicional = {
+  insumo: {
+    id: string;
+    nombre: string;
+  };
+  cantidad: number;
+  motivo?: string;
 };
 
 /*
@@ -118,6 +129,15 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   const [insumosDisponiblesSecundaria, setInsumosDisponiblesSecundaria] = useState<Insumo[]>([]);
   // Insumos actualmente seleccionados en el folio
   const [insumosFolio, setInsumosFolio] = useState<FolioInsumo[]>([]);
+  // Insumos adicionales (que exceden el máximo)
+  const [insumosAdicionales, setInsumosAdicionales] = useState<InsumoAdicional[]>([]);
+  // Control para dialog de confirmación de adicional
+  const [pendingAdicional, setPendingAdicional] = useState<{
+    insumoId: string;
+    nombreInsumo: string;
+    cantidadSolicitada: number;
+    cantidadMaxima: number;
+  } | null>(null);
   // Listas de médicos para selects
   const [cirujanos, setCirujanos] = useState<Medico[]>([]);
   const [anestesiologos, setAnestesiologos] = useState<Medico[]>([]);
@@ -528,34 +548,84 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     setInsumosFolio(insumosFolio.filter((fi) => fi.insumo.id !== insumoId));
   };
 
+  // Elimina un insumo adicional
+  const handleRemoveAdicional = (insumoId: string) => {
+    setInsumosAdicionales(insumosAdicionales.filter((ia) => ia.insumo.id !== insumoId));
+  };
+
   // Actualiza la cantidad de un insumo del folio respetando min/max
   const handleUpdateCantidad = (insumoId: string, cantidad: number) => {
-    setInsumosFolio((prev) =>
-      prev.map((fi) => {
-        if (fi.insumo.id !== insumoId) return fi;
+    const insumo = insumosFolio.find(fi => fi.insumo.id === insumoId);
+    if (!insumo) return;
 
-        const min = fi.cantidadMinima ?? 0;
-        const max = fi.cantidadMaxima ?? Number.MAX_SAFE_INTEGER;
+    const min = insumo.cantidadMinima ?? 0;
+    const max = insumo.cantidadMaxima ?? Number.MAX_SAFE_INTEGER;
 
-        let nuevaCantidad = cantidad;
+    if (cantidad < min) {
+      toast.error(`La cantidad mínima para ${insumo.insumo.nombre} es ${min}`);
+      setInsumosFolio(prev => prev.map(fi => 
+        fi.insumo.id === insumoId ? { ...fi, cantidad: min } : fi
+      ));
+      return;
+    }
 
-        if (nuevaCantidad < min) {
-          nuevaCantidad = min;
-          if (min > 0) {
-            toast.error(`La cantidad mínima para ${fi.insumo.nombre} es ${min}`);
-          }
-        }
+    if (cantidad > max && insumo.cantidadMaxima != null) {
+      // Mostrar dialog para preguntar si quiere agregar como adicional
+      setPendingAdicional({
+        insumoId,
+        nombreInsumo: insumo.insumo.nombre,
+        cantidadSolicitada: cantidad,
+        cantidadMaxima: max
+      });
+      return;
+    }
 
-        if (nuevaCantidad > max) {
-          nuevaCantidad = max;
-          if (fi.cantidadMaxima != null) {
-            toast.error(`La cantidad máxima para ${fi.insumo.nombre} es ${max}`);
-          }
-        }
+    setInsumosFolio(prev => prev.map(fi => 
+      fi.insumo.id === insumoId ? { ...fi, cantidad } : fi
+    ));
+  };
 
-        return { ...fi, cantidad: nuevaCantidad };
-      }),
-    );
+  // Confirmar agregar como adicional
+  const handleConfirmAdicional = () => {
+    if (!pendingAdicional) return;
+
+    const { insumoId, nombreInsumo, cantidadSolicitada, cantidadMaxima } = pendingAdicional;
+    const cantidadAdicional = cantidadSolicitada - cantidadMaxima;
+
+    // Poner el insumo regular al máximo
+    setInsumosFolio(prev => prev.map(fi => 
+      fi.insumo.id === insumoId ? { ...fi, cantidad: cantidadMaxima } : fi
+    ));
+
+    // Agregar o actualizar el adicional
+    setInsumosAdicionales(prev => {
+      const existing = prev.find(ia => ia.insumo.id === insumoId);
+      if (existing) {
+        return prev.map(ia => 
+          ia.insumo.id === insumoId 
+            ? { ...ia, cantidad: ia.cantidad + cantidadAdicional }
+            : ia
+        );
+      }
+      return [...prev, {
+        insumo: { id: insumoId, nombre: nombreInsumo },
+        cantidad: cantidadAdicional
+      }];
+    });
+
+    toast.success(`${cantidadAdicional} unidades agregadas como adicionales`);
+    setPendingAdicional(null);
+  };
+
+  // Actualiza cantidad de adicional
+  const handleUpdateAdicionalCantidad = (insumoId: string, cantidad: number) => {
+    if (cantidad <= 0) {
+      handleRemoveAdicional(insumoId);
+      return;
+    }
+    setInsumosAdicionales(prev => prev.map(ia => 
+      ia.insumo.id === insumoId ? { ...ia, cantidad } : ia
+    ));
   };
 
   // Envía el formulario completo
@@ -593,6 +663,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         cirujanoNombre: cirujanoSeleccionado?.nombre,
         anestesiologoNombre: anestesiologoSeleccionado?.nombre,
         insumos: insumosFolio,
+        insumosAdicionales: insumosAdicionales,
         hospital_id: selectedHospital?.id,
         hospital_display_name: selectedHospital?.display_name,
         hospital_budget_code: selectedHospital?.budget_code,
@@ -1118,6 +1189,52 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           )}
         </div>
 
+        {/* Insumos Adicionales */}
+        {insumosAdicionales.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <h3 className="font-semibold text-base">Insumos Adicionales</h3>
+              <Badge variant="outline" className="text-amber-600 border-amber-300">
+                {insumosAdicionales.length} adicional{insumosAdicionales.length > 1 ? 'es' : ''}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Estos insumos exceden la cantidad máxima permitida y se registrarán por separado para trazabilidad.
+            </p>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="py-2">Nombre</TableHead>
+                  <TableHead className="w-32 py-2">Cantidad Extra</TableHead>
+                  <TableHead className="w-20 py-2"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {insumosAdicionales.map((ia) => (
+                  <TableRow key={`adicional-${ia.insumo.id}`} className="bg-amber-50/50">
+                    <TableCell className="py-2">{ia.insumo.nombre}</TableCell>
+                    <TableCell className="py-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        value={ia.cantidad}
+                        onChange={(e) => handleUpdateAdicionalCantidad(ia.insumo.id, Number(e.target.value))}
+                        className="w-20 h-8"
+                      />
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveAdicional(ia.insumo.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
         {/* Botones de cancelar/crear */}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>
@@ -1154,6 +1271,28 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para confirmar insumo adicional */}
+      <AlertDialog open={!!pendingAdicional} onOpenChange={() => setPendingAdicional(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cantidad excede el máximo permitido</AlertDialogTitle>
+            <AlertDialogDescription>
+              La cantidad máxima para <strong>{pendingAdicional?.nombreInsumo}</strong> es {pendingAdicional?.cantidadMaxima}.
+              <br /><br />
+              ¿Deseas agregar {pendingAdicional ? pendingAdicional.cantidadSolicitada - pendingAdicional.cantidadMaxima : 0} unidades como <strong>insumo adicional</strong>?
+              <br /><br />
+              Los insumos adicionales se registran por separado para trazabilidad.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmAdicional}>
+              Sí, agregar como adicional
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Form>
   );
 }

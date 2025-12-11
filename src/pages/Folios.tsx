@@ -345,6 +345,20 @@ const Folios = ({ userRole }: FoliosProps) => {
           );
         }
 
+        // Insertar insumos adicionales
+        if (data.insumosAdicionales && data.insumosAdicionales.length > 0) {
+          const adicionales = data.insumosAdicionales.map((ia: any) => ({
+            folio_id: folioData.id,
+            insumo_id: ia.insumo.id,
+            cantidad: ia.cantidad,
+            motivo: ia.motivo || null,
+            created_by: user.id
+          }));
+          updatePromises.push(
+            (async () => await supabase.from('folios_insumos_adicionales').insert(adicionales))()
+          );
+        }
+
         await Promise.all(updatePromises);
       }
 

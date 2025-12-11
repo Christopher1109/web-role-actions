@@ -116,14 +116,12 @@ export function InsumoSearchCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-start text-left font-normal h-auto min-h-10 py-2"
+          className="w-full justify-start text-left font-normal h-auto min-h-10 py-2 overflow-hidden"
         >
           <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
-          {selectedInsumo ? (
-            <span className="truncate">{selectedInsumo.nombre}</span>
-          ) : (
-            <span className="text-muted-foreground">{placeholder}</span>
-          )}
+          <span className="truncate block max-w-[calc(100%-2rem)]">
+            {selectedInsumo ? selectedInsumo.nombre : placeholder}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent 

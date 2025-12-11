@@ -376,10 +376,35 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
       if (error) throw error;
 
-      const insumos: Insumo[] = (anestesiaInsumos || [])
+      // Obtener los nombres de los insumos para buscar en insumos_catalogo
+      const nombresInsumos = (anestesiaInsumos || [])
         .filter((ai: any) => ai.insumos)
+        .map((ai: any) => ai.insumos.nombre);
+
+      if (nombresInsumos.length === 0) {
+        console.log(`⚠️ No se encontraron insumos para ${tipoDb}`);
+        return [];
+      }
+
+      // Buscar los IDs correctos en insumos_catalogo por nombre
+      const { data: catalogoItems, error: catalogoError } = await supabase
+        .from("insumos_catalogo")
+        .select("id, nombre")
+        .in("nombre", nombresInsumos);
+
+      if (catalogoError) throw catalogoError;
+
+      // Crear un mapa de nombre -> id del catálogo
+      const catalogoMap = new Map<string, string>();
+      (catalogoItems || []).forEach((item: any) => {
+        catalogoMap.set(item.nombre, item.id);
+      });
+
+      const insumos: Insumo[] = (anestesiaInsumos || [])
+        .filter((ai: any) => ai.insumos && catalogoMap.has(ai.insumos.nombre))
         .map((ai: any) => ({
-          id: ai.insumos.id,
+          // USAR el ID de insumos_catalogo, no de insumos
+          id: catalogoMap.get(ai.insumos.nombre)!,
           nombre: ai.insumos.nombre,
           lote: ai.insumos.lote || "",
           cantidadDefault: ai.cantidad_default ?? 1,
@@ -389,7 +414,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           grupoExclusivo: ai.grupo_exclusivo ?? null,
         }));
 
-      console.log(`✅ Insumos cargados: ${insumos.length}`);
+      console.log(`✅ Insumos cargados: ${insumos.length} (con IDs de catálogo)`);
       return insumos;
     } catch (error) {
       console.error("Error loading insumos:", error);

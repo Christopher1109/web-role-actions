@@ -113,7 +113,7 @@ const EdicionMasivaMínimos = ({ onActualizado }: EdicionMasivaMínimosProps) =>
         const configExistente = getConfigForInsumo(insumoId);
         
         if (configExistente) {
-          // Actualizar configuración existente
+          // Actualizar TODOS los registros con este insumo_catalogo_id (por si hay duplicados)
           const { error } = await supabase
             .from('insumo_configuracion')
             .update({
@@ -121,7 +121,7 @@ const EdicionMasivaMínimos = ({ onActualizado }: EdicionMasivaMínimosProps) =>
               max_global_inventario: valores.maximo,
               updated_at: new Date().toISOString()
             })
-            .eq('id', configExistente.id);
+            .eq('insumo_catalogo_id', insumoId);
           
           if (error) throw error;
         } else {

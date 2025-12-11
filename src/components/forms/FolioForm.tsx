@@ -134,6 +134,11 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     [],
   );
   const [loadingProcedimientos, setLoadingProcedimientos] = useState(false);
+  
+  // Almacenes provisionales del hospital
+  const [almacenesProvisionales, setAlmacenesProvisionales] = useState<Array<{ id: string; nombre: string }>>([]);
+  const [almacenProvSeleccionado, setAlmacenProvSeleccionado] = useState<string>("");
+  const [loadingAlmacenes, setLoadingAlmacenes] = useState(false);
 
   // Configuración inicial del formulario
   const form = useForm<FolioFormValues>({
@@ -220,6 +225,44 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
     };
 
     loadProcedimientosHospital();
+  }, [selectedHospital]);
+
+  // Cargar almacenes provisionales del hospital
+  useEffect(() => {
+    const loadAlmacenesProvisionales = async () => {
+      if (!selectedHospital?.id) {
+        setAlmacenesProvisionales([]);
+        setAlmacenProvSeleccionado("");
+        return;
+      }
+
+      setLoadingAlmacenes(true);
+      try {
+        const { data, error } = await supabase
+          .from("almacenes_provisionales")
+          .select("id, nombre")
+          .eq("hospital_id", selectedHospital.id)
+          .eq("activo", true)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        setAlmacenesProvisionales(data || []);
+        // Auto-seleccionar el primero si existe
+        if (data && data.length > 0) {
+          setAlmacenProvSeleccionado(data[0].id);
+        } else {
+          setAlmacenProvSeleccionado("");
+        }
+      } catch (error) {
+        console.error("Error loading almacenes provisionales:", error);
+        setAlmacenesProvisionales([]);
+      } finally {
+        setLoadingAlmacenes(false);
+      }
+    };
+
+    loadAlmacenesProvisionales();
   }, [selectedHospital]);
 
   // Carga las listas de médicos al montar el componente
@@ -703,6 +746,19 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       return;
     }
 
+    // Validar que haya almacén provisional seleccionado
+    if (almacenesProvisionales.length === 0) {
+      toast.error("No hay almacenes provisionales configurados", {
+        description: "Debe crear un almacén provisional antes de crear folios"
+      });
+      return;
+    }
+
+    if (!almacenProvSeleccionado) {
+      toast.error("Debe seleccionar un almacén provisional");
+      return;
+    }
+
     try {
       // Validar tipo de anestesia con el backend
       const { data: validationResult, error: validationError } = await supabase.functions.invoke("validate-folio", {
@@ -724,6 +780,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       // Obtener nombres de médicos seleccionados
       const cirujanoSeleccionado = cirujanos.find((m) => m.id === values.cirujano);
       const anestesiologoSeleccionado = anestesiologos.find((m) => m.id === values.anestesiologo);
+      const almacenSeleccionado = almacenesProvisionales.find((a) => a.id === almacenProvSeleccionado);
 
       const submitData = {
         ...values,
@@ -735,6 +792,8 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         hospital_display_name: selectedHospital?.display_name,
         hospital_budget_code: selectedHospital?.budget_code,
         state_name: selectedHospital?.state_name,
+        almacen_provisional_id: almacenProvSeleccionado,
+        almacen_provisional_nombre: almacenSeleccionado?.nombre,
         ...(tipoAnestesia === "anestesia_mixta" && {
           anestesiaPrincipal: anestesiaPrincipal,
           anestesiaSecundaria: anestesiaSecundaria,
@@ -803,6 +862,38 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
               </FormItem>
             )}
           />
+
+          {/* Selector de Almacén Provisional */}
+          <div className="col-span-2">
+            <Label className="text-sm font-medium">Almacén Provisional *</Label>
+            {loadingAlmacenes ? (
+              <div className="h-10 flex items-center text-sm text-muted-foreground">
+                Cargando almacenes...
+              </div>
+            ) : almacenesProvisionales.length === 0 ? (
+              <div className="p-3 border border-destructive/50 bg-destructive/10 rounded-md">
+                <p className="text-sm text-destructive font-medium">
+                  ⚠️ No hay almacenes provisionales configurados
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Debe crear un almacén provisional antes de crear folios.
+                </p>
+              </div>
+            ) : (
+              <Select value={almacenProvSeleccionado} onValueChange={setAlmacenProvSeleccionado}>
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue placeholder="Seleccionar almacén provisional" />
+                </SelectTrigger>
+                <SelectContent>
+                  {almacenesProvisionales.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </div>
 
         {/* Horarios */}

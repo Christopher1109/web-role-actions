@@ -59,6 +59,10 @@ const AlmacenesProvisionales = () => {
   const [dialogCrearOpen, setDialogCrearOpen] = useState(false);
   const [dialogTraspasoOpen, setDialogTraspasoOpen] = useState(false);
   const [dialogDevolucionOpen, setDialogDevolucionOpen] = useState(false);
+  const [dialogEliminarOpen, setDialogEliminarOpen] = useState(false);
+  const [almacenAEliminar, setAlmacenAEliminar] = useState<AlmacenProvisional | null>(null);
+  const [inventarioAlmacenEliminar, setInventarioAlmacenEliminar] = useState<InventarioProvisional[]>([]);
+  const [modoEliminar, setModoEliminar] = useState<'confirmar' | 'inspeccionar'>('confirmar');
 
   // Form states
   const [nuevoNombre, setNuevoNombre] = useState('');
@@ -534,30 +538,124 @@ const AlmacenesProvisionales = () => {
     }
   };
 
-  const eliminarAlmacen = async (almacen: AlmacenProvisional) => {
-    if (!confirm(`¿Eliminar el almacén "${almacen.nombre}"? Los insumos serán devueltos al almacén general.`)) return;
-
+  const abrirDialogEliminar = async (almacen: AlmacenProvisional) => {
+    // Verificar si tiene inventario
     try {
-      // First return all inventory to general
-      const { data: inventario } = await supabase
+      const { data: inventario, error } = await supabase
         .from('almacen_provisional_inventario')
-        .select('*')
-        .eq('almacen_provisional_id', almacen.id);
+        .select(`
+          *,
+          insumo:insumos_catalogo(id, nombre, clave)
+        `)
+        .eq('almacen_provisional_id', almacen.id)
+        .gt('cantidad_disponible', 0);
 
-      // Mark as inactive instead of deleting
-      await supabase
-        .from('almacenes_provisionales')
-        .update({ activo: false })
-        .eq('id', almacen.id);
+      if (error) throw error;
 
-      toast.success('Almacén eliminado');
-      if (selectedAlmacen?.id === almacen.id) {
-        setSelectedAlmacen(null);
+      setAlmacenAEliminar(almacen);
+      setInventarioAlmacenEliminar(inventario || []);
+      setModoEliminar('confirmar');
+      setDialogEliminarOpen(true);
+    } catch (error) {
+      console.error('Error checking inventory:', error);
+      toast.error('Error al verificar inventario');
+    }
+  };
+
+  const ejecutarEliminacion = async (devolverTodo: boolean) => {
+    if (!almacenAEliminar || !selectedHospital) return;
+
+    setProcesando(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Si hay inventario y se quiere devolver
+      if (devolverTodo && inventarioAlmacenEliminar.length > 0) {
+        // Obtener almacén general
+        const { data: almacenGeneral } = await supabase
+          .from('almacenes')
+          .select('id')
+          .eq('hospital_id', selectedHospital.id)
+          .maybeSingle();
+
+        if (!almacenGeneral) {
+          toast.error('No se encontró almacén general');
+          return;
+        }
+
+        // Devolver cada insumo
+        for (const item of inventarioAlmacenEliminar) {
+          const cantidad = item.cantidad_disponible;
+          if (cantidad <= 0) continue;
+
+          // Agregar al inventario general
+          const { data: existenteGeneral } = await supabase
+            .from('inventario_hospital')
+            .select('*')
+            .eq('hospital_id', selectedHospital.id)
+            .eq('insumo_catalogo_id', item.insumo_catalogo_id)
+            .maybeSingle();
+
+          if (existenteGeneral) {
+            await supabase
+              .from('inventario_hospital')
+              .update({
+                cantidad_actual: (existenteGeneral.cantidad_actual || 0) + cantidad,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existenteGeneral.id);
+          } else {
+            await supabase
+              .from('inventario_hospital')
+              .insert({
+                hospital_id: selectedHospital.id,
+                almacen_id: almacenGeneral.id,
+                insumo_catalogo_id: item.insumo_catalogo_id,
+                cantidad_actual: cantidad,
+                cantidad_inicial: cantidad,
+                cantidad_minima: 10
+              });
+          }
+
+          // Registrar movimiento
+          await supabase
+            .from('movimientos_almacen_provisional')
+            .insert({
+              almacen_provisional_id: almacenAEliminar.id,
+              hospital_id: selectedHospital.id,
+              insumo_catalogo_id: item.insumo_catalogo_id,
+              cantidad: cantidad,
+              tipo: 'salida',
+              usuario_id: user?.id,
+              observaciones: 'Devolución por eliminación de almacén provisional'
+            });
+        }
       }
+
+      // Marcar almacén como inactivo
+      const { error: updateError } = await supabase
+        .from('almacenes_provisionales')
+        .update({ activo: false, updated_at: new Date().toISOString() })
+        .eq('id', almacenAEliminar.id);
+
+      if (updateError) throw updateError;
+
+      toast.success('Almacén eliminado correctamente');
+      
+      if (selectedAlmacen?.id === almacenAEliminar.id) {
+        setSelectedAlmacen(null);
+        setInventarioProvisional([]);
+      }
+      
+      setDialogEliminarOpen(false);
+      setAlmacenAEliminar(null);
+      setInventarioAlmacenEliminar([]);
       fetchAlmacenes();
     } catch (error) {
       console.error('Error deleting warehouse:', error);
       toast.error('Error al eliminar almacén');
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -643,7 +741,7 @@ const AlmacenesProvisionales = () => {
                             size="icon"
                             onClick={(e) => {
                               e.stopPropagation();
-                              eliminarAlmacen(almacen);
+                              abrirDialogEliminar(almacen);
                             }}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
@@ -953,6 +1051,113 @@ const AlmacenesProvisionales = () => {
               {procesando ? 'Procesando...' : 'Devolver Insumos'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar eliminación */}
+      <Dialog open={dialogEliminarOpen} onOpenChange={setDialogEliminarOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Eliminar Almacén "{almacenAEliminar?.nombre}"
+            </DialogTitle>
+          </DialogHeader>
+          
+          {modoEliminar === 'confirmar' ? (
+            <div className="space-y-4">
+              {inventarioAlmacenEliminar.length > 0 ? (
+                <>
+                  <Alert>
+                    <AlertDescription>
+                      Este almacén tiene <strong>{inventarioAlmacenEliminar.length} insumos</strong> con un total de{' '}
+                      <strong>{inventarioAlmacenEliminar.reduce((sum, i) => sum + i.cantidad_disponible, 0)} unidades</strong>.
+                    </AlertDescription>
+                  </Alert>
+                  <p className="text-sm text-muted-foreground">
+                    ¿Qué deseas hacer con los insumos?
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <Button 
+                      onClick={() => ejecutarEliminacion(true)} 
+                      disabled={procesando}
+                      className="justify-start"
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Devolver todo al almacén general y eliminar
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setModoEliminar('inspeccionar')}
+                      className="justify-start"
+                    >
+                      <Package className="mr-2 h-4 w-4" />
+                      Inspeccionar insumos primero
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => setDialogEliminarOpen(false)}
+                      className="justify-start"
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Este almacén está vacío. ¿Confirmas que deseas eliminarlo?
+                  </p>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setDialogEliminarOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      onClick={() => ejecutarEliminacion(false)}
+                      disabled={procesando}
+                    >
+                      {procesando ? 'Eliminando...' : 'Eliminar Almacén'}
+                    </Button>
+                  </DialogFooter>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Insumos en el almacén:
+              </p>
+              <ScrollArea className="h-[300px] border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Clave</TableHead>
+                      <TableHead>Insumo</TableHead>
+                      <TableHead className="text-right">Cantidad</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {inventarioAlmacenEliminar.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
+                        <TableCell className="max-w-[200px] truncate">{item.insumo?.nombre}</TableCell>
+                        <TableCell className="text-right font-mono">{item.cantidad_disponible}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+              <DialogFooter className="flex gap-2">
+                <Button variant="outline" onClick={() => setModoEliminar('confirmar')}>
+                  Volver
+                </Button>
+                <Button onClick={() => ejecutarEliminacion(true)} disabled={procesando}>
+                  {procesando ? 'Procesando...' : 'Devolver todo y eliminar'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

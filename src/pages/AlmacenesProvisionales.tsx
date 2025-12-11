@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useHospital } from '@/contexts/HospitalContext';
 import { Plus, Warehouse, ArrowRight, ArrowLeft, Package, RefreshCw, Search, Trash2, Zap, CheckSquare } from 'lucide-react';
+import { PROCEDIMIENTOS_CATALOG, getTipoAnestesiaKey } from '@/constants/procedimientosCatalog';
 
 interface AlmacenProvisional {
   id: string;
@@ -39,24 +40,11 @@ interface InventarioGeneral {
   insumo?: { id: string; nombre: string; clave: string };
 }
 
-interface AnestesiaInsumo {
-  insumo_id: string;
-  cantidad_default: number;
-  insumo?: { id: string; nombre: string; clave: string };
+interface ProcedimientoHospital {
+  clave: string;
+  nombre: string;
+  tipoAnestesiaKey: string;
 }
-
-const PROCEDIMIENTOS_LABELS: Record<string, string> = {
-  'general_balanceada_adulto': 'Anestesia General Balanceada Adulto',
-  'general_endovenosa': 'Anestesia General Endovenosa',
-  'general_balanceada_pediatrica': 'Anestesia General Balanceada Pediátrica',
-  'loco_regional': 'Anestesia Loco Regional',
-  'sedacion': 'Sedación',
-  'alta_especialidad': 'Alta Especialidad',
-  'alta_especialidad_neurocirugia': 'Alta Especialidad Neurocirugía',
-  '19.01.008': 'Trasplante Hepático (19.01.008)',
-  '19.01.009': 'Trasplante Renal (19.01.009)',
-  '19.01.010': 'Procedimiento 19.01.010',
-};
 
 const AlmacenesProvisionales = () => {
   const { selectedHospital } = useHospital();
@@ -82,7 +70,7 @@ const AlmacenesProvisionales = () => {
   
   // Procedimiento selector
   const [procedimientoSeleccionado, setProcedimientoSeleccionado] = useState<string>('');
-  const [procedimientosDisponibles, setProcedimientosDisponibles] = useState<string[]>([]);
+  const [procedimientosDisponibles, setProcedimientosDisponibles] = useState<ProcedimientoHospital[]>([]);
 
   useEffect(() => {
     if (selectedHospital) {
@@ -165,16 +153,26 @@ const AlmacenesProvisionales = () => {
   };
 
   const fetchProcedimientosDisponibles = async () => {
+    if (!selectedHospital) return;
+    
     try {
+      // Obtener procedimientos autorizados para este hospital
       const { data, error } = await supabase
-        .from('anestesia_insumos')
-        .select('tipo_anestesia')
+        .from('hospital_procedimientos')
+        .select('procedimiento_clave, procedimiento_nombre')
+        .eq('hospital_id', selectedHospital.id)
         .eq('activo', true);
 
       if (error) throw error;
       
-      const tipos = [...new Set(data?.map(d => d.tipo_anestesia) || [])];
-      setProcedimientosDisponibles(tipos);
+      // Convertir a formato ProcedimientoHospital con tipoAnestesiaKey
+      const procedimientos: ProcedimientoHospital[] = (data || []).map(p => ({
+        clave: p.procedimiento_clave,
+        nombre: p.procedimiento_nombre,
+        tipoAnestesiaKey: getTipoAnestesiaKey(p.procedimiento_clave)
+      }));
+      
+      setProcedimientosDisponibles(procedimientos);
     } catch (error) {
       console.error('Error fetching procedures:', error);
     }
@@ -739,9 +737,9 @@ const AlmacenesProvisionales = () => {
                         <SelectValue placeholder="Selecciona un procedimiento..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {procedimientosDisponibles.map((tipo) => (
-                          <SelectItem key={tipo} value={tipo}>
-                            {PROCEDIMIENTOS_LABELS[tipo] || tipo}
+                        {procedimientosDisponibles.map((proc) => (
+                          <SelectItem key={proc.clave} value={proc.tipoAnestesiaKey}>
+                            {proc.clave} - {proc.nombre}
                           </SelectItem>
                         ))}
                       </SelectContent>

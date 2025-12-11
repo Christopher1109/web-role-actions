@@ -150,7 +150,19 @@ const AlmacenesProvisionales = () => {
         .order('insumo_catalogo_id');
 
       if (error) throw error;
-      setInventarioGeneral(data || []);
+      
+      // Consolidar por insumo_catalogo_id (sumar cantidades de diferentes lotes)
+      const consolidado = new Map<string, InventarioGeneral>();
+      for (const item of (data || [])) {
+        const existing = consolidado.get(item.insumo_catalogo_id);
+        if (existing) {
+          existing.cantidad_actual += item.cantidad_actual;
+        } else {
+          consolidado.set(item.insumo_catalogo_id, { ...item });
+        }
+      }
+      
+      setInventarioGeneral(Array.from(consolidado.values()));
     } catch (error) {
       console.error('Error fetching general inventory:', error);
     }
@@ -239,8 +251,8 @@ const AlmacenesProvisionales = () => {
           if (nombreNorm.includes(notaNorm) || notaNorm.includes(nombreNorm.substring(0, 30))) {
             const cantidadRequerida = Math.min(cantidad, item.cantidad_actual);
             if (cantidadRequerida > 0) {
-              nuevasCantidades[item.id] = cantidadRequerida;
-              nuevosSeleccionados.add(item.id);
+              nuevasCantidades[item.insumo_catalogo_id] = cantidadRequerida;
+              nuevosSeleccionados.add(item.insumo_catalogo_id);
               encontrados++;
               break;
             }
@@ -258,22 +270,22 @@ const AlmacenesProvisionales = () => {
     }
   };
 
-  const toggleSeleccion = (id: string) => {
+  const toggleSeleccion = (insumoCatalogoId: string) => {
     const nuevos = new Set(seleccionados);
-    if (nuevos.has(id)) {
-      nuevos.delete(id);
+    if (nuevos.has(insumoCatalogoId)) {
+      nuevos.delete(insumoCatalogoId);
       // También limpiar la cantidad
       const nuevasCantidades = { ...cantidadesTraspaso };
-      delete nuevasCantidades[id];
+      delete nuevasCantidades[insumoCatalogoId];
       setCantidadesTraspaso(nuevasCantidades);
     } else {
-      nuevos.add(id);
+      nuevos.add(insumoCatalogoId);
     }
     setSeleccionados(nuevos);
   };
 
   const seleccionarTodos = () => {
-    const nuevos = new Set(filteredInventarioGeneral.map(item => item.id));
+    const nuevos = new Set(filteredInventarioGeneral.map(item => item.insumo_catalogo_id));
     setSeleccionados(nuevos);
   };
 
@@ -335,8 +347,9 @@ const AlmacenesProvisionales = () => {
     if (!selectedHospital || !selectedAlmacen) return;
 
     // Filtrar solo items seleccionados con cantidad > 0
+    // Ahora el key es insumo_catalogo_id (porque consolidamos)
     const itemsTraspaso = Object.entries(cantidadesTraspaso)
-      .filter(([id, cantidad]) => seleccionados.has(id) && cantidad > 0);
+      .filter(([insumoCatalogoId, cantidad]) => seleccionados.has(insumoCatalogoId) && cantidad > 0);
     
     if (itemsTraspaso.length === 0) {
       toast.error('Selecciona al menos un insumo y asigna cantidades');
@@ -349,25 +362,38 @@ const AlmacenesProvisionales = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      for (const [inventarioId, cantidad] of itemsTraspaso) {
-        const item = inventarioGeneral.find(i => i.id === inventarioId);
-        if (!item || cantidad > item.cantidad_actual) {
-          console.log('Item saltado:', inventarioId, 'cantidad:', cantidad);
+      for (const [insumoCatalogoId, cantidadSolicitada] of itemsTraspaso) {
+        const item = inventarioGeneral.find(i => i.insumo_catalogo_id === insumoCatalogoId);
+        if (!item || cantidadSolicitada > item.cantidad_actual) {
+          console.log('Item saltado - stock insuficiente:', insumoCatalogoId);
           continue;
         }
 
-        // Descontar del inventario general
-        const { error: errorUpdate } = await supabase
+        // Buscar TODOS los lotes de este insumo y descontar (FIFO - del más viejo primero)
+        const { data: lotes } = await supabase
           .from('inventario_hospital')
-          .update({
-            cantidad_actual: item.cantidad_actual - cantidad,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', inventarioId);
-
-        if (errorUpdate) {
-          console.error('Error actualizando inventario:', errorUpdate);
-          continue;
+          .select('id, cantidad_actual')
+          .eq('hospital_id', selectedHospital.id)
+          .eq('insumo_catalogo_id', insumoCatalogoId)
+          .gt('cantidad_actual', 0)
+          .order('created_at', { ascending: true });
+        
+        let cantidadRestante = cantidadSolicitada;
+        for (const lote of (lotes || [])) {
+          if (cantidadRestante <= 0) break;
+          
+          const aDescontar = Math.min(cantidadRestante, lote.cantidad_actual);
+          const { error: errorUpdate } = await supabase
+            .from('inventario_hospital')
+            .update({
+              cantidad_actual: lote.cantidad_actual - aDescontar,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', lote.id);
+          
+          if (!errorUpdate) {
+            cantidadRestante -= aDescontar;
+          }
         }
 
         // Agregar al inventario provisional
@@ -375,32 +401,34 @@ const AlmacenesProvisionales = () => {
           .from('almacen_provisional_inventario')
           .select('*')
           .eq('almacen_provisional_id', selectedAlmacen.id)
-          .eq('insumo_catalogo_id', item.insumo_catalogo_id)
+          .eq('insumo_catalogo_id', insumoCatalogoId)
           .maybeSingle();
 
         if (existente) {
           const { error: errorUpdateProv } = await supabase
             .from('almacen_provisional_inventario')
             .update({
-              cantidad_disponible: (existente.cantidad_disponible || 0) + cantidad,
+              cantidad_disponible: (existente.cantidad_disponible || 0) + cantidadSolicitada,
               updated_at: new Date().toISOString()
             })
             .eq('id', existente.id);
             
           if (errorUpdateProv) {
             console.error('Error actualizando provisional:', errorUpdateProv);
+            continue;
           }
         } else {
           const { error: errorInsertProv } = await supabase
             .from('almacen_provisional_inventario')
             .insert({
               almacen_provisional_id: selectedAlmacen.id,
-              insumo_catalogo_id: item.insumo_catalogo_id,
-              cantidad_disponible: cantidad
+              insumo_catalogo_id: insumoCatalogoId,
+              cantidad_disponible: cantidadSolicitada
             });
             
           if (errorInsertProv) {
             console.error('Error insertando provisional:', errorInsertProv);
+            continue;
           }
         }
 
@@ -410,8 +438,8 @@ const AlmacenesProvisionales = () => {
           .insert({
             almacen_provisional_id: selectedAlmacen.id,
             hospital_id: selectedHospital.id,
-            insumo_catalogo_id: item.insumo_catalogo_id,
-            cantidad: cantidad,
+            insumo_catalogo_id: insumoCatalogoId,
+            cantidad: cantidadSolicitada,
             tipo: 'entrada',
             usuario_id: user?.id,
             observaciones: 'Traspaso desde almacén general'
@@ -427,7 +455,6 @@ const AlmacenesProvisionales = () => {
       if (procesados > 0) {
         toast.success(`${procesados} insumos traspasados al almacén provisional`);
         setDialogTraspasoOpen(false);
-        // Refrescar datos
         await fetchInventarioProvisional(selectedAlmacen.id);
       } else {
         toast.error('No se pudo traspasar ningún insumo');
@@ -943,16 +970,16 @@ const AlmacenesProvisionales = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredInventarioGeneral.map((item) => {
-                    const isSelected = seleccionados.has(item.id);
+                    const isSelected = seleccionados.has(item.insumo_catalogo_id);
                     return (
                       <TableRow 
-                        key={item.id}
+                        key={item.insumo_catalogo_id}
                         className={isSelected ? 'bg-primary/5' : ''}
                       >
                         <TableCell>
                           <Checkbox
                             checked={isSelected}
-                            onCheckedChange={() => toggleSeleccion(item.id)}
+                            onCheckedChange={() => toggleSeleccion(item.insumo_catalogo_id)}
                           />
                         </TableCell>
                         <TableCell className="font-mono text-xs">{item.insumo?.clave}</TableCell>
@@ -967,15 +994,15 @@ const AlmacenesProvisionales = () => {
                             type="number"
                             min={0}
                             max={item.cantidad_actual}
-                            value={cantidadesTraspaso[item.id] || ''}
+                            value={cantidadesTraspaso[item.insumo_catalogo_id] || ''}
                             onChange={(e) => {
                               const valor = Math.min(Number(e.target.value), item.cantidad_actual);
                               setCantidadesTraspaso(prev => ({
                                 ...prev,
-                                [item.id]: valor
+                                [item.insumo_catalogo_id]: valor
                               }));
-                              if (valor > 0 && !seleccionados.has(item.id)) {
-                                setSeleccionados(prev => new Set([...prev, item.id]));
+                              if (valor > 0 && !seleccionados.has(item.insumo_catalogo_id)) {
+                                setSeleccionados(prev => new Set([...prev, item.insumo_catalogo_id]));
                               }
                             }}
                             className="h-8 w-20"

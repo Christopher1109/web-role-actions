@@ -316,10 +316,10 @@ const Folios = ({ userRole }: FoliosProps) => {
       }
 
       // PASO 7: Ejecutar todas las operaciones en paralelo
-      const updatePromises: Promise<any>[] = [];
+      const updateOperations = [];
 
       for (const upd of provisionalUpdates) {
-        updatePromises.push(
+        updateOperations.push(
           supabase
             .from('almacen_provisional_inventario')
             .update({ cantidad_disponible: upd.cantidad_disponible, updated_at: new Date().toISOString() })
@@ -328,17 +328,17 @@ const Folios = ({ userRole }: FoliosProps) => {
       }
 
       if (movimientosProvisional.length > 0) {
-        updatePromises.push(supabase.from('movimientos_almacen_provisional').insert(movimientosProvisional));
+        updateOperations.push(supabase.from('movimientos_almacen_provisional').insert(movimientosProvisional));
       }
       if (foliosInsumos.length > 0) {
-        updatePromises.push(supabase.from('folios_insumos').insert(foliosInsumos));
+        updateOperations.push(supabase.from('folios_insumos').insert(foliosInsumos));
       }
       if (foliosInsumosAdicionales.length > 0) {
-        updatePromises.push(supabase.from('folios_insumos_adicionales').insert(foliosInsumosAdicionales));
+        updateOperations.push(supabase.from('folios_insumos_adicionales').insert(foliosInsumosAdicionales));
       }
 
-      if (updatePromises.length > 0) {
-        await Promise.all(updatePromises);
+      for (const op of updateOperations) {
+        await op;
       }
 
       toast.success('Folio creado exitosamente', {

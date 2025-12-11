@@ -1,44 +1,57 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useHospital } from '@/contexts/HospitalContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Package } from 'lucide-react';
+import { Package, ArrowLeft, Save, Pencil } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { PROCEDIMIENTOS_CATALOG } from '@/constants/procedimientosCatalog';
 
-const tiposAnestesiaLabels: Record<string, string> = {
-  'general_balanceada_adulto': 'General Balanceada Adulto',
-  'general_balanceada_pediatrica': 'General Balanceada Pediátrica',
-  'alta_especialidad': 'Alta Especialidad',
-  'alta_especialidad_trasplante': 'Alta Especialidad Trasplante Renal',
-  'general_endovenosa': 'General Endovenosa',
-  'loco_regional': 'Locorregional',
-  'sedacion': 'Sedación',
-};
+interface AnestesiaInsumo {
+  id: string;
+  nota: string | null;
+  cantidad_minima: number | null;
+  cantidad_maxima: number | null;
+  grupo_exclusivo: string | null;
+  condicionante: string | null;
+  orden: number | null;
+}
 
 const Paquetes = () => {
   const { user } = useAuth();
-  const { selectedHospital } = useHospital();
   const [selectedTipo, setSelectedTipo] = useState<string | null>(null);
-  const [tiposAnestesia, setTiposAnestesia] = useState<any[]>([]);
-  const [insumosDelTipo, setInsumosDelTipo] = useState<any[]>([]);
+  const [selectedTipoLabel, setSelectedTipoLabel] = useState<string>('');
+  const [tiposAnestesia, setTiposAnestesia] = useState<{ tipo: string; label: string; clave: string }[]>([]);
+  const [insumosDelTipo, setInsumosDelTipo] = useState<AnestesiaInsumo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{
+    cantidad_minima: number;
+    cantidad_maxima: number;
+    condicionante: string;
+  }>({ cantidad_minima: 0, cantidad_maxima: 0, condicionante: '' });
 
   useEffect(() => {
-    if (user && selectedHospital) {
+    if (user) {
       fetchTiposAnestesia();
     }
-  }, [user, selectedHospital]);
+  }, [user]);
 
   const fetchTiposAnestesia = async () => {
     try {
-      if (!selectedHospital) return;
-      
       setLoading(true);
-      // Obtener los tipos de anestesia únicos
+      // Obtener los tipos de anestesia únicos de la DB
       const { data, error } = await supabase
         .from('anestesia_insumos')
         .select('tipo_anestesia')
@@ -48,10 +61,28 @@ const Paquetes = () => {
 
       // Obtener tipos únicos
       const tiposUnicos = [...new Set((data || []).map((d: any) => d.tipo_anestesia))];
-      setTiposAnestesia(tiposUnicos.map(tipo => ({
-        tipo,
-        label: tiposAnestesiaLabels[tipo] || tipo
-      })));
+      
+      // Mapear a los nombres del catálogo estandarizado
+      const tiposMapeados = tiposUnicos.map(tipo => {
+        // Buscar en el catálogo por tipoAnestesiaKey
+        const catalogItem = PROCEDIMIENTOS_CATALOG.find(p => p.tipoAnestesiaKey === tipo);
+        if (catalogItem) {
+          return {
+            tipo,
+            clave: catalogItem.clave,
+            label: `${catalogItem.clave} - ${catalogItem.nombre}`
+          };
+        }
+        return {
+          tipo,
+          clave: tipo,
+          label: tipo
+        };
+      });
+
+      // Ordenar por clave
+      tiposMapeados.sort((a, b) => a.clave.localeCompare(b.clave));
+      setTiposAnestesia(tiposMapeados);
       
     } catch (error: any) {
       toast.error('Error al cargar tipos de anestesia', {
@@ -67,18 +98,7 @@ const Paquetes = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('anestesia_insumos')
-        .select(`
-          cantidad_default,
-          orden,
-          insumo_id,
-          insumos (
-            id,
-            nombre,
-            descripcion,
-            clave,
-            cantidad
-          )
-        `)
+        .select('id, nota, cantidad_minima, cantidad_maxima, grupo_exclusivo, condicionante, orden')
         .eq('tipo_anestesia', tipo)
         .order('orden', { ascending: true });
 
@@ -94,66 +114,209 @@ const Paquetes = () => {
     }
   };
 
-  const handleSelectTipo = (tipo: string) => {
+  const handleSelectTipo = (tipo: string, label: string) => {
     setSelectedTipo(tipo);
+    setSelectedTipoLabel(label);
     fetchInsumosDelTipo(tipo);
+  };
+
+  const handleStartEdit = (insumo: AnestesiaInsumo) => {
+    setEditingId(insumo.id);
+    setEditValues({
+      cantidad_minima: insumo.cantidad_minima || 0,
+      cantidad_maxima: insumo.cantidad_maxima || 0,
+      condicionante: insumo.condicionante || ''
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditValues({ cantidad_minima: 0, cantidad_maxima: 0, condicionante: '' });
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    try {
+      setSaving(true);
+      const { error } = await supabase
+        .from('anestesia_insumos')
+        .update({
+          cantidad_minima: editValues.cantidad_minima,
+          cantidad_maxima: editValues.cantidad_maxima,
+          condicionante: editValues.condicionante || null
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Actualizar lista local
+      setInsumosDelTipo(prev => prev.map(item => 
+        item.id === id 
+          ? { 
+              ...item, 
+              cantidad_minima: editValues.cantidad_minima,
+              cantidad_maxima: editValues.cantidad_maxima,
+              condicionante: editValues.condicionante || null
+            }
+          : item
+      ));
+
+      setEditingId(null);
+      toast.success('Insumo actualizado correctamente');
+    } catch (error: any) {
+      toast.error('Error al guardar', { description: error.message });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {!selectedHospital && (
-        <Alert>
-          <AlertDescription>
-            Debes seleccionar un hospital para ver y gestionar los paquetes de anestesia.
-          </AlertDescription>
-        </Alert>
-      )}
-
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Paquetes de Anestesia</h1>
-          <p className="text-muted-foreground">Tipos de anestesia e insumos predefinidos</p>
+          <h1 className="text-3xl font-bold text-foreground">Configuración de Procedimientos</h1>
+          <p className="text-muted-foreground">Configura los insumos mínimos y máximos por tipo de anestesia</p>
         </div>
       </div>
 
-      {loading ? (
+      {loading && !selectedTipo ? (
         <Card>
           <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">Cargando paquetes...</p>
+            <p className="text-center text-muted-foreground">Cargando procedimientos...</p>
           </CardContent>
         </Card>
       ) : selectedTipo ? (
         <div className="space-y-4">
-          <Button variant="outline" onClick={() => setSelectedTipo(null)}>
-            ← Volver a Tipos de Anestesia
+          <Button variant="outline" onClick={() => { setSelectedTipo(null); setEditingId(null); }}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Volver a Procedimientos
           </Button>
+          
           <Card>
             <CardHeader>
-              <CardTitle>{tiposAnestesiaLabels[selectedTipo]}</CardTitle>
+              <CardTitle>{selectedTipoLabel}</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Insumos predefinidos para este tipo de anestesia
+                Configura los insumos y sus cantidades mínimas/máximas. Los cambios afectarán la creación de folios.
               </p>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {insumosDelTipo.map((item: any, index: number) => (
-                  <div key={index} className="flex items-center justify-between rounded-lg border bg-muted/50 p-3">
-                    <div className="flex-1">
-                      <p className="font-medium">{item.insumos?.nombre || 'Sin nombre'}</p>
-                      <p className="text-sm text-muted-foreground">{item.insumos?.descripcion}</p>
-                      <p className="text-xs text-muted-foreground">Clave: {item.insumos?.clave}</p>
-                    </div>
-                    <Badge variant="secondary">
-                      {item.cantidad_default} unidad(es)
-                    </Badge>
-                  </div>
-                ))}
-                {insumosDelTipo.length === 0 && (
-                  <p className="text-center text-muted-foreground py-4">
-                    No hay insumos configurados para este tipo de anestesia
-                  </p>
-                )}
-              </div>
+              {loading ? (
+                <p className="text-center text-muted-foreground py-4">Cargando insumos...</p>
+              ) : insumosDelTipo.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">
+                  No hay insumos configurados para este procedimiento
+                </p>
+              ) : (
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[50px]">#</TableHead>
+                        <TableHead className="min-w-[300px]">Nombre del Insumo</TableHead>
+                        <TableHead className="w-[100px] text-center">Mín</TableHead>
+                        <TableHead className="w-[100px] text-center">Máx</TableHead>
+                        <TableHead className="w-[150px]">Grupo Exclusivo</TableHead>
+                        <TableHead className="min-w-[200px]">Condicionante</TableHead>
+                        <TableHead className="w-[100px] text-center">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {insumosDelTipo.map((insumo, index) => (
+                        <TableRow key={insumo.id}>
+                          <TableCell className="font-medium">{index + 1}</TableCell>
+                          <TableCell className="text-sm">{insumo.nota || 'Sin nombre'}</TableCell>
+                          <TableCell className="text-center">
+                            {editingId === insumo.id ? (
+                              <Input
+                                type="number"
+                                min={0}
+                                className="w-16 h-8 text-center"
+                                value={editValues.cantidad_minima}
+                                onChange={(e) => setEditValues(prev => ({ 
+                                  ...prev, 
+                                  cantidad_minima: parseInt(e.target.value) || 0 
+                                }))}
+                              />
+                            ) : (
+                              <Badge variant="outline">{insumo.cantidad_minima ?? 0}</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {editingId === insumo.id ? (
+                              <Input
+                                type="number"
+                                min={0}
+                                className="w-16 h-8 text-center"
+                                value={editValues.cantidad_maxima}
+                                onChange={(e) => setEditValues(prev => ({ 
+                                  ...prev, 
+                                  cantidad_maxima: parseInt(e.target.value) || 0 
+                                }))}
+                              />
+                            ) : (
+                              <Badge variant="secondary">{insumo.cantidad_maxima ?? 0}</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {insumo.grupo_exclusivo && (
+                              <Badge variant="destructive" className="text-xs truncate max-w-[140px]">
+                                {insumo.grupo_exclusivo}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {editingId === insumo.id ? (
+                              <Input
+                                type="text"
+                                className="h-8 text-sm"
+                                placeholder="Condición de uso..."
+                                value={editValues.condicionante}
+                                onChange={(e) => setEditValues(prev => ({ 
+                                  ...prev, 
+                                  condicionante: e.target.value 
+                                }))}
+                              />
+                            ) : insumo.condicionante ? (
+                              <span className="text-xs text-muted-foreground">{insumo.condicionante}</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground/50">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {editingId === insumo.id ? (
+                              <div className="flex gap-1 justify-center">
+                                <Button 
+                                  size="sm" 
+                                  variant="default"
+                                  onClick={() => handleSaveEdit(insumo.id)}
+                                  disabled={saving}
+                                >
+                                  <Save className="h-3 w-3" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={handleCancelEdit}
+                                  disabled={saving}
+                                >
+                                  ✕
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                onClick={() => handleStartEdit(insumo)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -163,7 +326,7 @@ const Paquetes = () => {
             <Card 
               key={tipo.tipo} 
               className="border-l-4 border-l-primary cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => handleSelectTipo(tipo.tipo)}
+              onClick={() => handleSelectTipo(tipo.tipo, tipo.label)}
             >
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -172,9 +335,9 @@ const Paquetes = () => {
                       <Package className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg">{tipo.label}</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Haz clic para ver insumos
+                      <CardTitle className="text-base leading-tight">{tipo.label}</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Haz clic para configurar
                       </p>
                     </div>
                   </div>

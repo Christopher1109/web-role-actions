@@ -100,10 +100,12 @@ const Paquetes = () => {
         .from('anestesia_insumos')
         .select('id, nota, cantidad_minima, cantidad_maxima, grupo_exclusivo, condicionante, orden')
         .eq('tipo_anestesia', tipo)
-        .order('orden', { ascending: true });
+        .eq('activo', true)
+        .order('orden', { ascending: true, nullsFirst: false });
 
       if (error) throw error;
 
+      console.log(`✅ Cargados ${data?.length || 0} insumos para ${tipo}`);
       setInsumosDelTipo(data || []);
     } catch (error: any) {
       toast.error('Error al cargar insumos', {

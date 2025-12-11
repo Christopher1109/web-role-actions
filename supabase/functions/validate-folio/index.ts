@@ -50,21 +50,22 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Validar que ambos tipos existan para el hospital
+      // Validar que ambos tipos existan para el hospital en hospital_procedimientos
       const { data: procedimientos, error } = await supabase
-        .from('procedimientos')
-        .select('nombre')
+        .from('hospital_procedimientos')
+        .select('procedimiento_clave, procedimiento_nombre')
         .eq('hospital_id', hospital_id)
-        .in('nombre', [anestesia_principal, anestesia_secundaria]);
+        .eq('activo', true)
+        .in('procedimiento_clave', [anestesia_principal, anestesia_secundaria]);
 
       if (error) throw error;
 
       if (!procedimientos || procedimientos.length !== 2) {
         const faltantes = [];
-        if (!procedimientos?.find(p => p.nombre === anestesia_principal)) {
+        if (!procedimientos?.find(p => p.procedimiento_clave === anestesia_principal)) {
           faltantes.push(anestesia_principal);
         }
-        if (!procedimientos?.find(p => p.nombre === anestesia_secundaria)) {
+        if (!procedimientos?.find(p => p.procedimiento_clave === anestesia_secundaria)) {
           faltantes.push(anestesia_secundaria);
         }
 
@@ -92,12 +93,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validar tipo de anestesia simple
+    // Validar tipo de anestesia simple - buscar por clave en hospital_procedimientos
     const { data: procedimientos, error } = await supabase
-      .from('procedimientos')
-      .select('nombre')
+      .from('hospital_procedimientos')
+      .select('procedimiento_clave, procedimiento_nombre')
       .eq('hospital_id', hospital_id)
-      .eq('nombre', tipo_anestesia)
+      .eq('activo', true)
+      .eq('procedimiento_clave', tipo_anestesia)
       .limit(1);
 
     if (error) throw error;
@@ -116,7 +118,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('✅ Tipo de anestesia válido');
+    console.log('✅ Tipo de anestesia válido:', procedimientos[0].procedimiento_nombre);
     return new Response(
       JSON.stringify({
         valid: true,

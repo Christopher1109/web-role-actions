@@ -46,17 +46,17 @@ export const PROCEDIMIENTOS_CATALOG: ProcedimientoCatalogo[] = [
   {
     clave: "19.01.008",
     nombre: "Anestesia de Alta Especialidad en Trasplante Hepático",
-    tipoAnestesiaKey: "alta_especialidad_trasplante_hepatico",
+    tipoAnestesiaKey: "19.01.008", // Usa la clave directa como está en DB
   },
   {
     clave: "19.01.009",
     nombre: "Anestesia de Alta Especialidad en Trasplante Renal",
-    tipoAnestesiaKey: "alta_especialidad_trasplante",
+    tipoAnestesiaKey: "19.01.009", // Usa la clave directa como está en DB
   },
   {
     clave: "19.01.010",
     nombre: "Cuidados Anestésicos Monitoreados",
-    tipoAnestesiaKey: "cuidados_anestesicos_monitoreados",
+    tipoAnestesiaKey: "19.01.010", // Usa la clave directa como está en DB
   },
 ];
 

@@ -728,6 +728,51 @@ export type Database = {
           },
         ]
       }
+      folios_insumos_adicionales: {
+        Row: {
+          cantidad: number
+          created_at: string
+          created_by: string | null
+          folio_id: string
+          id: string
+          insumo_id: string
+          motivo: string | null
+        }
+        Insert: {
+          cantidad?: number
+          created_at?: string
+          created_by?: string | null
+          folio_id: string
+          id?: string
+          insumo_id: string
+          motivo?: string | null
+        }
+        Update: {
+          cantidad?: number
+          created_at?: string
+          created_by?: string | null
+          folio_id?: string
+          id?: string
+          insumo_id?: string
+          motivo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folios_insumos_adicionales_folio_id_fkey"
+            columns: ["folio_id"]
+            isOneToOne: false
+            referencedRelation: "folios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folios_insumos_adicionales_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       formatos_generados: {
         Row: {
           created_at: string

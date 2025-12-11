@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, AlertCircle, AlertTriangle, Calendar, LayoutGrid, Table2 } from 'lucide-react';
@@ -10,6 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import InsumoForm from '@/components/forms/InsumoForm';
 import InsumoDetailDialog from '@/components/dialogs/InsumoDetailDialog';
+import { InsumoGroupedCard } from '@/components/InsumoGroupedCard';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useHospital } from '@/contexts/HospitalContext';
@@ -24,6 +25,7 @@ interface InventarioItem {
   cantidad_actual: number;
   ubicacion: string;
   estatus: string;
+  insumo_catalogo_id: string;
   insumos_catalogo: {
     id: string;
     nombre: string;
@@ -34,6 +36,21 @@ interface InventarioItem {
     presentacion: string;
     tipo: string;
   };
+}
+
+interface GroupedInsumo {
+  insumo_catalogo_id: string;
+  nombre: string;
+  clave: string | null;
+  tipo: string;
+  stockTotal: number;
+  lotes: {
+    id: string;
+    lote: string;
+    cantidad_actual: number;
+    fecha_caducidad: string | null;
+    ubicacion: string;
+  }[];
 }
 
 const Insumos = () => {
@@ -249,7 +266,63 @@ const Insumos = () => {
     return days <= 60 && days >= 0;
   };
 
-  // Filtrar inventario
+  // Agrupar inventario por insumo_catalogo_id
+  const groupedInsumos = useMemo((): GroupedInsumo[] => {
+    const groups = new Map<string, GroupedInsumo>();
+    
+    inventario.forEach(item => {
+      if (!item.insumos_catalogo) return;
+      
+      const catalogoId = item.insumo_catalogo_id || item.insumos_catalogo.id;
+      const existing = groups.get(catalogoId);
+      
+      if (existing) {
+        existing.stockTotal += item.cantidad_actual;
+        existing.lotes.push({
+          id: item.id,
+          lote: item.lote,
+          cantidad_actual: item.cantidad_actual,
+          fecha_caducidad: item.fecha_caducidad,
+          ubicacion: item.ubicacion
+        });
+      } else {
+        groups.set(catalogoId, {
+          insumo_catalogo_id: catalogoId,
+          nombre: item.insumos_catalogo.nombre,
+          clave: item.insumos_catalogo.clave,
+          tipo: item.insumos_catalogo.tipo || 'insumo',
+          stockTotal: item.cantidad_actual,
+          lotes: [{
+            id: item.id,
+            lote: item.lote,
+            cantidad_actual: item.cantidad_actual,
+            fecha_caducidad: item.fecha_caducidad,
+            ubicacion: item.ubicacion
+          }]
+        });
+      }
+    });
+    
+    return Array.from(groups.values());
+  }, [inventario]);
+
+  // Filtrar inventario agrupado
+  const filteredGroupedInsumos = useMemo(() => {
+    return groupedInsumos.filter(item => {
+      const matchesSearch = 
+        item.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.clave?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStockBajo = !filterStockBajo || item.stockTotal < 10;
+      const matchesProximoCaducar = !filterProximosCaducar || 
+        item.lotes.some(l => isCaducidadProxima(l.fecha_caducidad || ''));
+      const matchesTipo = filterTipo === 'todos' || item.tipo === filterTipo;
+
+      return matchesSearch && matchesStockBajo && matchesProximoCaducar && matchesTipo;
+    });
+  }, [groupedInsumos, searchTerm, filterStockBajo, filterProximosCaducar, filterTipo]);
+
+  // Filtrar inventario para vista de tabla (mantiene lotes individuales)
   const filteredInventario = inventario.filter(item => {
     const matchesSearch = 
       item.insumos_catalogo?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -263,8 +336,10 @@ const Insumos = () => {
     return matchesSearch && matchesStockBajo && matchesProximoCaducar && matchesTipo;
   });
 
-  const stockBajo = inventario.filter(i => i.cantidad_actual < 10).length;
-  const proximosVencer = inventario.filter(i => isCaducidadProxima(i.fecha_caducidad)).length;
+  const stockBajoCount = groupedInsumos.filter(i => i.stockTotal < 10).length;
+  const proximosVencerCount = groupedInsumos.filter(i => 
+    i.lotes.some(l => isCaducidadProxima(l.fecha_caducidad || ''))
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -316,8 +391,8 @@ const Insumos = () => {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-2">
-                  <div className="text-2xl font-bold text-orange-500">{stockBajo}</div>
-                  {stockBajo > 0 && <AlertTriangle className="h-5 w-5 text-orange-500" />}
+                  <div className="text-2xl font-bold text-orange-500">{stockBajoCount}</div>
+                  {stockBajoCount > 0 && <AlertTriangle className="h-5 w-5 text-orange-500" />}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Requieren reabastecimiento
@@ -333,8 +408,8 @@ const Insumos = () => {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-2">
-                  <div className="text-2xl font-bold text-red-500">{proximosVencer}</div>
-                  {proximosVencer > 0 && <Calendar className="h-5 w-5 text-red-500" />}
+                  <div className="text-2xl font-bold text-red-500">{proximosVencerCount}</div>
+                  {proximosVencerCount > 0 && <Calendar className="h-5 w-5 text-red-500" />}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Menos de 60 días
@@ -403,75 +478,32 @@ const Insumos = () => {
             <div className="text-center py-12 text-muted-foreground">
               Cargando inventario...
             </div>
-          ) : filteredInventario.length === 0 ? (
+          ) : filteredGroupedInsumos.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
                 No se encontraron insumos que coincidan con los filtros
               </CardContent>
             </Card>
           ) : viewMode === 'cards' ? (
-            // Vista de tarjetas (original)
+            // Vista de tarjetas agrupadas
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredInventario.map((item) => {
-                const status = getStockStatus(item.cantidad_actual);
-                const proximoVencer = isCaducidadProxima(item.fecha_caducidad);
-
-                return (
-                  <Card
-                    key={item.id}
-                    className="cursor-pointer hover:shadow-md transition-shadow"
-                    onClick={() => {
-                      setSelectedInsumo(item);
+              {filteredGroupedInsumos.map((item) => (
+                <InsumoGroupedCard
+                  key={item.insumo_catalogo_id}
+                  nombre={item.nombre}
+                  clave={item.clave}
+                  tipo={item.tipo}
+                  stockTotal={item.stockTotal}
+                  lotes={item.lotes}
+                  onSelectLote={(lote) => {
+                    const inventarioItem = inventario.find(i => i.id === lote.id);
+                    if (inventarioItem) {
+                      setSelectedInsumo(inventarioItem);
                       setShowDetail(true);
-                    }}
-                  >
-                    <CardHeader>
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-base">
-                          {item.insumos_catalogo?.nombre || 'Sin nombre'}
-                        </CardTitle>
-                        <Badge variant={status.variant}>{status.label}</Badge>
-                      </div>
-                      {item.insumos_catalogo?.presentacion && (
-                        <CardDescription className="text-xs">
-                          {item.insumos_catalogo.presentacion}
-                        </CardDescription>
-                      )}
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <p className="text-muted-foreground text-xs">Clave</p>
-                          <p className="font-medium">{item.insumos_catalogo?.clave || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground text-xs">Tipo</p>
-                          <Badge variant="outline" className="text-xs">
-                            {item.insumos_catalogo?.tipo || 'insumo'}
-                          </Badge>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground text-xs">Lote</p>
-                          <p className="font-medium">{item.lote || 'N/A'}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground text-xs">Stock Actual</p>
-                          <p className="font-bold text-lg">{item.cantidad_actual}</p>
-                        </div>
-                      </div>
-                      
-                      {proximoVencer && (
-                        <Alert variant="destructive" className="py-2">
-                          <Calendar className="h-3 w-3" />
-                          <AlertDescription className="text-xs">
-                            Caduca: {item.fecha_caducidad ? format(new Date(item.fecha_caducidad), 'dd/MM/yyyy') : 'N/A'}
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                    }
+                  }}
+                />
+              ))}
             </div>
           ) : (
             // Vista de tabla

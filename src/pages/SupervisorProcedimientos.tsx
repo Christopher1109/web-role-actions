@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { RefreshCw, CheckCircle2, Building2, ClipboardList, Save, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Building2, ClipboardList, Save, AlertTriangle } from 'lucide-react';
+import { PROCEDIMIENTOS_CATALOG, getProcedimientoLabel } from '@/constants/procedimientosCatalog';
 
 interface Hospital {
   id: string;
@@ -16,23 +17,8 @@ interface Hospital {
   display_name: string;
 }
 
-interface Procedimiento {
-  id: string;
-  tipo_anestesia: string;
-  nombre?: string;
-}
-
-interface HospitalProcedimiento {
-  id: string;
-  hospital_id: string;
-  procedimiento_clave: string;
-  procedimiento_nombre: string;
-}
-
 const SupervisorProcedimientos = () => {
   const [hospitalesAsignados, setHospitalesAsignados] = useState<Hospital[]>([]);
-  const [procedimientos, setProcedimientos] = useState<Procedimiento[]>([]);
-  const [hospitalProcedimientos, setHospitalProcedimientos] = useState<HospitalProcedimiento[]>([]);
   const [selectedHospital, setSelectedHospital] = useState<string>('');
   const [selectedProcedimientos, setSelectedProcedimientos] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -97,20 +83,6 @@ const SupervisorProcedimientos = () => {
 
       setHospitalesAsignados(hospitalesData);
 
-      // Fetch unique procedure types from anestesia_insumos
-      const { data: tiposAnestesia } = await supabase
-        .from('anestesia_insumos')
-        .select('tipo_anestesia')
-        .order('tipo_anestesia');
-
-      const uniqueTipos = [...new Set(tiposAnestesia?.map(t => t.tipo_anestesia) || [])];
-      const procs = uniqueTipos.map((tipo, idx) => ({
-        id: `proc-${idx}`,
-        tipo_anestesia: tipo,
-        nombre: getNombreProcedimiento(tipo)
-      }));
-      setProcedimientos(procs);
-
       if (hospitalesData.length > 0) {
         setSelectedHospital(hospitalesData[0].id);
       }
@@ -126,29 +98,15 @@ const SupervisorProcedimientos = () => {
     try {
       const { data } = await supabase
         .from('hospital_procedimientos')
-        .select('*')
-        .eq('hospital_id', hospitalId);
+        .select('procedimiento_clave')
+        .eq('hospital_id', hospitalId)
+        .eq('activo', true);
 
-      setHospitalProcedimientos(data || []);
-      
       const selected = new Set(data?.map(hp => hp.procedimiento_clave) || []);
       setSelectedProcedimientos(selected);
     } catch (error) {
       console.error('Error fetching hospital procedures:', error);
     }
-  };
-
-  const getNombreProcedimiento = (tipo: string): string => {
-    const nombres: Record<string, string> = {
-      'general_balanceada_adulto': 'Anestesia General Balanceada Adulto (19.01.001)',
-      'general_alta_especialidad': 'Anestesia General de Alta Especialidad (19.01.002)',
-      'general_endovenosa': 'Anestesia General Endovenosa (19.01.003)',
-      'general_balanceada_pediatrica': 'Anestesia General Balanceada Pediátrica (19.01.004)',
-      'locorregional': 'Anestesia Loco Regional (19.01.005)',
-      'sedacion': 'Sedación (19.01.006)',
-      'alta_especialidad_trasplante': 'Anestesia de Alta Especialidad en Trasplante Renal (19.01.009)'
-    };
-    return nombres[tipo] || tipo;
   };
 
   const toggleProcedimiento = (clave: string) => {
@@ -159,6 +117,14 @@ const SupervisorProcedimientos = () => {
       newSelected.add(clave);
     }
     setSelectedProcedimientos(newSelected);
+  };
+
+  const toggleAll = () => {
+    if (selectedProcedimientos.size === PROCEDIMIENTOS_CATALOG.length) {
+      setSelectedProcedimientos(new Set());
+    } else {
+      setSelectedProcedimientos(new Set(PROCEDIMIENTOS_CATALOG.map(p => p.clave)));
+    }
   };
 
   const guardarProcedimientos = async () => {
@@ -176,12 +142,15 @@ const SupervisorProcedimientos = () => {
 
       // Insert new
       if (selectedProcedimientos.size > 0) {
-        const inserts = Array.from(selectedProcedimientos).map(clave => ({
-          hospital_id: selectedHospital,
-          procedimiento_clave: clave,
-          procedimiento_nombre: getNombreProcedimiento(clave),
-          created_by: user?.id
-        }));
+        const inserts = Array.from(selectedProcedimientos).map(clave => {
+          const proc = PROCEDIMIENTOS_CATALOG.find(p => p.clave === clave);
+          return {
+            hospital_id: selectedHospital,
+            procedimiento_clave: clave,
+            procedimiento_nombre: proc?.nombre || clave,
+            created_by: user?.id
+          };
+        });
 
         const { error } = await supabase
           .from('hospital_procedimientos')
@@ -277,13 +246,18 @@ const SupervisorProcedimientos = () => {
                 <ClipboardList className="h-5 w-5" />
                 Procedimientos Autorizados
                 <Badge variant="secondary" className="ml-2">
-                  {selectedProcedimientos.size} seleccionados
+                  {selectedProcedimientos.size} / {PROCEDIMIENTOS_CATALOG.length}
                 </Badge>
               </div>
-              <Button onClick={guardarProcedimientos} disabled={saving}>
-                <Save className="mr-2 h-4 w-4" />
-                {saving ? 'Guardando...' : 'Guardar Cambios'}
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={toggleAll} variant="outline" size="sm">
+                  {selectedProcedimientos.size === PROCEDIMIENTOS_CATALOG.length ? 'Desmarcar todos' : 'Seleccionar todos'}
+                </Button>
+                <Button onClick={guardarProcedimientos} disabled={saving}>
+                  <Save className="mr-2 h-4 w-4" />
+                  {saving ? 'Guardando...' : 'Guardar Cambios'}
+                </Button>
+              </div>
             </CardTitle>
             <p className="text-sm text-muted-foreground">
               Hospital: <strong>{selectedHospitalData?.display_name || selectedHospitalData?.nombre}</strong>
@@ -295,27 +269,27 @@ const SupervisorProcedimientos = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12">Activo</TableHead>
+                    <TableHead className="w-28">Clave</TableHead>
                     <TableHead>Procedimiento</TableHead>
-                    <TableHead>Clave</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {procedimientos.map(proc => (
+                  {PROCEDIMIENTOS_CATALOG.map(proc => (
                     <TableRow 
-                      key={proc.tipo_anestesia}
-                      className={selectedProcedimientos.has(proc.tipo_anestesia) ? 'bg-primary/5' : ''}
+                      key={proc.clave}
+                      className={selectedProcedimientos.has(proc.clave) ? 'bg-primary/5' : ''}
                     >
                       <TableCell>
                         <Checkbox
-                          checked={selectedProcedimientos.has(proc.tipo_anestesia)}
-                          onCheckedChange={() => toggleProcedimiento(proc.tipo_anestesia)}
+                          checked={selectedProcedimientos.has(proc.clave)}
+                          onCheckedChange={() => toggleProcedimiento(proc.clave)}
                         />
+                      </TableCell>
+                      <TableCell className="font-mono text-sm font-semibold text-primary">
+                        {proc.clave}
                       </TableCell>
                       <TableCell className="font-medium">
                         {proc.nombre}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm text-muted-foreground">
-                        {proc.tipo_anestesia}
                       </TableCell>
                     </TableRow>
                   ))}

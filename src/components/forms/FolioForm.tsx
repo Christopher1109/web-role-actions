@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, AlertTriangle } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { PROCEDIMIENTOS_CATALOG, PROCEDIMIENTOS_BY_CLAVE, getTipoAnestesiaKey } from "@/constants/procedimientosCatalog";
 
 type Insumo = {
   id: string;
@@ -50,32 +51,16 @@ type InsumoAdicional = {
   motivo?: string;
 };
 
-/*
- * Mapeo de nombres de procedimientos (como vienen de la tabla procedimientos)
- * a los valores snake_case usados en anestesia_insumos
- */
-const procedimientoToTipoAnestesia: Record<string, string> = {
-  Sedación: "sedacion",
-  "Anestesia Loco Regional": "loco_regional",
-  "Anestesia General Loco Regional": "loco_regional",
-  "Anestesia General Balanceada Adulto": "general_balanceada_adulto",
-  "Anestesia General Balanceada Pediátrica": "general_balanceada_pediatrica",
-  "Anestesia General Endovenosa": "general_endovenosa",
-  "Anestesia General de Alta Especialidad": "alta_especialidad",
-  "Alta Especialidad Trasplante Renal": "alta_especialidad_trasplante",
+// Mapeo de clave de procedimiento a tipo_anestesia key para buscar insumos
+const getClaveToTipoAnestesia = (clave: string): string => {
+  return getTipoAnestesiaKey(clave);
 };
 
-// Mapeo de labels para mostrar nombres amigables
-const tipoAnestesiaLabels: Record<string, string> = {
-  Sedación: "Sedación / Cuidados anestésicos monitoreados",
-  "Anestesia Loco Regional": "Loco regional",
-  "Anestesia General Loco Regional": "Loco regional",
-  "Anestesia General Balanceada Adulto": "General balanceada adulto",
-  "Anestesia General Balanceada Pediátrica": "General balanceada pediátrica",
-  "Anestesia General Endovenosa": "General endovenosa",
-  "Anestesia General de Alta Especialidad": "Alta especialidad",
-  "Alta Especialidad Trasplante Renal": "Alta especialidad trasplante renal",
-  anestesia_mixta: "Anestesia mixta",
+// Mapeo de labels para mostrar nombres amigables (ahora usa catálogo)
+const getProcedimientoLabel = (clave: string): string => {
+  if (clave === "anestesia_mixta") return "Anestesia Mixta";
+  const proc = PROCEDIMIENTOS_BY_CLAVE.get(clave);
+  return proc ? `${proc.clave} - ${proc.nombre}` : clave;
 };
 
 // Esquema de validación de los campos del folio T33
@@ -204,50 +189,26 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         if (hpError) throw hpError;
 
         if (hospitalProcs && hospitalProcs.length > 0) {
-          // Use authorized procedures from hospital_procedimientos
+          // Use authorized procedures from hospital_procedimientos (using clave as value)
           const tiposDisponibles = hospitalProcs.map((proc) => ({
-            value: proc.procedimiento_nombre,
-            label: tipoAnestesiaLabels[proc.procedimiento_nombre] || proc.procedimiento_nombre,
+            value: proc.procedimiento_clave, // Ahora usamos la clave como value
+            label: getProcedimientoLabel(proc.procedimiento_clave),
           }));
 
           // Add mixed anesthesia option if multiple types available
           if (tiposDisponibles.length > 1) {
             tiposDisponibles.push({
               value: "anestesia_mixta",
-              label: tipoAnestesiaLabels.anestesia_mixta,
+              label: "Anestesia Mixta",
             });
           }
 
           setTiposAnestesiaDisponibles(tiposDisponibles);
           console.log(`✅ Procedimientos autorizados para ${selectedHospital.display_name}:`, tiposDisponibles.length);
         } else {
-          // Fallback: try legacy procedimientos table
-          const { data: procedimientos, error } = await supabase
-            .from("procedimientos")
-            .select("nombre, descripcion")
-            .eq("hospital_id", selectedHospital.id);
-
-          if (error) throw error;
-
-          if (procedimientos && procedimientos.length > 0) {
-            const tiposDisponibles = procedimientos.map((proc) => ({
-              value: proc.nombre,
-              label: tipoAnestesiaLabels[proc.nombre] || proc.descripcion || proc.nombre,
-            }));
-
-            if (tiposDisponibles.length > 1) {
-              tiposDisponibles.push({
-                value: "anestesia_mixta",
-                label: tipoAnestesiaLabels.anestesia_mixta,
-              });
-            }
-
-            setTiposAnestesiaDisponibles(tiposDisponibles);
-          } else {
-            console.warn(`⚠️ No hay procedimientos configurados para ${selectedHospital.display_name}`);
-            setTiposAnestesiaDisponibles([]);
-            toast.error("Este hospital no tiene tipos de anestesia autorizados. Contacte al Supervisor.");
-          }
+          console.warn(`⚠️ No hay procedimientos configurados para ${selectedHospital.display_name}`);
+          setTiposAnestesiaDisponibles([]);
+          toast.error("Este hospital no tiene tipos de anestesia autorizados. Contacte al Gerente de Operaciones.");
         }
       } catch (error) {
         console.error("Error al cargar procedimientos del hospital:", error);
@@ -337,18 +298,18 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   };
 
   /**
-   * Carga los insumos de una anestesia específica. Utiliza el mapa
-   * tipoAnestesiaToDb para traducir el slug del select al nombre real de
-   * la tabla `anestesia_insumos`.
+   * Carga los insumos de una anestesia específica. Utiliza la clave del
+   * procedimiento para obtener el tipo_anestesia correspondiente en la
+   * tabla `anestesia_insumos`.
    */
-  const loadInsumosForTipo = async (tipo: string): Promise<Insumo[]> => {
-    if (!tipo) return [];
+  const loadInsumosForTipo = async (clave: string): Promise<Insumo[]> => {
+    if (!clave) return [];
 
     try {
-      // Convertir el nombre del procedimiento al valor snake_case
-      const tipoDb = procedimientoToTipoAnestesia[tipo] ?? tipo;
+      // Convertir la clave del procedimiento al tipo_anestesia key
+      const tipoDb = getClaveToTipoAnestesia(clave);
 
-      console.log(`🔍 Buscando insumos para tipo: "${tipo}" → "${tipoDb}"`);
+      console.log(`🔍 Buscando insumos para clave: "${clave}" → tipo: "${tipoDb}"`);
 
       const { data: anestesiaInsumos, error } = (await supabase
         .from("anestesia_insumos")

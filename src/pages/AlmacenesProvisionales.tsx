@@ -185,16 +185,13 @@ const AlmacenesProvisionales = () => {
     }
 
     try {
-      // Obtener insumos del procedimiento
+      // Obtener insumos del procedimiento usando el campo 'nota' como descripción
       const { data: anestesiaInsumos, error } = await supabase
         .from('anestesia_insumos')
-        .select(`
-          insumo_id,
-          cantidad_default,
-          insumo:insumos(id, nombre, clave)
-        `)
+        .select('nota, cantidad_default')
         .eq('tipo_anestesia', procedimientoSeleccionado)
-        .eq('activo', true);
+        .eq('activo', true)
+        .not('nota', 'is', null);
 
       if (error) throw error;
 
@@ -203,32 +200,46 @@ const AlmacenesProvisionales = () => {
         return;
       }
 
-      // Crear mapa de insumo_id a nombre para buscar en inventario
-      const insumoNombres = new Map<string, { nombre: string; cantidad: number }>();
+      console.log('Insumos del procedimiento:', anestesiaInsumos.length);
+
+      // Crear función de normalización para comparar nombres
+      const normalizar = (texto: string): string => {
+        return texto
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[:\-,;.\/\(\)]/g, " ")
+          .replace(/\s+/g, " ")
+          .toUpperCase()
+          .trim();
+      };
+
+      // Crear mapa de notas normalizadas a cantidades
+      const notasMap = new Map<string, number>();
       anestesiaInsumos.forEach(ai => {
-        if (ai.insumo?.nombre) {
-          insumoNombres.set(ai.insumo.nombre.toUpperCase().trim(), {
-            nombre: ai.insumo.nombre,
-            cantidad: ai.cantidad_default || 1
-          });
+        if (ai.nota) {
+          const notaNorm = normalizar(ai.nota);
+          notasMap.set(notaNorm, ai.cantidad_default || 1);
         }
       });
 
-      // Buscar en inventario general por nombre (ya que los IDs pueden no coincidir)
+      // Buscar en inventario general por coincidencia parcial de nombre
       const nuevasCantidades: Record<string, number> = { ...cantidadesTraspaso };
       const nuevosSeleccionados = new Set(seleccionados);
       let encontrados = 0;
 
       for (const item of inventarioGeneral) {
-        const nombreUpper = item.insumo?.nombre?.toUpperCase().trim() || '';
-        const match = insumoNombres.get(nombreUpper);
+        const nombreNorm = normalizar(item.insumo?.nombre || '');
         
-        if (match) {
-          const cantidadRequerida = Math.min(match.cantidad, item.cantidad_actual);
-          if (cantidadRequerida > 0) {
-            nuevasCantidades[item.id] = cantidadRequerida;
-            nuevosSeleccionados.add(item.id);
-            encontrados++;
+        // Buscar coincidencia - el nombre del inventario contiene la nota o viceversa
+        for (const [notaNorm, cantidad] of notasMap.entries()) {
+          if (nombreNorm.includes(notaNorm) || notaNorm.includes(nombreNorm.substring(0, 30))) {
+            const cantidadRequerida = Math.min(cantidad, item.cantidad_actual);
+            if (cantidadRequerida > 0) {
+              nuevasCantidades[item.id] = cantidadRequerida;
+              nuevosSeleccionados.add(item.id);
+              encontrados++;
+              break;
+            }
           }
         }
       }
@@ -329,21 +340,31 @@ const AlmacenesProvisionales = () => {
     }
 
     setProcesando(true);
+    let procesados = 0;
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
       for (const [inventarioId, cantidad] of itemsTraspaso) {
         const item = inventarioGeneral.find(i => i.id === inventarioId);
-        if (!item || cantidad > item.cantidad_actual) continue;
+        if (!item || cantidad > item.cantidad_actual) {
+          console.log('Item saltado:', inventarioId, 'cantidad:', cantidad);
+          continue;
+        }
 
         // Descontar del inventario general
-        await supabase
+        const { error: errorUpdate } = await supabase
           .from('inventario_hospital')
           .update({
             cantidad_actual: item.cantidad_actual - cantidad,
             updated_at: new Date().toISOString()
           })
           .eq('id', inventarioId);
+
+        if (errorUpdate) {
+          console.error('Error actualizando inventario:', errorUpdate);
+          continue;
+        }
 
         // Agregar al inventario provisional
         const { data: existente } = await supabase
@@ -354,25 +375,33 @@ const AlmacenesProvisionales = () => {
           .maybeSingle();
 
         if (existente) {
-          await supabase
+          const { error: errorUpdateProv } = await supabase
             .from('almacen_provisional_inventario')
             .update({
               cantidad_disponible: (existente.cantidad_disponible || 0) + cantidad,
               updated_at: new Date().toISOString()
             })
             .eq('id', existente.id);
+            
+          if (errorUpdateProv) {
+            console.error('Error actualizando provisional:', errorUpdateProv);
+          }
         } else {
-          await supabase
+          const { error: errorInsertProv } = await supabase
             .from('almacen_provisional_inventario')
             .insert({
               almacen_provisional_id: selectedAlmacen.id,
               insumo_catalogo_id: item.insumo_catalogo_id,
               cantidad_disponible: cantidad
             });
+            
+          if (errorInsertProv) {
+            console.error('Error insertando provisional:', errorInsertProv);
+          }
         }
 
         // Registrar movimiento
-        await supabase
+        const { error: errorMov } = await supabase
           .from('movimientos_almacen_provisional')
           .insert({
             almacen_provisional_id: selectedAlmacen.id,
@@ -383,11 +412,22 @@ const AlmacenesProvisionales = () => {
             usuario_id: user?.id,
             observaciones: 'Traspaso desde almacén general'
           });
+          
+        if (errorMov) {
+          console.error('Error registrando movimiento:', errorMov);
+        }
+        
+        procesados++;
       }
 
-      toast.success(`${itemsTraspaso.length} insumos traspasados al almacén provisional`);
-      setDialogTraspasoOpen(false);
-      fetchInventarioProvisional(selectedAlmacen.id);
+      if (procesados > 0) {
+        toast.success(`${procesados} insumos traspasados al almacén provisional`);
+        setDialogTraspasoOpen(false);
+        // Refrescar datos
+        await fetchInventarioProvisional(selectedAlmacen.id);
+      } else {
+        toast.error('No se pudo traspasar ningún insumo');
+      }
     } catch (error) {
       console.error('Error executing transfer:', error);
       toast.error('Error al realizar traspaso');

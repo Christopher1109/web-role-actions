@@ -421,7 +421,7 @@ const Folios = ({ userRole }: FoliosProps) => {
 
         const provisionalMap = new Map((inventarioProvisional || []).map((inv) => [inv.insumo_catalogo_id, inv]));
 
-        const updatePromises: Array<Promise<{ error: any }>> = [];
+        const updatePromises: Array<PromiseLike<{ error: any }>> = [];
         const movimientosDevolucion: any[] = [];
 
         for (const folioInsumo of todosLosInsumos) {
@@ -436,7 +436,8 @@ const Folios = ({ userRole }: FoliosProps) => {
                   cantidad_disponible: itemProvisional.cantidad_disponible + folioInsumo.cantidad,
                   updated_at: new Date().toISOString(),
                 })
-                .eq("id", itemProvisional.id),
+                .eq("id", itemProvisional.id)
+                .select(),
             );
             // Actualizar mapa para evitar conflictos en múltiples items del mismo insumo
             itemProvisional.cantidad_disponible += folioInsumo.cantidad;
@@ -447,7 +448,7 @@ const Folios = ({ userRole }: FoliosProps) => {
                 almacen_provisional_id: almacenProvisionalId,
                 insumo_catalogo_id: folioInsumo.insumo_id,
                 cantidad_disponible: folioInsumo.cantidad,
-              }),
+              }).select(),
             );
           }
 

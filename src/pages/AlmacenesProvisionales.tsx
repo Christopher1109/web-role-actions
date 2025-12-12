@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useHospital } from '@/contexts/HospitalContext';
 import { Plus, Warehouse, ArrowRight, ArrowLeft, Package, RefreshCw, Search, Trash2, CheckSquare } from 'lucide-react';
-
+import { assertSupabaseOk, createTimer, logInventoryOp } from '@/utils/supabaseAssert';
 interface AlmacenProvisional {
   id: string;
   nombre: string;
@@ -234,6 +234,8 @@ const AlmacenesProvisionales = () => {
   };
 
   const ejecutarTraspaso = async () => {
+    const timer = createTimer('ejecutarTraspaso');
+    
     if (!selectedHospital || !selectedAlmacen) {
       toast.error('No hay almacén seleccionado');
       return;
@@ -247,6 +249,12 @@ const AlmacenesProvisionales = () => {
       return;
     }
 
+    console.log('🔄 [TRASPASO] Iniciando:', {
+      hospital_id: selectedHospital.id,
+      almacen_provisional_id: selectedAlmacen.id,
+      items: itemsTraspaso.length
+    });
+
     setProcesando(true);
     setProgresoTraspaso(0);
     setMensajeProgreso('Preparando traspaso...');
@@ -258,19 +266,27 @@ const AlmacenesProvisionales = () => {
       const totalItems = itemsTraspaso.length;
 
       // Obtener todos los lotes del inventario general en una sola query
+      timer.log('Cargando inventario general');
       setMensajeProgreso('Cargando inventario...');
-      const { data: todosLotes } = await supabase
+      const lotesResult = await supabase
         .from('inventario_hospital')
         .select('id, insumo_catalogo_id, cantidad_actual')
         .eq('hospital_id', hospitalId)
         .gt('cantidad_actual', 0)
         .order('created_at', { ascending: true });
 
+      const todosLotes = assertSupabaseOk(lotesResult, 'Cargar inventario general', { throwError: false });
+      logInventoryOp('Carga inventario general', { hospital_id: hospitalId, result: { count: todosLotes?.length || 0 } });
+
       // Obtener inventario provisional actual en una sola query
-      const { data: inventarioProv } = await supabase
+      timer.log('Cargando inventario provisional');
+      const provResult = await supabase
         .from('almacen_provisional_inventario')
         .select('id, insumo_catalogo_id, cantidad_disponible')
         .eq('almacen_provisional_id', almacenId);
+
+      const inventarioProv = assertSupabaseOk(provResult, 'Cargar inventario provisional', { throwError: false });
+      logInventoryOp('Carga inventario provisional', { almacen_provisional_id: almacenId, result: { count: inventarioProv?.length || 0 } });
 
       // Crear mapas para acceso rápido O(1)
       const lotesPorInsumo = new Map<string, Array<{ id: string; cantidad_actual: number }>>();
@@ -286,9 +302,10 @@ const AlmacenesProvisionales = () => {
       }
 
       // Preparar todas las operaciones
+      timer.log('Preparando operaciones');
       setMensajeProgreso('Procesando traspasos...');
-      const updateLotes: Array<{ id: string; cantidad_actual: number }> = [];
-      const updateProv: Array<{ id: string; cantidad_disponible: number }> = [];
+      const updateLotes: Array<{ id: string; cantidad_actual: number; insumo_id: string }> = [];
+      const updateProv: Array<{ id: string; cantidad_disponible: number; insumo_id: string }> = [];
       const insertProv: Array<{ almacen_provisional_id: string; insumo_catalogo_id: string; cantidad_disponible: number }> = [];
       const movimientos: Array<{
         almacen_provisional_id: string;
@@ -309,7 +326,7 @@ const AlmacenesProvisionales = () => {
         for (const lote of lotes) {
           if (cantidadRestante <= 0) break;
           const aDescontar = Math.min(cantidadRestante, lote.cantidad_actual);
-          updateLotes.push({ id: lote.id, cantidad_actual: lote.cantidad_actual - aDescontar });
+          updateLotes.push({ id: lote.id, cantidad_actual: lote.cantidad_actual - aDescontar, insumo_id: insumoCatalogoId });
           cantidadRestante -= aDescontar;
         }
 
@@ -318,7 +335,8 @@ const AlmacenesProvisionales = () => {
         if (existente) {
           updateProv.push({
             id: existente.id,
-            cantidad_disponible: (existente.cantidad_disponible || 0) + cantidadSolicitada
+            cantidad_disponible: (existente.cantidad_disponible || 0) + cantidadSolicitada,
+            insumo_id: insumoCatalogoId
           });
         } else {
           insertProv.push({
@@ -343,49 +361,94 @@ const AlmacenesProvisionales = () => {
         setProgresoTraspaso(Math.round((procesados / totalItems) * 50));
       }
 
+      console.log('📦 [TRASPASO] Operaciones preparadas:', {
+        updateLotes: updateLotes.length,
+        updateProv: updateProv.length,
+        insertProv: insertProv.length,
+        movimientos: movimientos.length
+      });
+
       // Ejecutar todas las operaciones en paralelo por tipo
+      timer.log('Ejecutando updates de lotes');
       setMensajeProgreso(`Guardando ${procesados} traspasos...`);
       
       // Updates de lotes en batches de 50
       const BATCH_SIZE = 50;
       for (let i = 0; i < updateLotes.length; i += BATCH_SIZE) {
         const batch = updateLotes.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(lote =>
+        const results = await Promise.all(batch.map(lote =>
           supabase.from('inventario_hospital')
             .update({ cantidad_actual: lote.cantidad_actual, updated_at: new Date().toISOString() })
             .eq('id', lote.id)
         ));
+        
+        // Verificar errores en batch
+        results.forEach((r, idx) => {
+          if (r.error) {
+            console.error(`❌ [TRASPASO] Error update lote ${batch[idx].id}:`, r.error);
+          }
+        });
+        
         setProgresoTraspaso(50 + Math.round((i / updateLotes.length) * 20));
       }
 
-      // Updates/inserts de provisional
+      // Updates de provisional
+      timer.log('Ejecutando updates provisional');
       if (updateProv.length > 0) {
-        await Promise.all(updateProv.map(item =>
+        const provResults = await Promise.all(updateProv.map(item =>
           supabase.from('almacen_provisional_inventario')
             .update({ cantidad_disponible: item.cantidad_disponible, updated_at: new Date().toISOString() })
             .eq('id', item.id)
         ));
+        
+        provResults.forEach((r, idx) => {
+          logInventoryOp(`Update provisional ${updateProv[idx].insumo_id}`, {
+            almacen_provisional_id: almacenId,
+            insumo_catalogo_id: updateProv[idx].insumo_id,
+            cantidad: updateProv[idx].cantidad_disponible,
+            error: r.error
+          });
+        });
       }
 
+      // Inserts de provisional
+      timer.log('Ejecutando inserts provisional');
       if (insertProv.length > 0) {
-        await supabase.from('almacen_provisional_inventario').insert(insertProv);
+        const insertResult = await supabase.from('almacen_provisional_inventario').insert(insertProv);
+        if (insertResult.error) {
+          console.error('❌ [TRASPASO] Error insert provisional:', insertResult.error);
+          toast.error('Error al insertar en provisional', { description: insertResult.error.message });
+        } else {
+          console.log('✅ [TRASPASO] Insertados en provisional:', insertProv.length);
+        }
       }
       setProgresoTraspaso(80);
 
       // Insertar movimientos en batch
+      timer.log('Insertando movimientos');
       if (movimientos.length > 0) {
-        await supabase.from('movimientos_almacen_provisional').insert(movimientos);
+        const movResult = await supabase.from('movimientos_almacen_provisional').insert(movimientos);
+        if (movResult.error) {
+          console.error('❌ [TRASPASO] Error insert movimientos:', movResult.error);
+        }
       }
       setProgresoTraspaso(100);
 
-      toast.success(`${procesados} insumos traspasados correctamente`);
+      const totalTime = timer.end();
+      console.log(`✅ [TRASPASO] Completado en ${totalTime.toFixed(0)}ms - ${procesados} items`);
+
+      toast.success(`${procesados} insumos traspasados correctamente`, {
+        description: `Tiempo: ${(totalTime / 1000).toFixed(1)}s`
+      });
       setDialogTraspasoOpen(false);
       setCantidadesTraspaso({});
       setSeleccionados(new Set());
       fetchInventarioProvisional(almacenId);
-    } catch (error) {
-      console.error('Error executing transfer:', error);
-      toast.error('Error al realizar traspaso');
+    } catch (error: any) {
+      console.error('❌ [TRASPASO] Error general:', error);
+      toast.error('Error al realizar traspaso', {
+        description: error.message || 'Error desconocido'
+      });
     } finally {
       setProcesando(false);
       setProgresoTraspaso(0);
@@ -400,7 +463,12 @@ const AlmacenesProvisionales = () => {
   };
 
   const ejecutarDevolucion = async () => {
-    if (!selectedHospital || !selectedAlmacen) return;
+    const timer = createTimer('ejecutarDevolucion');
+    
+    if (!selectedHospital || !selectedAlmacen) {
+      toast.error('Datos incompletos');
+      return;
+    }
 
     const itemsDevolucion = Object.entries(cantidadesDevolucion).filter(([_, cantidad]) => cantidad > 0);
     if (itemsDevolucion.length === 0) {
@@ -408,28 +476,51 @@ const AlmacenesProvisionales = () => {
       return;
     }
 
+    console.log('🔄 [DEVOLUCION] Iniciando:', {
+      hospital_id: selectedHospital.id,
+      almacen_provisional_id: selectedAlmacen.id,
+      items: itemsDevolucion.length
+    });
+
     setProcesando(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
       // Get almacen_id for general inventory
-      const { data: almacenGeneral } = await supabase
+      timer.log('Buscando almacén general');
+      const almacenResult = await supabase
         .from('almacenes')
         .select('id')
         .eq('hospital_id', selectedHospital.id)
         .maybeSingle();
 
+      const almacenGeneral = assertSupabaseOk(almacenResult, 'Buscar almacén general', { throwError: false });
+
       if (!almacenGeneral) {
-        toast.error('No se encontró almacén general');
+        toast.error('No se encontró almacén general', {
+          description: 'Verifica que el hospital tenga un almacén configurado'
+        });
         return;
       }
 
+      let successCount = 0;
+      let errorCount = 0;
+
       for (const [inventarioProvId, cantidad] of itemsDevolucion) {
         const item = inventarioProvisional.find(i => i.id === inventarioProvId);
-        if (!item || cantidad > item.cantidad_disponible) continue;
+        if (!item || cantidad > item.cantidad_disponible) {
+          console.warn(`⚠️ [DEVOLUCION] Item inválido o cantidad excede disponible:`, { inventarioProvId, cantidad, disponible: item?.cantidad_disponible });
+          continue;
+        }
+
+        logInventoryOp('Procesando devolución item', {
+          almacen_provisional_id: selectedAlmacen.id,
+          insumo_catalogo_id: item.insumo_catalogo_id,
+          cantidad
+        });
 
         // Descontar del provisional
-        await supabase
+        const updateProvResult = await supabase
           .from('almacen_provisional_inventario')
           .update({
             cantidad_disponible: item.cantidad_disponible - cantidad,
@@ -437,24 +528,36 @@ const AlmacenesProvisionales = () => {
           })
           .eq('id', inventarioProvId);
 
+        if (updateProvResult.error) {
+          console.error('❌ [DEVOLUCION] Error update provisional:', updateProvResult.error);
+          errorCount++;
+          continue;
+        }
+
         // Agregar al inventario general
-        const { data: existenteGeneral } = await supabase
+        const existenteResult = await supabase
           .from('inventario_hospital')
-          .select('*')
+          .select('id, cantidad_actual')
           .eq('hospital_id', selectedHospital.id)
           .eq('insumo_catalogo_id', item.insumo_catalogo_id)
           .maybeSingle();
 
-        if (existenteGeneral) {
-          await supabase
+        if (existenteResult.data) {
+          const updateResult = await supabase
             .from('inventario_hospital')
             .update({
-              cantidad_actual: (existenteGeneral.cantidad_actual || 0) + cantidad,
+              cantidad_actual: (existenteResult.data.cantidad_actual || 0) + cantidad,
               updated_at: new Date().toISOString()
             })
-            .eq('id', existenteGeneral.id);
+            .eq('id', existenteResult.data.id);
+
+          if (updateResult.error) {
+            console.error('❌ [DEVOLUCION] Error update inventario:', updateResult.error);
+            errorCount++;
+            continue;
+          }
         } else {
-          await supabase
+          const insertResult = await supabase
             .from('inventario_hospital')
             .insert({
               hospital_id: selectedHospital.id,
@@ -464,10 +567,16 @@ const AlmacenesProvisionales = () => {
               cantidad_inicial: cantidad,
               cantidad_minima: 10
             });
+
+          if (insertResult.error) {
+            console.error('❌ [DEVOLUCION] Error insert inventario:', insertResult.error);
+            errorCount++;
+            continue;
+          }
         }
 
         // Registrar movimiento
-        await supabase
+        const movResult = await supabase
           .from('movimientos_almacen_provisional')
           .insert({
             almacen_provisional_id: selectedAlmacen.id,
@@ -478,14 +587,31 @@ const AlmacenesProvisionales = () => {
             usuario_id: user?.id,
             observaciones: 'Devolución a almacén general'
           });
+
+        if (movResult.error) {
+          console.warn('⚠️ [DEVOLUCION] Error registrando movimiento:', movResult.error);
+        }
+
+        successCount++;
       }
 
-      toast.success(`${itemsDevolucion.length} insumos devueltos al almacén general`);
+      const totalTime = timer.end();
+      console.log(`✅ [DEVOLUCION] Completado: ${successCount} éxitos, ${errorCount} errores, ${totalTime.toFixed(0)}ms`);
+
+      if (errorCount > 0) {
+        toast.warning(`Devolución parcial: ${successCount} éxitos, ${errorCount} errores`);
+      } else {
+        toast.success(`${successCount} insumos devueltos al almacén general`);
+      }
+      
       setDialogDevolucionOpen(false);
+      setCantidadesDevolucion({});
       fetchInventarioProvisional(selectedAlmacen.id);
-    } catch (error) {
-      console.error('Error executing return:', error);
-      toast.error('Error al realizar devolución');
+    } catch (error: any) {
+      console.error('❌ [DEVOLUCION] Error general:', error);
+      toast.error('Error al realizar devolución', {
+        description: error.message || 'Error desconocido'
+      });
     } finally {
       setProcesando(false);
     }
@@ -516,12 +642,24 @@ const AlmacenesProvisionales = () => {
   };
 
   const ejecutarEliminacion = async (devolverTodo: boolean) => {
+    const timer = createTimer('ejecutarEliminacion');
+    
     if (!almacenAEliminar || !selectedHospital) {
       toast.error('Datos incompletos para eliminar');
       return;
     }
 
     const almacenIdEliminar = almacenAEliminar.id;
+    const almacenNombre = almacenAEliminar.nombre;
+    
+    console.log('🗑️ [ELIMINACION] Iniciando:', {
+      almacen_id: almacenIdEliminar,
+      nombre: almacenNombre,
+      hospital_id: selectedHospital.id,
+      devolverTodo,
+      itemsADevolver: inventarioAlmacenEliminar.length
+    });
+    
     setProcesando(true);
     
     try {
@@ -529,11 +667,14 @@ const AlmacenesProvisionales = () => {
 
       // Si hay inventario y se quiere devolver
       if (devolverTodo && inventarioAlmacenEliminar.length > 0) {
-        const { data: almacenGeneral } = await supabase
+        timer.log('Buscando almacén general para devolución');
+        const almacenResult = await supabase
           .from('almacenes')
           .select('id')
           .eq('hospital_id', selectedHospital.id)
           .maybeSingle();
+
+        const almacenGeneral = assertSupabaseOk(almacenResult, 'Buscar almacén general', { throwError: false });
 
         if (!almacenGeneral) {
           toast.error('No se encontró almacén general');
@@ -541,27 +682,38 @@ const AlmacenesProvisionales = () => {
           return;
         }
 
+        timer.log('Procesando devoluciones');
         for (const item of inventarioAlmacenEliminar) {
           const cantidad = item.cantidad_disponible;
           if (cantidad <= 0) continue;
 
-          const { data: existenteGeneral } = await supabase
+          logInventoryOp('Devolviendo item por eliminación', {
+            almacen_provisional_id: almacenIdEliminar,
+            insumo_catalogo_id: item.insumo_catalogo_id,
+            cantidad
+          });
+
+          const existenteResult = await supabase
             .from('inventario_hospital')
-            .select('*')
+            .select('id, cantidad_actual')
             .eq('hospital_id', selectedHospital.id)
             .eq('insumo_catalogo_id', item.insumo_catalogo_id)
             .maybeSingle();
 
-          if (existenteGeneral) {
-            await supabase
+          if (existenteResult.data) {
+            const updateResult = await supabase
               .from('inventario_hospital')
               .update({
-                cantidad_actual: (existenteGeneral.cantidad_actual || 0) + cantidad,
+                cantidad_actual: (existenteResult.data.cantidad_actual || 0) + cantidad,
                 updated_at: new Date().toISOString()
               })
-              .eq('id', existenteGeneral.id);
+              .eq('id', existenteResult.data.id);
+            
+            if (updateResult.error) {
+              console.error('❌ [ELIMINACION] Error actualizando inventario:', updateResult.error);
+            }
           } else {
-            await supabase
+            const insertResult = await supabase
               .from('inventario_hospital')
               .insert({
                 hospital_id: selectedHospital.id,
@@ -571,6 +723,10 @@ const AlmacenesProvisionales = () => {
                 cantidad_inicial: cantidad,
                 cantidad_minima: 10
               });
+            
+            if (insertResult.error) {
+              console.error('❌ [ELIMINACION] Error insertando inventario:', insertResult.error);
+            }
           }
 
           await supabase
@@ -588,30 +744,46 @@ const AlmacenesProvisionales = () => {
       }
 
       // Marcar almacén como inactivo
-      const { error: updateError } = await supabase
+      timer.log('Marcando almacén como inactivo');
+      const updateResult = await supabase
         .from('almacenes_provisionales')
         .update({ activo: false, updated_at: new Date().toISOString() })
         .eq('id', almacenIdEliminar);
 
-      if (updateError) throw updateError;
+      if (updateResult.error) {
+        console.error('❌ [ELIMINACION] Error marcando inactivo:', updateResult.error);
+        toast.error('Error al desactivar almacén', {
+          description: updateResult.error.message
+        });
+        throw updateResult.error;
+      }
 
-      // Limpiar estado
+      console.log('✅ [ELIMINACION] Almacén marcado como inactivo:', almacenIdEliminar);
+
+      // Limpiar estado local ANTES de refrescar
       if (selectedAlmacen?.id === almacenIdEliminar) {
         setSelectedAlmacen(null);
         setInventarioProvisional([]);
       }
       
-      // Actualizar lista desde la base de datos
-      await fetchAlmacenes();
-      
+      // Cerrar diálogo y limpiar estado
       setDialogEliminarOpen(false);
       setAlmacenAEliminar(null);
       setInventarioAlmacenEliminar([]);
       
-      toast.success('Almacén eliminado correctamente');
-    } catch (error) {
-      console.error('Error deleting warehouse:', error);
-      toast.error('Error al eliminar almacén');
+      // Actualizar lista desde la base de datos (CRÍTICO: después de cerrar diálogo)
+      timer.log('Refrescando lista de almacenes');
+      await fetchAlmacenes();
+      
+      const totalTime = timer.end();
+      console.log(`✅ [ELIMINACION] Completado en ${totalTime.toFixed(0)}ms`);
+      
+      toast.success(`Almacén "${almacenNombre}" eliminado correctamente`);
+    } catch (error: any) {
+      console.error('❌ [ELIMINACION] Error general:', error);
+      toast.error('Error al eliminar almacén', {
+        description: error.message || 'Error desconocido'
+      });
     } finally {
       setProcesando(false);
     }

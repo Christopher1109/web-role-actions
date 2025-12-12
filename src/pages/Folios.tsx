@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useHospital } from '@/contexts/HospitalContext';
 import { generateFolioPDF } from '@/utils/pdfExport';
+import { createTimer, logInventoryOp } from '@/utils/supabaseAssert';
 
 interface FoliosProps {
   userRole: UserRole;
@@ -61,6 +62,8 @@ const Folios = ({ userRole }: FoliosProps) => {
   };
 
   const handleCreateFolio = async (data: any) => {
+    const timer = createTimer('handleCreateFolio');
+    
     try {
       if (!user || !selectedHospital) {
         toast.error('Debes seleccionar un hospital para continuar');
@@ -74,6 +77,13 @@ const Folios = ({ userRole }: FoliosProps) => {
         });
         return;
       }
+
+      console.log('📝 [FOLIO] Iniciando creación:', {
+        hospital_id: selectedHospital.id,
+        almacen_provisional_id: data.almacen_provisional_id,
+        insumos: data.insumos?.length || 0,
+        insumosAdicionales: data.insumosAdicionales?.length || 0
+      });
 
       // PASO 1: Obtener almacén general (para referencia) e inventario del provisional seleccionado
       const [almacenResult, provisionalResult] = await Promise.all([
@@ -342,13 +352,20 @@ const Folios = ({ userRole }: FoliosProps) => {
         await op;
       }
 
+      const totalTime = timer.end();
+      console.log(`✅ [FOLIO] Creado exitosamente en ${totalTime.toFixed(0)}ms:`, {
+        numero_folio: numeroFolio,
+        insumos_procesados: foliosInsumos.length,
+        adicionales_procesados: foliosInsumosAdicionales.length
+      });
+
       toast.success('Folio creado exitosamente', {
         description: `Número de folio: ${numeroFolio} (consumido de ${data.almacen_provisional_nombre})`
       });
       setShowForm(false);
       fetchFolios();
     } catch (error: any) {
-      console.error('Error al crear folio:', error);
+      console.error('❌ [FOLIO] Error al crear:', error);
       toast.error('Error al crear folio', {
         description: error.message,
       });
@@ -356,10 +373,15 @@ const Folios = ({ userRole }: FoliosProps) => {
   };
 
   const handleCancelFolio = async (folioId: string) => {
+    const timer = createTimer('handleCancelFolio');
+    
     try {
       if (!user || !selectedHospital) return;
 
+      console.log('🚫 [CANCELAR FOLIO] Iniciando:', { folioId, hospital_id: selectedHospital.id });
+
       // Obtener el folio con su almacén provisional y sus insumos (regulares + adicionales)
+      timer.log('Cargando folio con insumos');
       const { data: folio, error: folioError } = await supabase
         .from('folios')
         .select(`
@@ -376,13 +398,24 @@ const Folios = ({ userRole }: FoliosProps) => {
         .eq('id', folioId)
         .single();
 
-      if (folioError) throw folioError;
+      if (folioError) {
+        console.error('❌ [CANCELAR FOLIO] Error cargando folio:', folioError);
+        throw folioError;
+      }
+
+      logInventoryOp('Folio cargado para cancelación', {
+        almacen_provisional_id: folio.almacen_provisional_id,
+        insumos_regulares: folio.folios_insumos?.length || 0,
+        insumos_adicionales: folio.folios_insumos_adicionales?.length || 0
+      });
 
       // Determinar almacén provisional origen (primero del folio, luego de movimientos)
       let almacenProvisionalId = folio.almacen_provisional_id;
       
       if (!almacenProvisionalId) {
         // Fallback: obtener desde movimientos_almacen_provisional
+        console.log('⚠️ [CANCELAR FOLIO] No hay almacen_provisional_id en folio, buscando en movimientos...');
+        timer.log('Buscando almacén en movimientos');
         const { data: movimiento } = await supabase
           .from('movimientos_almacen_provisional')
           .select('almacen_provisional_id')
@@ -392,9 +425,16 @@ const Folios = ({ userRole }: FoliosProps) => {
           .maybeSingle();
         
         almacenProvisionalId = movimiento?.almacen_provisional_id;
+        console.log('🔍 [CANCELAR FOLIO] Almacén encontrado en movimientos:', almacenProvisionalId);
       }
 
+      logInventoryOp('Almacén provisional para devolución', {
+        almacen_provisional_id: almacenProvisionalId,
+        source: folio.almacen_provisional_id ? 'folio' : 'movimientos'
+      });
+
       // Actualizar estado del folio
+      timer.log('Actualizando estado del folio');
       const { error: updateError } = await supabase
         .from('folios')
         .update({ 
@@ -403,7 +443,12 @@ const Folios = ({ userRole }: FoliosProps) => {
         })
         .eq('id', folioId);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('❌ [CANCELAR FOLIO] Error actualizando estado:', updateError);
+        throw updateError;
+      }
+
+      console.log('✅ [CANCELAR FOLIO] Estado actualizado a cancelado');
 
       // Combinar insumos regulares + adicionales para devolución
       const todosLosInsumos: { insumo_id: string; cantidad: number }[] = [
@@ -411,22 +456,37 @@ const Folios = ({ userRole }: FoliosProps) => {
         ...(folio.folios_insumos_adicionales || [])
       ];
 
+      console.log('📦 [CANCELAR FOLIO] Insumos a devolver:', todosLosInsumos.length);
+
       // DEVOLVER inventario AL ALMACÉN PROVISIONAL CORRECTO
       if (almacenProvisionalId && todosLosInsumos.length > 0) {
+        timer.log('Cargando inventario provisional para devolución');
         // Obtener inventario actual del provisional para este folio
-        const { data: inventarioProvisional } = await supabase
+        const { data: inventarioProvisional, error: invError } = await supabase
           .from('almacen_provisional_inventario')
           .select('id, insumo_catalogo_id, cantidad_disponible')
           .eq('almacen_provisional_id', almacenProvisionalId);
+
+        if (invError) {
+          console.error('❌ [CANCELAR FOLIO] Error cargando inventario provisional:', invError);
+        }
 
         const provisionalMap = new Map(
           (inventarioProvisional || []).map(inv => [inv.insumo_catalogo_id, inv])
         );
 
+        timer.log('Preparando operaciones de devolución');
         const updatePromises: PromiseLike<any>[] = [];
         const movimientosDevolucion: any[] = [];
+        let itemsDevueltos = 0;
 
         for (const folioInsumo of todosLosInsumos) {
+          logInventoryOp('Procesando devolución item', {
+            almacen_provisional_id: almacenProvisionalId,
+            insumo_catalogo_id: folioInsumo.insumo_id,
+            cantidad: folioInsumo.cantidad
+          });
+
           const itemProvisional = provisionalMap.get(folioInsumo.insumo_id);
 
           if (itemProvisional) {
@@ -439,12 +499,18 @@ const Folios = ({ userRole }: FoliosProps) => {
                   updated_at: new Date().toISOString()
                 })
                 .eq('id', itemProvisional.id)
-                .then()
+                .then((result) => {
+                  if (result.error) {
+                    console.error('❌ [CANCELAR FOLIO] Error update provisional:', result.error);
+                  }
+                  return result;
+                })
             );
             // Actualizar mapa para evitar conflictos en múltiples items del mismo insumo
             itemProvisional.cantidad_disponible += folioInsumo.cantidad;
           } else {
             // El insumo no existe en provisional - crear nuevo registro
+            console.log('⚠️ [CANCELAR FOLIO] Insumo no existe en provisional, creando:', folioInsumo.insumo_id);
             updatePromises.push(
               supabase
                 .from('almacen_provisional_inventario')
@@ -453,7 +519,12 @@ const Folios = ({ userRole }: FoliosProps) => {
                   insumo_catalogo_id: folioInsumo.insumo_id,
                   cantidad_disponible: folioInsumo.cantidad
                 })
-                .then()
+                .then((result) => {
+                  if (result.error) {
+                    console.error('❌ [CANCELAR FOLIO] Error insert provisional:', result.error);
+                  }
+                  return result;
+                })
             );
           }
 
@@ -468,19 +539,29 @@ const Folios = ({ userRole }: FoliosProps) => {
             usuario_id: user.id,
             observaciones: `Devolución por cancelación de folio ${folio.numero_folio}`
           });
+          itemsDevueltos++;
         }
 
         // Ejecutar todas las operaciones
+        timer.log('Ejecutando operaciones de devolución');
         await Promise.all(updatePromises);
         
         if (movimientosDevolucion.length > 0) {
-          await supabase.from('movimientos_almacen_provisional').insert(movimientosDevolucion);
+          const movResult = await supabase.from('movimientos_almacen_provisional').insert(movimientosDevolucion);
+          if (movResult.error) {
+            console.error('❌ [CANCELAR FOLIO] Error insertando movimientos:', movResult.error);
+          }
         }
 
+        const totalTime = timer.end();
+        console.log(`✅ [CANCELAR FOLIO] Completado en ${totalTime.toFixed(0)}ms - ${itemsDevueltos} items devueltos`);
+
         toast.success('Folio cancelado exitosamente', {
-          description: 'El inventario ha sido devuelto al almacén provisional'
+          description: `${itemsDevueltos} insumos devueltos al almacén provisional`
         });
       } else {
+        timer.end();
+        console.log('⚠️ [CANCELAR FOLIO] No se encontró almacén provisional o no hay insumos');
         toast.success('Folio cancelado', {
           description: 'No se encontró almacén provisional para devolución de inventario'
         });
@@ -488,7 +569,7 @@ const Folios = ({ userRole }: FoliosProps) => {
 
       fetchFolios();
     } catch (error: any) {
-      console.error('Error al cancelar folio:', error);
+      console.error('❌ [CANCELAR FOLIO] Error general:', error);
       toast.error('Error al cancelar folio', {
         description: error.message,
       });

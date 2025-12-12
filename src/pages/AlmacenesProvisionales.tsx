@@ -276,9 +276,9 @@ const AlmacenesProvisionales = () => {
         .order("created_at", { ascending: true });
 
       const todosLotes = assertSupabaseOk(
-        lotesRes as any,
+        lotesRes,
         "AlmacenesProvisionales.ejecutarTraspaso: cargar inventario general",
-      );
+      ) as Array<{ id: string; insumo_catalogo_id: string; cantidad_actual: number }> | null;
 
       // Obtener inventario provisional actual en una sola query
       const provRes = await supabase
@@ -287,20 +287,20 @@ const AlmacenesProvisionales = () => {
         .eq("almacen_provisional_id", almacenId);
 
       const inventarioProv = assertSupabaseOk(
-        provRes as any,
+        provRes,
         "AlmacenesProvisionales.ejecutarTraspaso: cargar inventario provisional",
-      );
+      ) as Array<{ id: string; insumo_catalogo_id: string; cantidad_disponible: number }> | null;
 
       // Crear mapas para acceso rápido O(1)
       const lotesPorInsumo = new Map<string, Array<{ id: string; cantidad_actual: number }>>();
-      for (const lote of todosLotes || []) {
+      for (const lote of (todosLotes || [])) {
         const arr = lotesPorInsumo.get(lote.insumo_catalogo_id) || [];
         arr.push({ id: lote.id, cantidad_actual: lote.cantidad_actual });
         lotesPorInsumo.set(lote.insumo_catalogo_id, arr);
       }
 
       const provPorInsumo = new Map<string, { id: string; cantidad_disponible: number }>();
-      for (const item of inventarioProv || []) {
+      for (const item of (inventarioProv || [])) {
         provPorInsumo.set(item.insumo_catalogo_id, { id: item.id, cantidad_disponible: item.cantidad_disponible });
       }
 

@@ -10,12 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useHospital } from '@/contexts/HospitalContext';
-import { Plus, Warehouse, ArrowRight, ArrowLeft, Package, RefreshCw, Search, Trash2, Zap, CheckSquare } from 'lucide-react';
-import { PROCEDIMIENTOS_CATALOG, getTipoAnestesiaKey } from '@/constants/procedimientosCatalog';
+import { Plus, Warehouse, ArrowRight, ArrowLeft, Package, RefreshCw, Search, Trash2, CheckSquare } from 'lucide-react';
 
 interface AlmacenProvisional {
   id: string;
@@ -40,11 +39,6 @@ interface InventarioGeneral {
   insumo?: { id: string; nombre: string; clave: string };
 }
 
-interface ProcedimientoHospital {
-  clave: string;
-  nombre: string;
-  tipoAnestesiaKey: string;
-}
 
 const AlmacenesProvisionales = () => {
   const { selectedHospital } = useHospital();
@@ -71,10 +65,8 @@ const AlmacenesProvisionales = () => {
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [cantidadesDevolucion, setCantidadesDevolucion] = useState<Record<string, number>>({});
   const [procesando, setProcesando] = useState(false);
-  
-  // Procedimiento selector
-  const [procedimientoSeleccionado, setProcedimientoSeleccionado] = useState<string>('');
-  const [procedimientosDisponibles, setProcedimientosDisponibles] = useState<ProcedimientoHospital[]>([]);
+  const [progresoTraspaso, setProgresoTraspaso] = useState(0);
+  const [mensajeProgreso, setMensajeProgreso] = useState('');
 
   useEffect(() => {
     if (selectedHospital) {
@@ -168,108 +160,6 @@ const AlmacenesProvisionales = () => {
     }
   };
 
-  const fetchProcedimientosDisponibles = async () => {
-    if (!selectedHospital) return;
-    
-    try {
-      // Obtener procedimientos autorizados para este hospital
-      const { data, error } = await supabase
-        .from('hospital_procedimientos')
-        .select('procedimiento_clave, procedimiento_nombre')
-        .eq('hospital_id', selectedHospital.id)
-        .eq('activo', true);
-
-      if (error) throw error;
-      
-      // Convertir a formato ProcedimientoHospital con tipoAnestesiaKey
-      const procedimientos: ProcedimientoHospital[] = (data || []).map(p => ({
-        clave: p.procedimiento_clave,
-        nombre: p.procedimiento_nombre,
-        tipoAnestesiaKey: getTipoAnestesiaKey(p.procedimiento_clave)
-      }));
-      
-      setProcedimientosDisponibles(procedimientos);
-    } catch (error) {
-      console.error('Error fetching procedures:', error);
-    }
-  };
-
-  const precargarInsumosProcedimiento = async () => {
-    if (!procedimientoSeleccionado) {
-      toast.error('Selecciona un procedimiento');
-      return;
-    }
-
-    try {
-      // Obtener insumos del procedimiento usando el campo 'nota' como descripción
-      const { data: anestesiaInsumos, error } = await supabase
-        .from('anestesia_insumos')
-        .select('nota, cantidad_default')
-        .eq('tipo_anestesia', procedimientoSeleccionado)
-        .eq('activo', true)
-        .not('nota', 'is', null);
-
-      if (error) throw error;
-
-      if (!anestesiaInsumos || anestesiaInsumos.length === 0) {
-        toast.info('No hay insumos configurados para este procedimiento');
-        return;
-      }
-
-      console.log('Insumos del procedimiento:', anestesiaInsumos.length);
-
-      // Crear función de normalización para comparar nombres
-      const normalizar = (texto: string): string => {
-        return texto
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[:\-,;.\/\(\)]/g, " ")
-          .replace(/\s+/g, " ")
-          .toUpperCase()
-          .trim();
-      };
-
-      // Crear mapa de notas normalizadas a cantidades
-      const notasMap = new Map<string, number>();
-      anestesiaInsumos.forEach(ai => {
-        if (ai.nota) {
-          const notaNorm = normalizar(ai.nota);
-          notasMap.set(notaNorm, ai.cantidad_default || 1);
-        }
-      });
-
-      // Buscar en inventario general por coincidencia parcial de nombre
-      const nuevasCantidades: Record<string, number> = { ...cantidadesTraspaso };
-      const nuevosSeleccionados = new Set(seleccionados);
-      let encontrados = 0;
-
-      for (const item of inventarioGeneral) {
-        const nombreNorm = normalizar(item.insumo?.nombre || '');
-        
-        // Buscar coincidencia - el nombre del inventario contiene la nota o viceversa
-        for (const [notaNorm, cantidad] of notasMap.entries()) {
-          if (nombreNorm.includes(notaNorm) || notaNorm.includes(nombreNorm.substring(0, 30))) {
-            const cantidadRequerida = Math.min(cantidad, item.cantidad_actual);
-            if (cantidadRequerida > 0) {
-              nuevasCantidades[item.insumo_catalogo_id] = cantidadRequerida;
-              nuevosSeleccionados.add(item.insumo_catalogo_id);
-              encontrados++;
-              break;
-            }
-          }
-        }
-      }
-
-      setCantidadesTraspaso(nuevasCantidades);
-      setSeleccionados(nuevosSeleccionados);
-      
-      toast.success(`${encontrados} insumos pre-cargados del procedimiento`);
-    } catch (error) {
-      console.error('Error loading procedure insumos:', error);
-      toast.error('Error al cargar insumos del procedimiento');
-    }
-  };
-
   const toggleSeleccion = (insumoCatalogoId: string) => {
     const nuevos = new Set(seleccionados);
     if (nuevos.has(insumoCatalogoId)) {
@@ -335,22 +225,20 @@ const AlmacenesProvisionales = () => {
   const abrirDialogTraspaso = () => {
     if (!selectedAlmacen) return;
     fetchInventarioGeneral();
-    fetchProcedimientosDisponibles();
     setCantidadesTraspaso({});
     setSeleccionados(new Set());
-    setProcedimientoSeleccionado('');
     setSearchTerm('');
+    setProgresoTraspaso(0);
+    setMensajeProgreso('');
     setDialogTraspasoOpen(true);
   };
 
   const ejecutarTraspaso = async () => {
     if (!selectedHospital || !selectedAlmacen) {
       toast.error('No hay almacén seleccionado');
-      setProcesando(false);
       return;
     }
 
-    // Filtrar solo items seleccionados con cantidad > 0
     const itemsTraspaso = Object.entries(cantidadesTraspaso)
       .filter(([insumoCatalogoId, cantidad]) => seleccionados.has(insumoCatalogoId) && cantidad > 0);
     
@@ -360,87 +248,137 @@ const AlmacenesProvisionales = () => {
     }
 
     setProcesando(true);
-    let procesados = 0;
+    setProgresoTraspaso(0);
+    setMensajeProgreso('Preparando traspaso...');
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const almacenId = selectedAlmacen.id;
+      const hospitalId = selectedHospital.id;
+      const totalItems = itemsTraspaso.length;
 
+      // Obtener todos los lotes del inventario general en una sola query
+      setMensajeProgreso('Cargando inventario...');
+      const { data: todosLotes } = await supabase
+        .from('inventario_hospital')
+        .select('id, insumo_catalogo_id, cantidad_actual')
+        .eq('hospital_id', hospitalId)
+        .gt('cantidad_actual', 0)
+        .order('created_at', { ascending: true });
+
+      // Obtener inventario provisional actual en una sola query
+      const { data: inventarioProv } = await supabase
+        .from('almacen_provisional_inventario')
+        .select('id, insumo_catalogo_id, cantidad_disponible')
+        .eq('almacen_provisional_id', almacenId);
+
+      // Crear mapas para acceso rápido O(1)
+      const lotesPorInsumo = new Map<string, Array<{ id: string; cantidad_actual: number }>>();
+      for (const lote of (todosLotes || [])) {
+        const arr = lotesPorInsumo.get(lote.insumo_catalogo_id) || [];
+        arr.push({ id: lote.id, cantidad_actual: lote.cantidad_actual });
+        lotesPorInsumo.set(lote.insumo_catalogo_id, arr);
+      }
+
+      const provPorInsumo = new Map<string, { id: string; cantidad_disponible: number }>();
+      for (const item of (inventarioProv || [])) {
+        provPorInsumo.set(item.insumo_catalogo_id, { id: item.id, cantidad_disponible: item.cantidad_disponible });
+      }
+
+      // Preparar todas las operaciones
+      setMensajeProgreso('Procesando traspasos...');
+      const updateLotes: Array<{ id: string; cantidad_actual: number }> = [];
+      const updateProv: Array<{ id: string; cantidad_disponible: number }> = [];
+      const insertProv: Array<{ almacen_provisional_id: string; insumo_catalogo_id: string; cantidad_disponible: number }> = [];
+      const movimientos: Array<{
+        almacen_provisional_id: string;
+        hospital_id: string;
+        insumo_catalogo_id: string;
+        cantidad: number;
+        tipo: string;
+        usuario_id: string | undefined;
+        observaciones: string;
+      }> = [];
+
+      let procesados = 0;
       for (const [insumoCatalogoId, cantidadSolicitada] of itemsTraspaso) {
-        const item = inventarioGeneral.find(i => i.insumo_catalogo_id === insumoCatalogoId);
-        if (!item || cantidadSolicitada > item.cantidad_actual) {
-          console.log('Item saltado - stock insuficiente:', insumoCatalogoId);
-          continue;
-        }
-
-        // Buscar TODOS los lotes y descontar (FIFO)
-        const { data: lotes } = await supabase
-          .from('inventario_hospital')
-          .select('id, cantidad_actual')
-          .eq('hospital_id', selectedHospital.id)
-          .eq('insumo_catalogo_id', insumoCatalogoId)
-          .gt('cantidad_actual', 0)
-          .order('created_at', { ascending: true });
-        
+        const lotes = lotesPorInsumo.get(insumoCatalogoId) || [];
         let cantidadRestante = cantidadSolicitada;
-        for (const lote of (lotes || [])) {
+
+        // Calcular descuentos de lotes
+        for (const lote of lotes) {
           if (cantidadRestante <= 0) break;
-          
           const aDescontar = Math.min(cantidadRestante, lote.cantidad_actual);
-          await supabase
-            .from('inventario_hospital')
-            .update({
-              cantidad_actual: lote.cantidad_actual - aDescontar,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', lote.id);
-          
+          updateLotes.push({ id: lote.id, cantidad_actual: lote.cantidad_actual - aDescontar });
           cantidadRestante -= aDescontar;
         }
 
-        // Agregar al inventario provisional
-        const { data: existente } = await supabase
-          .from('almacen_provisional_inventario')
-          .select('*')
-          .eq('almacen_provisional_id', almacenId)
-          .eq('insumo_catalogo_id', insumoCatalogoId)
-          .maybeSingle();
-
+        // Preparar actualización/inserción en provisional
+        const existente = provPorInsumo.get(insumoCatalogoId);
         if (existente) {
-          await supabase
-            .from('almacen_provisional_inventario')
-            .update({
-              cantidad_disponible: (existente.cantidad_disponible || 0) + cantidadSolicitada,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existente.id);
+          updateProv.push({
+            id: existente.id,
+            cantidad_disponible: (existente.cantidad_disponible || 0) + cantidadSolicitada
+          });
         } else {
-          await supabase
-            .from('almacen_provisional_inventario')
-            .insert({
-              almacen_provisional_id: almacenId,
-              insumo_catalogo_id: insumoCatalogoId,
-              cantidad_disponible: cantidadSolicitada
-            });
+          insertProv.push({
+            almacen_provisional_id: almacenId,
+            insumo_catalogo_id: insumoCatalogoId,
+            cantidad_disponible: cantidadSolicitada
+          });
         }
 
-        // Registrar movimiento
-        await supabase
-          .from('movimientos_almacen_provisional')
-          .insert({
-            almacen_provisional_id: almacenId,
-            hospital_id: selectedHospital.id,
-            insumo_catalogo_id: insumoCatalogoId,
-            cantidad: cantidadSolicitada,
-            tipo: 'entrada',
-            usuario_id: user?.id,
-            observaciones: 'Traspaso desde almacén general'
-          });
-        
+        // Preparar movimiento
+        movimientos.push({
+          almacen_provisional_id: almacenId,
+          hospital_id: hospitalId,
+          insumo_catalogo_id: insumoCatalogoId,
+          cantidad: cantidadSolicitada,
+          tipo: 'entrada',
+          usuario_id: user?.id,
+          observaciones: 'Traspaso desde almacén general'
+        });
+
         procesados++;
+        setProgresoTraspaso(Math.round((procesados / totalItems) * 50));
       }
 
-      toast.success(`${procesados} insumos traspasados al almacén provisional`);
+      // Ejecutar todas las operaciones en paralelo por tipo
+      setMensajeProgreso(`Guardando ${procesados} traspasos...`);
+      
+      // Updates de lotes en batches de 50
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < updateLotes.length; i += BATCH_SIZE) {
+        const batch = updateLotes.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(lote =>
+          supabase.from('inventario_hospital')
+            .update({ cantidad_actual: lote.cantidad_actual, updated_at: new Date().toISOString() })
+            .eq('id', lote.id)
+        ));
+        setProgresoTraspaso(50 + Math.round((i / updateLotes.length) * 20));
+      }
+
+      // Updates/inserts de provisional
+      if (updateProv.length > 0) {
+        await Promise.all(updateProv.map(item =>
+          supabase.from('almacen_provisional_inventario')
+            .update({ cantidad_disponible: item.cantidad_disponible, updated_at: new Date().toISOString() })
+            .eq('id', item.id)
+        ));
+      }
+
+      if (insertProv.length > 0) {
+        await supabase.from('almacen_provisional_inventario').insert(insertProv);
+      }
+      setProgresoTraspaso(80);
+
+      // Insertar movimientos en batch
+      if (movimientos.length > 0) {
+        await supabase.from('movimientos_almacen_provisional').insert(movimientos);
+      }
+      setProgresoTraspaso(100);
+
+      toast.success(`${procesados} insumos traspasados correctamente`);
       setDialogTraspasoOpen(false);
       setCantidadesTraspaso({});
       setSeleccionados(new Set());
@@ -450,6 +388,8 @@ const AlmacenesProvisionales = () => {
       toast.error('Error al realizar traspaso');
     } finally {
       setProcesando(false);
+      setProgresoTraspaso(0);
+      setMensajeProgreso('');
     }
   };
 
@@ -661,8 +601,8 @@ const AlmacenesProvisionales = () => {
         setInventarioProvisional([]);
       }
       
-      // Actualizar lista de almacenes (quitar el eliminado)
-      setAlmacenes(prev => prev.filter(a => a.id !== almacenIdEliminar));
+      // Actualizar lista desde la base de datos
+      await fetchAlmacenes();
       
       setDialogEliminarOpen(false);
       setAlmacenAEliminar(null);
@@ -872,46 +812,23 @@ const AlmacenesProvisionales = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: Traspaso desde general - Mejorado con selector de procedimiento */}
+      {/* Dialog: Traspaso desde general */}
       <Dialog open={dialogTraspasoOpen} onOpenChange={setDialogTraspasoOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Agregar Insumos a {selectedAlmacen?.nombre}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Sección de pre-carga por procedimiento */}
-            <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="py-3">
-                <div className="flex items-end gap-3">
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium mb-1 block">
-                      <Zap className="inline h-4 w-4 mr-1" />
-                      Pre-cargar por Procedimiento
-                    </Label>
-                    <Select value={procedimientoSeleccionado} onValueChange={setProcedimientoSeleccionado}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un procedimiento..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {procedimientosDisponibles.map((proc) => (
-                          <SelectItem key={proc.clave} value={proc.tipoAnestesiaKey}>
-                            {proc.clave} - {proc.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button 
-                    onClick={precargarInsumosProcedimiento}
-                    disabled={!procedimientoSeleccionado}
-                    variant="secondary"
-                  >
-                    <Zap className="mr-2 h-4 w-4" />
-                    Pre-cargar
-                  </Button>
+            {/* Barra de progreso cuando se está procesando */}
+            {procesando && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{mensajeProgreso}</span>
+                  <span className="font-medium">{progresoTraspaso}%</span>
                 </div>
-              </CardContent>
-            </Card>
+                <Progress value={progresoTraspaso} className="h-2" />
+              </div>
+            )}
 
             {/* Barra de búsqueda y acciones de selección */}
             <div className="flex items-center gap-3">

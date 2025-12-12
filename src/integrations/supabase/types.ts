@@ -539,6 +539,7 @@ export type Database = {
       }
       folios: {
         Row: {
+          almacen_provisional_id: string | null
           anestesia_principal: string | null
           anestesia_secundaria: string | null
           anestesiologo_id: string | null
@@ -579,6 +580,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          almacen_provisional_id?: string | null
           anestesia_principal?: string | null
           anestesia_secundaria?: string | null
           anestesiologo_id?: string | null
@@ -619,6 +621,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          almacen_provisional_id?: string | null
           anestesia_principal?: string | null
           anestesia_secundaria?: string | null
           anestesiologo_id?: string | null
@@ -659,6 +662,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "folios_almacen_provisional_id_fkey"
+            columns: ["almacen_provisional_id"]
+            isOneToOne: false
+            referencedRelation: "almacenes_provisionales"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "folios_anestesiologo_id_fkey"
             columns: ["anestesiologo_id"]

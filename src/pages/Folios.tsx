@@ -195,7 +195,7 @@ const Folios = ({ userRole }: FoliosProps) => {
 
       const numeroFolio = `${selectedHospital.budget_code}-${String((count || 0) + 1).padStart(6, '0')}`;
 
-      // PASO 5: Crear el folio
+      // PASO 5: Crear el folio CON almacen_provisional_id para rastreo
       const { data: folioData, error: folioError } = await supabase
         .from('folios')
         .insert({
@@ -204,6 +204,7 @@ const Folios = ({ userRole }: FoliosProps) => {
           hospital_budget_code: selectedHospital.budget_code,
           hospital_display_name: selectedHospital.display_name,
           hospital_id: selectedHospital.id,
+          almacen_provisional_id: data.almacen_provisional_id,
           unidad: data.unidad,
           numero_quirofano: data.numeroQuirofano,
           hora_inicio_procedimiento: data.inicioProcedimiento,
@@ -358,12 +359,16 @@ const Folios = ({ userRole }: FoliosProps) => {
     try {
       if (!user || !selectedHospital) return;
 
-      // Obtener el folio y sus insumos antes de cancelarlo
+      // Obtener el folio con su almacén provisional y sus insumos (regulares + adicionales)
       const { data: folio, error: folioError } = await supabase
         .from('folios')
         .select(`
           *,
           folios_insumos (
+            insumo_id,
+            cantidad
+          ),
+          folios_insumos_adicionales (
             insumo_id,
             cantidad
           )
@@ -373,12 +378,21 @@ const Folios = ({ userRole }: FoliosProps) => {
 
       if (folioError) throw folioError;
 
-      // Obtener almacén del hospital
-      const { data: almacen } = await supabase
-        .from('almacenes')
-        .select('id')
-        .eq('hospital_id', selectedHospital.id)
-        .maybeSingle();
+      // Determinar almacén provisional origen (primero del folio, luego de movimientos)
+      let almacenProvisionalId = folio.almacen_provisional_id;
+      
+      if (!almacenProvisionalId) {
+        // Fallback: obtener desde movimientos_almacen_provisional
+        const { data: movimiento } = await supabase
+          .from('movimientos_almacen_provisional')
+          .select('almacen_provisional_id')
+          .eq('folio_id', folioId)
+          .eq('tipo', 'salida')
+          .limit(1)
+          .maybeSingle();
+        
+        almacenProvisionalId = movimiento?.almacen_provisional_id;
+      }
 
       // Actualizar estado del folio
       const { error: updateError } = await supabase
@@ -391,59 +405,87 @@ const Folios = ({ userRole }: FoliosProps) => {
 
       if (updateError) throw updateError;
 
-      // DEVOLVER inventario y registrar movimiento
-      if (almacen && folio.folios_insumos && folio.folios_insumos.length > 0) {
-        for (const folioInsumo of folio.folios_insumos) {
-          // Buscar el inventario correspondiente
-          const { data: inventarioItems } = await supabase
-            .from('inventario_hospital')
-            .select('*')
-            .eq('almacen_id', almacen.id)
-            .eq('insumo_catalogo_id', folioInsumo.insumo_id)
-            .eq('estatus', 'activo')
-            .order('fecha_caducidad', { ascending: true })
-            .limit(1);
+      // Combinar insumos regulares + adicionales para devolución
+      const todosLosInsumos: { insumo_id: string; cantidad: number }[] = [
+        ...(folio.folios_insumos || []),
+        ...(folio.folios_insumos_adicionales || [])
+      ];
 
-          if (inventarioItems && inventarioItems.length > 0) {
-            const inventario = inventarioItems[0];
-            const cantidadAnterior = inventario.cantidad_actual;
-            const cantidadNueva = cantidadAnterior + folioInsumo.cantidad;
+      // DEVOLVER inventario AL ALMACÉN PROVISIONAL CORRECTO
+      if (almacenProvisionalId && todosLosInsumos.length > 0) {
+        // Obtener inventario actual del provisional para este folio
+        const { data: inventarioProvisional } = await supabase
+          .from('almacen_provisional_inventario')
+          .select('id, insumo_catalogo_id, cantidad_disponible')
+          .eq('almacen_provisional_id', almacenProvisionalId);
 
-            // Devolver al inventario
-            const { error: devolucionError } = await supabase
-              .from('inventario_hospital')
-              .update({ 
-                cantidad_actual: cantidadNueva,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', inventario.id);
+        const provisionalMap = new Map(
+          (inventarioProvisional || []).map(inv => [inv.insumo_catalogo_id, inv])
+        );
 
-            if (devolucionError) {
-              console.error('Error al devolver inventario:', devolucionError);
-              continue;
-            }
+        const updatePromises: PromiseLike<any>[] = [];
+        const movimientosDevolucion: any[] = [];
 
-            // Registrar movimiento de devolución en kardex
-            await supabase
-              .from('movimientos_inventario')
-              .insert({
-                inventario_id: inventario.id,
-                hospital_id: selectedHospital.id,
-                tipo_movimiento: 'ajuste',
-                cantidad: folioInsumo.cantidad,
-                cantidad_anterior: cantidadAnterior,
-                cantidad_nueva: cantidadNueva,
-                folio_id: folioId,
-                usuario_id: user.id,
-                observaciones: `Devolución por cancelación de folio ${folio.numero_folio}`
-              });
+        for (const folioInsumo of todosLosInsumos) {
+          const itemProvisional = provisionalMap.get(folioInsumo.insumo_id);
+
+          if (itemProvisional) {
+            // El insumo existe en provisional - solo actualizar cantidad
+            updatePromises.push(
+              supabase
+                .from('almacen_provisional_inventario')
+                .update({ 
+                  cantidad_disponible: itemProvisional.cantidad_disponible + folioInsumo.cantidad,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', itemProvisional.id)
+                .then()
+            );
+            // Actualizar mapa para evitar conflictos en múltiples items del mismo insumo
+            itemProvisional.cantidad_disponible += folioInsumo.cantidad;
+          } else {
+            // El insumo no existe en provisional - crear nuevo registro
+            updatePromises.push(
+              supabase
+                .from('almacen_provisional_inventario')
+                .insert({
+                  almacen_provisional_id: almacenProvisionalId,
+                  insumo_catalogo_id: folioInsumo.insumo_id,
+                  cantidad_disponible: folioInsumo.cantidad
+                })
+                .then()
+            );
           }
+
+          // Registrar movimiento de devolución
+          movimientosDevolucion.push({
+            almacen_provisional_id: almacenProvisionalId,
+            hospital_id: selectedHospital.id,
+            insumo_catalogo_id: folioInsumo.insumo_id,
+            cantidad: folioInsumo.cantidad,
+            tipo: 'entrada',
+            folio_id: folioId,
+            usuario_id: user.id,
+            observaciones: `Devolución por cancelación de folio ${folio.numero_folio}`
+          });
         }
+
+        // Ejecutar todas las operaciones
+        await Promise.all(updatePromises);
+        
+        if (movimientosDevolucion.length > 0) {
+          await supabase.from('movimientos_almacen_provisional').insert(movimientosDevolucion);
+        }
+
+        toast.success('Folio cancelado exitosamente', {
+          description: 'El inventario ha sido devuelto al almacén provisional'
+        });
+      } else {
+        toast.success('Folio cancelado', {
+          description: 'No se encontró almacén provisional para devolución de inventario'
+        });
       }
 
-      toast.success('Folio cancelado exitosamente', {
-        description: 'El inventario ha sido devuelto automáticamente'
-      });
       fetchFolios();
     } catch (error: any) {
       console.error('Error al cancelar folio:', error);

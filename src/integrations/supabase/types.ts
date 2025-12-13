@@ -1042,6 +1042,7 @@ export type Database = {
       insumos_alertas: {
         Row: {
           cantidad_actual: number
+          consolidado_id: string | null
           created_at: string
           enviado_a_gerente_operaciones: boolean
           enviado_a_supervisor: boolean
@@ -1060,6 +1061,7 @@ export type Database = {
         }
         Insert: {
           cantidad_actual?: number
+          consolidado_id?: string | null
           created_at?: string
           enviado_a_gerente_operaciones?: boolean
           enviado_a_supervisor?: boolean
@@ -1078,6 +1080,7 @@ export type Database = {
         }
         Update: {
           cantidad_actual?: number
+          consolidado_id?: string | null
           created_at?: string
           enviado_a_gerente_operaciones?: boolean
           enviado_a_supervisor?: boolean
@@ -1095,6 +1098,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "insumos_alertas_consolidado_id_fkey"
+            columns: ["consolidado_id"]
+            isOneToOne: false
+            referencedRelation: "inventario_consolidado"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "insumos_alertas_hospital_id_fkey"
             columns: ["hospital_id"]
@@ -1233,6 +1243,61 @@ export type Database = {
           },
         ]
       }
+      inventario_consolidado: {
+        Row: {
+          almacen_id: string
+          cantidad_minima: number | null
+          cantidad_total: number
+          created_at: string | null
+          hospital_id: string
+          id: string
+          insumo_catalogo_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          almacen_id: string
+          cantidad_minima?: number | null
+          cantidad_total?: number
+          created_at?: string | null
+          hospital_id: string
+          id?: string
+          insumo_catalogo_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          almacen_id?: string
+          cantidad_minima?: number | null
+          cantidad_total?: number
+          created_at?: string | null
+          hospital_id?: string
+          id?: string
+          insumo_catalogo_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventario_consolidado_almacen_id_fkey"
+            columns: ["almacen_id"]
+            isOneToOne: false
+            referencedRelation: "almacenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_consolidado_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventario_consolidado_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventario_hospital: {
         Row: {
           almacen_id: string
@@ -1302,6 +1367,50 @@ export type Database = {
             columns: ["insumo_catalogo_id"]
             isOneToOne: false
             referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventario_lotes: {
+        Row: {
+          cantidad: number
+          consolidado_id: string
+          created_at: string | null
+          fecha_caducidad: string | null
+          fecha_entrada: string | null
+          id: string
+          lote: string | null
+          ubicacion: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          cantidad?: number
+          consolidado_id: string
+          created_at?: string | null
+          fecha_caducidad?: string | null
+          fecha_entrada?: string | null
+          id?: string
+          lote?: string | null
+          ubicacion?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          cantidad?: number
+          consolidado_id?: string
+          created_at?: string | null
+          fecha_caducidad?: string | null
+          fecha_entrada?: string | null
+          id?: string
+          lote?: string | null
+          ubicacion?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventario_lotes_consolidado_id_fkey"
+            columns: ["consolidado_id"]
+            isOneToOne: false
+            referencedRelation: "inventario_consolidado"
             referencedColumns: ["id"]
           },
         ]
@@ -2213,6 +2322,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consumir_inventario_fifo: {
+        Args: { p_cantidad: number; p_consolidado_id: string }
+        Returns: {
+          cantidad_consumida: number
+          lote_id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2221,6 +2337,10 @@ export type Database = {
         Returns: boolean
       }
       is_gerente_almacen: { Args: { _user_id: string }; Returns: boolean }
+      recalcular_alerta_consolidado: {
+        Args: { p_consolidado_id: string }
+        Returns: undefined
+      }
       recalcular_alerta_insumo: {
         Args: { p_hospital_id: string; p_insumo_catalogo_id: string }
         Returns: undefined

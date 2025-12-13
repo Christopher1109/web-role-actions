@@ -131,34 +131,32 @@ const AlmacenesProvisionales = () => {
     if (!selectedHospital) return;
 
     try {
+      // Usar nueva tabla inventario_consolidado (mucho más rápido)
       const { data, error } = await supabase
-        .from("inventario_hospital")
+        .from("inventario_consolidado")
         .select(
           `
           id,
           insumo_catalogo_id,
-          cantidad_actual,
+          cantidad_total,
           insumo:insumos_catalogo(id, nombre, clave)
         `,
         )
         .eq("hospital_id", selectedHospital.id)
-        .gt("cantidad_actual", 0)
+        .gt("cantidad_total", 0)
         .order("insumo_catalogo_id");
 
       if (error) throw error;
 
-      // Consolidar por insumo_catalogo_id (sumar cantidades de diferentes lotes)
-      const consolidado = new Map<string, InventarioGeneral>();
-      for (const item of data || []) {
-        const existing = consolidado.get(item.insumo_catalogo_id);
-        if (existing) {
-          existing.cantidad_actual += item.cantidad_actual;
-        } else {
-          consolidado.set(item.insumo_catalogo_id, { ...item });
-        }
-      }
+      // Mapear al formato esperado
+      const inventarioMapeado = (data || []).map(item => ({
+        id: item.id,
+        insumo_catalogo_id: item.insumo_catalogo_id,
+        cantidad_actual: item.cantidad_total,
+        insumo: item.insumo
+      }));
 
-      setInventarioGeneral(Array.from(consolidado.values()));
+      setInventarioGeneral(inventarioMapeado);
     } catch (error) {
       console.error("Error fetching general inventory:", error);
     }

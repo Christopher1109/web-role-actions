@@ -152,7 +152,7 @@ const GerenteAlmacenDashboard = () => {
   };
 
   const descargarExcelParaProveedor = async (documento: DocumentoAgrupado) => {
-    // Always fetch fresh data from database to get updated cantidad_cubierta
+    // Always fetch fresh data from database to get updated cantidad_cubierta and cantidad_pendiente
     const { data: freshDetalles, error } = await supabase
       .from('documento_agrupado_detalle')
       .select(`
@@ -166,8 +166,14 @@ const GerenteAlmacenDashboard = () => {
       return;
     }
 
-    // Filter only items with pending quantities (total - covered > 0)
+    // Filter only items with pending quantities > 0
+    // Use cantidad_pendiente if available (from previous upload), otherwise calculate from total - cubierta
     const detallesPendientes = freshDetalles.filter(d => {
+      // If cantidad_pendiente is explicitly set (from previous upload), use it
+      if (d.cantidad_pendiente !== null && d.cantidad_pendiente !== undefined) {
+        return d.cantidad_pendiente > 0;
+      }
+      // Otherwise calculate: total - cubierta
       const pendiente = d.total_faltante_requerido - (d.cantidad_cubierta || 0);
       return pendiente > 0;
     });
@@ -177,9 +183,16 @@ const GerenteAlmacenDashboard = () => {
       return;
     }
 
-    // Simplified columns - use PENDING quantity (not total) as the quantity to request
+    // Use cantidad_pendiente if set, otherwise calculate
     const data = detallesPendientes.map((d, index) => {
-      const cantidadPendiente = d.total_faltante_requerido - (d.cantidad_cubierta || 0);
+      // Priority: use cantidad_pendiente from DB if set, otherwise calculate
+      let cantidadPendiente: number;
+      if (d.cantidad_pendiente !== null && d.cantidad_pendiente !== undefined) {
+        cantidadPendiente = d.cantidad_pendiente;
+      } else {
+        cantidadPendiente = d.total_faltante_requerido - (d.cantidad_cubierta || 0);
+      }
+      
       return {
         'No.': index + 1,
         'Clave': d.insumo?.clave || 'N/A',
@@ -220,9 +233,12 @@ const GerenteAlmacenDashboard = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Solicitud Proveedor');
     
-    const totalPendiente = detallesPendientes.reduce((sum, d) => 
-      sum + (d.total_faltante_requerido - (d.cantidad_cubierta || 0)), 0
-    );
+    const totalPendiente = detallesPendientes.reduce((sum, d) => {
+      if (d.cantidad_pendiente !== null && d.cantidad_pendiente !== undefined) {
+        return sum + d.cantidad_pendiente;
+      }
+      return sum + (d.total_faltante_requerido - (d.cantidad_cubierta || 0));
+    }, 0);
     
     const infoData = [
       { Campo: 'Fecha de Generación', Valor: new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) },
@@ -232,7 +248,8 @@ const GerenteAlmacenDashboard = () => {
       { Campo: '', Valor: '' },
       { Campo: 'IMPORTANTE', Valor: 'La columna "Cantidad Pendiente Requerida" YA considera órdenes anteriores.' },
       { Campo: 'Instrucciones', Valor: 'Complete SOLO "Cantidad Proveedor" y "Precio Unitario".' },
-      { Campo: '', Valor: 'La columna "Cantidad Faltante" se calcula automáticamente.' }
+      { Campo: '', Valor: 'La columna "Cantidad Faltante" se calcula automáticamente (Pendiente - Proveedor).' },
+      { Campo: '', Valor: 'Al subir este archivo, el sistema actualizará las cantidades pendientes automáticamente.' }
     ];
     const wsInfo = XLSX.utils.json_to_sheet(infoData);
     wsInfo['!cols'] = [{ wch: 25 }, { wch: 70 }];
@@ -259,9 +276,10 @@ const GerenteAlmacenDashboard = () => {
           'No.': number;
           'Clave': string;
           'Nombre del Insumo': string;
-          'Cantidad Requerida': number;
+          'Cantidad Pendiente Requerida': number;
           'Cantidad Proveedor': number;
           'Precio Unitario ($)': number;
+          'Cantidad Faltante': number;
           'ID Sistema': string;
         }>;
 
@@ -279,7 +297,7 @@ const GerenteAlmacenDashboard = () => {
 
         // Calculate total from prices
         const totalEstimado = itemsConCantidad.reduce((sum, row) => {
-          const precio = row['Precio Unitario'] || 100;
+          const precio = row['Precio Unitario ($)'] || 100;
           return sum + (precio * row['Cantidad Proveedor']);
         }, 0);
 
@@ -313,17 +331,19 @@ const GerenteAlmacenDashboard = () => {
 
         if (itemsError) throw itemsError;
 
-        // Update cantidad_cubierta for each detail item
-        for (const row of itemsConCantidad) {
+        // Update cantidad_cubierta AND cantidad_pendiente for each detail item
+        for (const row of jsonData) {
           const insumoId = row['ID Sistema'];
           const cantidadProveedor = Number(row['Cantidad Proveedor']) || 0;
+          // Read "Cantidad Faltante" from Excel - this is the new pending quantity
+          const cantidadFaltante = Number(row['Cantidad Faltante']) || 0;
           
-          if (!insumoId || cantidadProveedor === 0) continue;
+          if (!insumoId) continue;
           
           // Use maybeSingle() instead of single() to handle no results
           const { data: det, error: detError } = await supabase
             .from('documento_agrupado_detalle')
-            .select('id, cantidad_cubierta')
+            .select('id, cantidad_cubierta, total_faltante_requerido')
             .eq('documento_id', selectedDocId)
             .eq('insumo_catalogo_id', insumoId)
             .maybeSingle();
@@ -334,16 +354,22 @@ const GerenteAlmacenDashboard = () => {
           }
 
           if (det) {
-            const nuevaCantidad = (det.cantidad_cubierta || 0) + cantidadProveedor;
+            const nuevaCubierta = (det.cantidad_cubierta || 0) + cantidadProveedor;
+            // cantidad_pendiente is the "Cantidad Faltante" from Excel
+            // If proveedor filled nothing, faltante = pendiente_requerida (no change needed for next download)
+            // If proveedor filled some, faltante = pendiente - proveedor
             const { error: updateError } = await supabase
               .from('documento_agrupado_detalle')
-              .update({ cantidad_cubierta: nuevaCantidad })
+              .update({ 
+                cantidad_cubierta: nuevaCubierta,
+                cantidad_pendiente: cantidadFaltante 
+              })
               .eq('id', det.id);
             
             if (updateError) {
-              console.error('Error updating cantidad_cubierta:', updateError);
+              console.error('Error updating detail:', updateError);
             } else {
-              console.log(`Updated cantidad_cubierta for ${insumoId}: ${nuevaCantidad}`);
+              console.log(`Updated ${insumoId}: cubierta=${nuevaCubierta}, pendiente=${cantidadFaltante}`);
             }
           }
         }
@@ -351,11 +377,11 @@ const GerenteAlmacenDashboard = () => {
         // Check if all items are fully covered - only then mark as processed
         const { data: allDetails } = await supabase
           .from('documento_agrupado_detalle')
-          .select('total_faltante_requerido, cantidad_cubierta')
+          .select('total_faltante_requerido, cantidad_cubierta, cantidad_pendiente')
           .eq('documento_id', selectedDocId);
 
         const allCovered = allDetails?.every(d => 
-          (d.cantidad_cubierta || 0) >= d.total_faltante_requerido
+          (d.cantidad_pendiente === 0) || ((d.cantidad_cubierta || 0) >= d.total_faltante_requerido)
         );
 
         if (allCovered) {

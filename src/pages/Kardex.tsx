@@ -29,9 +29,20 @@ interface MovimientoKardex {
   observaciones: string;
   created_at: string;
   folio_id: string;
-  inventario_hospital: {
+  // Datos del lote desde inventario_lotes
+  inventario_lotes?: {
     lote: string;
-    insumos_catalogo: {
+    inventario_consolidado?: {
+      insumos_catalogo?: {
+        nombre: string;
+        clave: string;
+      };
+    };
+  };
+  // Fallback para registros antiguos
+  inventario_hospital?: {
+    lote: string;
+    insumos_catalogo?: {
       nombre: string;
       clave: string;
     };
@@ -120,12 +131,28 @@ const Kardex = () => {
     }
   };
 
-  const filteredMovimientos = movimientos.filter(mov =>
-    mov.inventario_hospital?.insumos_catalogo?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    mov.inventario_hospital?.insumos_catalogo?.clave?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    mov.inventario_hospital?.lote?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    mov.folios?.numero_folio?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Helper para obtener datos del insumo (compatible con ambos sistemas)
+  const getInsumoData = (mov: MovimientoKardex) => {
+    // Intentar primero con nuevo sistema (inventario_lotes)
+    if (mov.inventario_lotes?.inventario_consolidado?.insumos_catalogo) {
+      return mov.inventario_lotes.inventario_consolidado.insumos_catalogo;
+    }
+    // Fallback a sistema antiguo (inventario_hospital)
+    return mov.inventario_hospital?.insumos_catalogo;
+  };
+
+  const getLote = (mov: MovimientoKardex) => {
+    return mov.inventario_lotes?.lote || mov.inventario_hospital?.lote;
+  };
+
+  const filteredMovimientos = movimientos.filter(mov => {
+    const insumoData = getInsumoData(mov);
+    const lote = getLote(mov);
+    return insumoData?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      insumoData?.clave?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      lote?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      mov.folios?.numero_folio?.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   const totalEntradas = movimientos.filter(m => 
     m.tipo_movimiento === 'entrada' || m.tipo_movimiento === 'traspaso_entrada'
@@ -286,16 +313,16 @@ const Kardex = () => {
                             </TableCell>
                             <TableCell className="font-medium">
                               <div>
-                                {mov.inventario_hospital?.insumos_catalogo?.nombre}
+                                {getInsumoData(mov)?.nombre}
                               </div>
-                              {mov.inventario_hospital?.insumos_catalogo?.clave && (
+                              {getInsumoData(mov)?.clave && (
                                 <div className="text-xs text-muted-foreground">
-                                  {mov.inventario_hospital.insumos_catalogo.clave}
+                                  {getInsumoData(mov)?.clave}
                                 </div>
                               )}
                             </TableCell>
                             <TableCell className="font-mono text-xs">
-                              {mov.inventario_hospital?.lote}
+                              {getLote(mov)}
                             </TableCell>
                             <TableCell className="text-right font-medium">
                               {mov.cantidad_anterior}

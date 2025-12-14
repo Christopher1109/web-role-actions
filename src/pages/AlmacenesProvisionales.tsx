@@ -264,19 +264,24 @@ const AlmacenesProvisionales = () => {
       const hospitalId = selectedHospital.id;
       const totalItems = itemsTraspaso.length;
 
-      // Obtener todos los lotes del inventario general en una sola query
+      // Obtener todos los lotes del inventario general usando sistema híbrido
       setMensajeProgreso("Cargando inventario...");
       const lotesRes = await supabase
-        .from("inventario_hospital")
-        .select("id, insumo_catalogo_id, cantidad_actual")
-        .eq("hospital_id", hospitalId)
-        .gt("cantidad_actual", 0)
-        .order("created_at", { ascending: true });
+        .from("inventario_lotes")
+        .select(`
+          id, 
+          cantidad, 
+          consolidado_id,
+          inventario_consolidado!inner(insumo_catalogo_id, hospital_id)
+        `)
+        .eq("inventario_consolidado.hospital_id", hospitalId)
+        .gt("cantidad", 0)
+        .order("fecha_entrada", { ascending: true }); // FIFO
 
       const todosLotes = assertSupabaseOk(
         lotesRes,
         "AlmacenesProvisionales.ejecutarTraspaso: cargar inventario general",
-      ) as Array<{ id: string; insumo_catalogo_id: string; cantidad_actual: number }> | null;
+      ) as Array<{ id: string; cantidad: number; consolidado_id: string; inventario_consolidado: { insumo_catalogo_id: string; hospital_id: string } }> | null;
 
       // Obtener inventario provisional actual en una sola query
       const provRes = await supabase
@@ -290,11 +295,12 @@ const AlmacenesProvisionales = () => {
       ) as Array<{ id: string; insumo_catalogo_id: string; cantidad_disponible: number }> | null;
 
       // Crear mapas para acceso rápido O(1)
-      const lotesPorInsumo = new Map<string, Array<{ id: string; cantidad_actual: number }>>();
+      const lotesPorInsumo = new Map<string, Array<{ id: string; cantidad: number; consolidado_id: string }>>();
       for (const lote of (todosLotes || [])) {
-        const arr = lotesPorInsumo.get(lote.insumo_catalogo_id) || [];
-        arr.push({ id: lote.id, cantidad_actual: lote.cantidad_actual });
-        lotesPorInsumo.set(lote.insumo_catalogo_id, arr);
+        const insumoCatId = lote.inventario_consolidado.insumo_catalogo_id;
+        const arr = lotesPorInsumo.get(insumoCatId) || [];
+        arr.push({ id: lote.id, cantidad: lote.cantidad, consolidado_id: lote.consolidado_id });
+        lotesPorInsumo.set(insumoCatId, arr);
       }
 
       const provPorInsumo = new Map<string, { id: string; cantidad_disponible: number }>();
@@ -304,7 +310,8 @@ const AlmacenesProvisionales = () => {
 
       // Preparar todas las operaciones
       setMensajeProgreso("Procesando traspasos...");
-      const updateLotes: Array<{ id: string; cantidad_actual: number }> = [];
+      const updateLotes: Array<{ id: string; cantidad: number; consolidado_id: string }> = [];
+      const updateConsolidados: Map<string, number> = new Map(); // consolidado_id -> cantidad a restar
       const updateProv: Array<{ id: string; cantidad_disponible: number }> = [];
       const insertProv: Array<{
         almacen_provisional_id: string;
@@ -324,7 +331,7 @@ const AlmacenesProvisionales = () => {
       let procesados = 0;
       for (const [insumoCatalogoId, cantidadSolicitada] of itemsTraspaso) {
         const lotes = lotesPorInsumo.get(insumoCatalogoId) || [];
-        const stockTotal = lotes.reduce((sum, l) => sum + (l.cantidad_actual || 0), 0);
+        const stockTotal = lotes.reduce((sum, l) => sum + (l.cantidad || 0), 0);
         if (stockTotal < cantidadSolicitada) {
           throw new Error(
             `Stock insuficiente en almacén general para insumo ${insumoCatalogoId}. ` +
@@ -333,14 +340,18 @@ const AlmacenesProvisionales = () => {
         }
         let cantidadRestante = cantidadSolicitada;
 
-        // Calcular descuentos de lotes
+        // Calcular descuentos de lotes (FIFO)
         for (const lote of lotes) {
           if (cantidadRestante <= 0) break;
-          const aDescontar = Math.min(cantidadRestante, lote.cantidad_actual);
-          // Mantener el estado local consistente (NO doble-descuento)
-          const nuevaCantidad = lote.cantidad_actual - aDescontar;
-          lote.cantidad_actual = nuevaCantidad;
-          updateLotes.push({ id: lote.id, cantidad_actual: nuevaCantidad });
+          const aDescontar = Math.min(cantidadRestante, lote.cantidad);
+          const nuevaCantidad = lote.cantidad - aDescontar;
+          lote.cantidad = nuevaCantidad;
+          updateLotes.push({ id: lote.id, cantidad: nuevaCantidad, consolidado_id: lote.consolidado_id });
+          
+          // Track consolidado update
+          const currentDeduct = updateConsolidados.get(lote.consolidado_id) || 0;
+          updateConsolidados.set(lote.consolidado_id, currentDeduct + aDescontar);
+          
           cantidadRestante -= aDescontar;
         }
 
@@ -384,13 +395,33 @@ const AlmacenesProvisionales = () => {
         const batchRes = await Promise.all(
           batch.map((lote) =>
             supabase
-              .from("inventario_hospital")
-              .update({ cantidad_actual: lote.cantidad_actual, updated_at: new Date().toISOString() })
+              .from("inventario_lotes")
+              .update({ cantidad: lote.cantidad, updated_at: new Date().toISOString() })
               .eq("id", lote.id),
           ),
         );
-        collectSupabaseErrors(batchRes as any, "AlmacenesProvisionales.ejecutarTraspaso: update inventario_hospital");
+        collectSupabaseErrors(batchRes as any, "AlmacenesProvisionales.ejecutarTraspaso: update inventario_lotes");
         setProgresoTraspaso(50 + Math.round((i / updateLotes.length) * 20));
+      }
+
+      // Update consolidados totals
+      for (const [consolidadoId, cantidadRestar] of updateConsolidados) {
+        await supabase.rpc("recalcular_alerta_consolidado", { p_consolidado_id: consolidadoId });
+        // Also update cantidad_total directly
+        const { data: currentConsolidado } = await supabase
+          .from("inventario_consolidado")
+          .select("cantidad_total")
+          .eq("id", consolidadoId)
+          .single();
+        if (currentConsolidado) {
+          await supabase
+            .from("inventario_consolidado")
+            .update({ 
+              cantidad_total: Math.max(0, currentConsolidado.cantidad_total - cantidadRestar),
+              updated_at: new Date().toISOString() 
+            })
+            .eq("id", consolidadoId);
+        }
       }
 
       // Updates/inserts de provisional
@@ -480,30 +511,48 @@ const AlmacenesProvisionales = () => {
           })
           .eq("id", inventarioProvId);
 
-        // Agregar al inventario general
-        const { data: existenteGeneral } = await supabase
-          .from("inventario_hospital")
-          .select("*")
+        // Agregar al inventario general usando sistema híbrido
+        const { data: existenteConsolidado } = await supabase
+          .from("inventario_consolidado")
+          .select("id, cantidad_total")
           .eq("hospital_id", selectedHospital.id)
+          .eq("almacen_id", almacenGeneral.id)
           .eq("insumo_catalogo_id", item.insumo_catalogo_id)
           .maybeSingle();
 
-        if (existenteGeneral) {
+        let consolidadoId: string;
+
+        if (existenteConsolidado) {
           await supabase
-            .from("inventario_hospital")
+            .from("inventario_consolidado")
             .update({
-              cantidad_actual: (existenteGeneral.cantidad_actual || 0) + cantidad,
+              cantidad_total: (existenteConsolidado.cantidad_total || 0) + cantidad,
               updated_at: new Date().toISOString(),
             })
-            .eq("id", existenteGeneral.id);
+            .eq("id", existenteConsolidado.id);
+          consolidadoId = existenteConsolidado.id;
         } else {
-          await supabase.from("inventario_hospital").insert({
-            hospital_id: selectedHospital.id,
-            almacen_id: almacenGeneral.id,
-            insumo_catalogo_id: item.insumo_catalogo_id,
-            cantidad_actual: cantidad,
-            cantidad_inicial: cantidad,
-            cantidad_minima: 10,
+          const { data: newConsolidado } = await supabase
+            .from("inventario_consolidado")
+            .insert({
+              hospital_id: selectedHospital.id,
+              almacen_id: almacenGeneral.id,
+              insumo_catalogo_id: item.insumo_catalogo_id,
+              cantidad_total: cantidad,
+              cantidad_minima: 10,
+            })
+            .select()
+            .single();
+          consolidadoId = newConsolidado?.id;
+        }
+
+        // Create lote record
+        if (consolidadoId) {
+          await supabase.from("inventario_lotes").insert({
+            consolidado_id: consolidadoId,
+            cantidad: cantidad,
+            fecha_entrada: new Date().toISOString(),
+            ubicacion: "Devolución provisional",
           });
         }
 
@@ -588,29 +637,48 @@ const AlmacenesProvisionales = () => {
           const cantidad = item.cantidad_disponible;
           if (cantidad <= 0) continue;
 
-          const { data: existenteGeneral } = await supabase
-            .from("inventario_hospital")
-            .select("*")
+          // Usar sistema híbrido (inventario_consolidado + inventario_lotes)
+          const { data: existenteConsolidado } = await supabase
+            .from("inventario_consolidado")
+            .select("id, cantidad_total")
             .eq("hospital_id", selectedHospital.id)
+            .eq("almacen_id", almacenGeneral.id)
             .eq("insumo_catalogo_id", item.insumo_catalogo_id)
             .maybeSingle();
 
-          if (existenteGeneral) {
+          let consolidadoId: string;
+
+          if (existenteConsolidado) {
             await supabase
-              .from("inventario_hospital")
+              .from("inventario_consolidado")
               .update({
-                cantidad_actual: (existenteGeneral.cantidad_actual || 0) + cantidad,
+                cantidad_total: (existenteConsolidado.cantidad_total || 0) + cantidad,
                 updated_at: new Date().toISOString(),
               })
-              .eq("id", existenteGeneral.id);
+              .eq("id", existenteConsolidado.id);
+            consolidadoId = existenteConsolidado.id;
           } else {
-            await supabase.from("inventario_hospital").insert({
-              hospital_id: selectedHospital.id,
-              almacen_id: almacenGeneral.id,
-              insumo_catalogo_id: item.insumo_catalogo_id,
-              cantidad_actual: cantidad,
-              cantidad_inicial: cantidad,
-              cantidad_minima: 10,
+            const { data: newConsolidado } = await supabase
+              .from("inventario_consolidado")
+              .insert({
+                hospital_id: selectedHospital.id,
+                almacen_id: almacenGeneral.id,
+                insumo_catalogo_id: item.insumo_catalogo_id,
+                cantidad_total: cantidad,
+                cantidad_minima: 10,
+              })
+              .select()
+              .single();
+            consolidadoId = newConsolidado?.id;
+          }
+
+          // Create lote record
+          if (consolidadoId) {
+            await supabase.from("inventario_lotes").insert({
+              consolidado_id: consolidadoId,
+              cantidad: cantidad,
+              fecha_entrada: new Date().toISOString(),
+              ubicacion: "Devolución por eliminación",
             });
           }
 

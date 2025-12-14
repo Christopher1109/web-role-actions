@@ -194,74 +194,62 @@ const AlmacenistaAlertasTransferencia = () => {
             });
         }
 
-        // Update hospital inventory - ALWAYS ADD to existing quantity, never replace
-        const { data: inventarioExistente } = await supabase
-          .from('inventario_hospital')
-          .select('*')
+        // Update hospital inventory using hybrid system (inventario_consolidado + inventario_lotes)
+        const { data: almacenHospital } = await supabase
+          .from('almacenes')
+          .select('id')
           .eq('hospital_id', selectedHospital.id)
-          .eq('insumo_catalogo_id', alerta.insumo_catalogo_id)
           .maybeSingle();
 
-        if (inventarioExistente) {
-          // SUM the received quantity to the existing inventory
-          const nuevaCantidad = (inventarioExistente.cantidad_actual || 0) + cantidadRecibida;
-          
-          await supabase
-            .from('inventario_hospital')
-            .update({
-              cantidad_actual: nuevaCantidad,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', inventarioExistente.id);
-
-          // Record the movement in kardex
-          await supabase
-            .from('movimientos_inventario')
-            .insert({
-              hospital_id: selectedHospital.id,
-              inventario_id: inventarioExistente.id,
-              cantidad: cantidadRecibida,
-              cantidad_anterior: inventarioExistente.cantidad_actual || 0,
-              cantidad_nueva: nuevaCantidad,
-              tipo_movimiento: 'entrada_transferencia',
-              observaciones: `Recepción de tirada desde Almacén Central. Merma: ${merma}`
-            });
-        } else {
-          // Create new inventory record if doesn't exist
-          const { data: almacenHospital } = await supabase
-            .from('almacenes')
-            .select('id')
+        if (almacenHospital) {
+          // Check if consolidado exists
+          const { data: existingConsolidado } = await supabase
+            .from('inventario_consolidado')
+            .select('id, cantidad_total')
             .eq('hospital_id', selectedHospital.id)
+            .eq('almacen_id', almacenHospital.id)
+            .eq('insumo_catalogo_id', alerta.insumo_catalogo_id)
             .maybeSingle();
 
-          if (almacenHospital) {
-            const { data: nuevoInventario } = await supabase
-              .from('inventario_hospital')
+          let consolidadoId: string;
+          const cantidadAnterior = existingConsolidado?.cantidad_total || 0;
+
+          if (existingConsolidado) {
+            // Update consolidado total
+            await supabase
+              .from('inventario_consolidado')
+              .update({
+                cantidad_total: existingConsolidado.cantidad_total + cantidadRecibida,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingConsolidado.id);
+            consolidadoId = existingConsolidado.id;
+          } else {
+            // Create new consolidado record
+            const { data: newConsolidado } = await supabase
+              .from('inventario_consolidado')
               .insert({
                 hospital_id: selectedHospital.id,
                 almacen_id: almacenHospital.id,
                 insumo_catalogo_id: alerta.insumo_catalogo_id,
-                cantidad_actual: cantidadRecibida,
-                cantidad_inicial: cantidadRecibida,
+                cantidad_total: cantidadRecibida,
                 cantidad_minima: 10
               })
               .select()
               .single();
+            consolidadoId = newConsolidado?.id;
+          }
 
-            // Record the movement
-            if (nuevoInventario) {
-              await supabase
-                .from('movimientos_inventario')
-                .insert({
-                  hospital_id: selectedHospital.id,
-                  inventario_id: nuevoInventario.id,
-                  cantidad: cantidadRecibida,
-                  cantidad_anterior: 0,
-                  cantidad_nueva: cantidadRecibida,
-                  tipo_movimiento: 'entrada_transferencia',
-                  observaciones: `Primera recepción desde Almacén Central`
-                });
-            }
+          // Create new lote record for FIFO tracking
+          if (consolidadoId) {
+            await supabase
+              .from('inventario_lotes')
+              .insert({
+                consolidado_id: consolidadoId,
+                cantidad: cantidadRecibida,
+                fecha_entrada: new Date().toISOString(),
+                ubicacion: 'Transferencia Central'
+              });
           }
         }
 

@@ -230,8 +230,7 @@ const Traspasos = () => {
         })
         .eq('id', alertaSeleccionada.transferencia_id);
 
-      // 3. Add to hospital inventory
-      // First check if there's an existing inventory record
+      // 3. Add to hospital inventory using new hybrid system (inventario_consolidado + inventario_lotes)
       const { data: almacen } = await supabase
         .from('almacenes')
         .select('id')
@@ -239,33 +238,52 @@ const Traspasos = () => {
         .maybeSingle();
 
       if (almacen) {
-        const { data: existingInventario } = await supabase
-          .from('inventario_hospital')
-          .select()
+        // Check if consolidado exists
+        const { data: existingConsolidado } = await supabase
+          .from('inventario_consolidado')
+          .select('id, cantidad_total')
           .eq('hospital_id', selectedHospital.id)
           .eq('almacen_id', almacen.id)
           .eq('insumo_catalogo_id', alertaSeleccionada.insumo_catalogo_id)
           .maybeSingle();
 
-        if (existingInventario) {
-          // Update existing inventory
+        let consolidadoId: string;
+
+        if (existingConsolidado) {
+          // Update consolidado total
           await supabase
-            .from('inventario_hospital')
+            .from('inventario_consolidado')
             .update({
-              cantidad_actual: existingInventario.cantidad_actual + cantidadAceptada,
+              cantidad_total: existingConsolidado.cantidad_total + cantidadAceptada,
               updated_at: new Date().toISOString()
             })
-            .eq('id', existingInventario.id);
+            .eq('id', existingConsolidado.id);
+          consolidadoId = existingConsolidado.id;
         } else {
-          // Create new inventory record
-          await supabase
-            .from('inventario_hospital')
+          // Create new consolidado record
+          const { data: newConsolidado } = await supabase
+            .from('inventario_consolidado')
             .insert({
               hospital_id: selectedHospital.id,
               almacen_id: almacen.id,
               insumo_catalogo_id: alertaSeleccionada.insumo_catalogo_id,
-              cantidad_actual: cantidadAceptada,
-              cantidad_inicial: cantidadAceptada
+              cantidad_total: cantidadAceptada,
+              cantidad_minima: 10
+            })
+            .select()
+            .single();
+          consolidadoId = newConsolidado?.id;
+        }
+
+        // Create new lote record for FIFO tracking
+        if (consolidadoId) {
+          await supabase
+            .from('inventario_lotes')
+            .insert({
+              consolidado_id: consolidadoId,
+              cantidad: cantidadAceptada,
+              fecha_entrada: new Date().toISOString(),
+              ubicacion: 'Transferencia Central'
             });
         }
       }

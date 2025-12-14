@@ -331,14 +331,14 @@ const GerenteAlmacenDashboard = () => {
 
         if (itemsError) throw itemsError;
 
-        // Update cantidad_cubierta AND cantidad_pendiente for each detail item
-        for (const row of jsonData) {
+        // Update cantidad_cubierta for each detail item
+        // cantidad_pendiente is a GENERATED column (total_faltante_requerido - cantidad_cubierta)
+        // so it will be automatically recalculated when we update cantidad_cubierta
+        for (const row of itemsConCantidad) {
           const insumoId = row['ID Sistema'];
           const cantidadProveedor = Number(row['Cantidad Proveedor']) || 0;
-          // Read "Cantidad Faltante" from Excel - this is the new pending quantity
-          const cantidadFaltante = Number(row['Cantidad Faltante']) || 0;
           
-          if (!insumoId) continue;
+          if (!insumoId || cantidadProveedor === 0) continue;
           
           // Use maybeSingle() instead of single() to handle no results
           const { data: det, error: detError } = await supabase
@@ -354,22 +354,19 @@ const GerenteAlmacenDashboard = () => {
           }
 
           if (det) {
+            // Add provider quantity to what's already covered
             const nuevaCubierta = (det.cantidad_cubierta || 0) + cantidadProveedor;
-            // cantidad_pendiente is the "Cantidad Faltante" from Excel
-            // If proveedor filled nothing, faltante = pendiente_requerida (no change needed for next download)
-            // If proveedor filled some, faltante = pendiente - proveedor
+            // Only update cantidad_cubierta - cantidad_pendiente is auto-calculated
             const { error: updateError } = await supabase
               .from('documento_agrupado_detalle')
-              .update({ 
-                cantidad_cubierta: nuevaCubierta,
-                cantidad_pendiente: cantidadFaltante 
-              })
+              .update({ cantidad_cubierta: nuevaCubierta })
               .eq('id', det.id);
             
             if (updateError) {
-              console.error('Error updating detail:', updateError);
+              console.error('Error updating cantidad_cubierta:', updateError);
             } else {
-              console.log(`Updated ${insumoId}: cubierta=${nuevaCubierta}, pendiente=${cantidadFaltante}`);
+              const nuevaPendiente = det.total_faltante_requerido - nuevaCubierta;
+              console.log(`Updated ${insumoId}: cubierta=${nuevaCubierta}, pendiente calculado=${nuevaPendiente}`);
             }
           }
         }

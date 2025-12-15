@@ -159,7 +159,11 @@ const AlmacenistaAlertasTransferencia = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      for (const alerta of selectedTirada.alertas) {
+      // Collect all alert IDs to update at once for the tirada
+      const alertaIds = selectedTirada.alertas.map(a => a.id);
+      
+      // Process each alerta
+      const updatePromises = selectedTirada.alertas.map(async (alerta) => {
         const cantidadRecibida = cantidadesRecibidas[alerta.id] || 0;
         const merma = mermas[alerta.id] || 0;
         const motivoMerma = motivosMerma[alerta.id] || '';
@@ -177,7 +181,10 @@ const AlmacenistaAlertasTransferencia = () => {
           })
           .eq('id', alerta.id);
 
-        if (alertaError) throw alertaError;
+        if (alertaError) {
+          console.error('Error updating alerta:', alerta.id, alertaError);
+          throw alertaError;
+        }
 
         // Register merma if any
         if (merma > 0) {
@@ -212,7 +219,6 @@ const AlmacenistaAlertasTransferencia = () => {
             .maybeSingle();
 
           let consolidadoId: string;
-          const cantidadAnterior = existingConsolidado?.cantidad_total || 0;
 
           if (existingConsolidado) {
             // Update consolidado total
@@ -262,7 +268,14 @@ const AlmacenistaAlertasTransferencia = () => {
             recibido_por: user?.id
           })
           .eq('id', alerta.transferencia_id);
-      }
+          
+        return alerta.id;
+      });
+
+      // Wait for ALL updates to complete
+      await Promise.all(updatePromises);
+      
+      console.log('Tirada procesada, alertas actualizadas:', alertaIds);
 
       const totalMerma = Object.values(mermas).reduce((sum, m) => sum + m, 0);
       toast.success(
@@ -271,10 +284,11 @@ const AlmacenistaAlertasTransferencia = () => {
           : `Tirada de ${selectedTirada.alertas.length} insumos aceptada completamente`
       );
 
+      // Close dialog first
       setDialogTiradaOpen(false);
       setSelectedTirada(null);
       
-      // Esperar a que se recarguen los datos antes de finalizar
+      // Then reload data to reflect changes
       await fetchAlertas();
 
     } catch (error) {

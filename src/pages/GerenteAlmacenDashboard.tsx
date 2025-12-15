@@ -1,19 +1,32 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
-import { Download, Upload, Package, ShoppingCart, CheckCircle, RefreshCw, Warehouse, Send, Clock, FileText, DollarSign, CreditCard, Truck } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import { StatusTimeline, StatusBadge } from '@/components/StatusTimeline';
-import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import {
+  Download,
+  Upload,
+  Package,
+  ShoppingCart,
+  CheckCircle,
+  RefreshCw,
+  Warehouse,
+  Send,
+  Clock,
+  FileText,
+  DollarSign,
+  CreditCard,
+  Truck,
+} from "lucide-react";
+import * as XLSX from "xlsx";
+import { StatusTimeline } from "@/components/StatusTimeline";
+import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
 
 interface DocumentoAgrupado {
   id: string;
@@ -66,6 +79,23 @@ interface AlmacenCentralItem {
   insumo?: { id: string; nombre: string; clave: string };
 }
 
+/** Helpers */
+const toNumberOrNull = (v: unknown): number | null => {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const s = v.trim().replace(/,/g, "");
+    if (!s) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
+
+const clampMin0 = (n: number) => (n < 0 ? 0 : n);
+
+const isValidNonNegNumber = (n: number | null) => typeof n === "number" && Number.isFinite(n) && n >= 0;
+
 const GerenteAlmacenDashboard = () => {
   const [documentos, setDocumentos] = useState<DocumentoAgrupado[]>([]);
   const [ordenesCompra, setOrdenesCompra] = useState<OrdenCompra[]>([]);
@@ -87,7 +117,7 @@ const GerenteAlmacenDashboard = () => {
 
   // Realtime notifications
   useRealtimeNotifications({
-    userRole: 'gerente_almacen',
+    userRole: "gerente_almacen",
     onDocumentoAgrupado: fetchDataCallback,
     onPedidoActualizado: fetchDataCallback,
   });
@@ -99,167 +129,148 @@ const GerenteAlmacenDashboard = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch documentos agrupados que fueron enviados
       const { data: docsData, error: docsError } = await supabase
-        .from('documentos_necesidades_agrupado')
-        .select(`
+        .from("documentos_necesidades_agrupado")
+        .select(
+          `
           *,
           detalles:documento_agrupado_detalle(
             *,
             insumo:insumos_catalogo(id, nombre, clave)
           )
-        `)
-        .eq('enviado_a_gerente_almacen', true)
-        .order('fecha_generacion', { ascending: false })
+        `,
+        )
+        .eq("enviado_a_gerente_almacen", true)
+        .order("fecha_generacion", { ascending: false })
         .limit(20);
 
       if (docsError) throw docsError;
       setDocumentos(docsData || []);
 
-      // Fetch ordenes de compra
       const { data: ordenesData, error: ordenesError } = await supabase
-        .from('pedidos_compra')
-        .select(`
+        .from("pedidos_compra")
+        .select(
+          `
           *,
           items:pedido_items(
             *,
             insumo:insumos_catalogo(id, nombre, clave)
           )
-        `)
-        .order('created_at', { ascending: false });
+        `,
+        )
+        .order("created_at", { ascending: false });
 
       if (ordenesError) throw ordenesError;
       setOrdenesCompra(ordenesData || []);
 
-      // Fetch almacen central
       const { data: almacenData, error: almacenError } = await supabase
-        .from('almacen_central')
-        .select(`
+        .from("almacen_central")
+        .select(
+          `
           *,
           insumo:insumos_catalogo(id, nombre, clave)
-        `)
-        .order('cantidad_disponible', { ascending: false });
+        `,
+        )
+        .order("cantidad_disponible", { ascending: false });
 
       if (almacenError) throw almacenError;
       setAlmacenCentral(almacenData || []);
-
     } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Error al cargar datos');
+      console.error("Error fetching data:", error);
+      toast.error("Error al cargar datos");
     } finally {
       setLoading(false);
     }
   };
 
+  /**
+   * DESCARGA EXCEL
+   * - Usa cantidad_pendiente (si existe) como verdad para “Cantidad Pendiente Requerida”
+   * - Si no existe, calcula total_faltante_requerido - cantidad_cubierta
+   */
   const descargarExcelParaProveedor = async (documento: DocumentoAgrupado) => {
-    // Always fetch fresh data from database to get updated cantidad_cubierta and cantidad_pendiente
     const { data: freshDetalles, error } = await supabase
-      .from('documento_agrupado_detalle')
-      .select(`
+      .from("documento_agrupado_detalle")
+      .select(
+        `
         *,
         insumo:insumos_catalogo(id, nombre, clave)
-      `)
-      .eq('documento_id', documento.id);
+      `,
+      )
+      .eq("documento_id", documento.id);
 
     if (error || !freshDetalles || freshDetalles.length === 0) {
-      toast.error('Error al obtener datos actualizados del documento');
+      toast.error("Error al obtener datos actualizados del documento");
       return;
     }
 
-    // Filter only items with pending quantities > 0
-    // Use cantidad_pendiente if available (from previous upload), otherwise calculate from total - cubierta
-    const detallesPendientes = freshDetalles.filter(d => {
-      // If cantidad_pendiente is explicitly set (from previous upload), use it
-      if (d.cantidad_pendiente !== null && d.cantidad_pendiente !== undefined) {
-        return d.cantidad_pendiente > 0;
-      }
-      // Otherwise calculate: total - cubierta
-      const pendiente = d.total_faltante_requerido - (d.cantidad_cubierta || 0);
-      return pendiente > 0;
-    });
+    const detallesConPendiente = freshDetalles
+      .map((d: any) => {
+        const pendienteDB = toNumberOrNull(d.cantidad_pendiente);
+        const cubierta = toNumberOrNull(d.cantidad_cubierta) ?? 0;
+        const total = toNumberOrNull(d.total_faltante_requerido) ?? 0;
 
-    if (detallesPendientes.length === 0) {
-      toast.info('Todos los insumos de este documento ya están cubiertos');
+        const pendienteCalculado = clampMin0(total - cubierta);
+        const pendienteFinal = isValidNonNegNumber(pendienteDB) ? (pendienteDB as number) : pendienteCalculado;
+
+        return { ...d, _pendienteFinal: pendienteFinal };
+      })
+      .filter((d: any) => (toNumberOrNull(d._pendienteFinal) ?? 0) > 0);
+
+    if (detallesConPendiente.length === 0) {
+      toast.info("Todos los insumos de este documento ya están cubiertos");
       return;
     }
 
-    // Use cantidad_pendiente if set, otherwise calculate
-    const data = detallesPendientes.map((d, index) => {
-      // Priority: use cantidad_pendiente from DB if set, otherwise calculate
-      let cantidadPendiente: number;
-      if (d.cantidad_pendiente !== null && d.cantidad_pendiente !== undefined) {
-        cantidadPendiente = d.cantidad_pendiente;
-      } else {
-        cantidadPendiente = d.total_faltante_requerido - (d.cantidad_cubierta || 0);
-      }
-      
-      return {
-        'No.': index + 1,
-        'Clave': d.insumo?.clave || 'N/A',
-        'Nombre del Insumo': d.insumo?.nombre || 'N/A',
-        'Cantidad Pendiente Requerida': cantidadPendiente,
-        'Cantidad Proveedor': '',
-        'Precio Unitario ($)': '',
-        'Cantidad Faltante': '',
-        'ID Sistema': d.insumo_catalogo_id
-      };
-    });
+    const data = detallesConPendiente.map((d: any, index: number) => ({
+      "No.": index + 1,
+      Clave: d.insumo?.clave || "N/A",
+      "Nombre del Insumo": d.insumo?.nombre || "N/A",
+      "Cantidad Pendiente Requerida": d._pendienteFinal,
+      "Cantidad Proveedor": "",
+      "Precio Unitario ($)": "",
+      "Cantidad Faltante": "",
+      "ID Sistema": d.insumo_catalogo_id,
+    }));
 
     const ws = XLSX.utils.json_to_sheet(data);
-    
-    // Set column widths
-    ws['!cols'] = [
-      { wch: 6 },   // No.
-      { wch: 18 },  // Clave
-      { wch: 50 },  // Nombre del Insumo
-      { wch: 26 },  // Cantidad Pendiente Requerida
-      { wch: 22 },  // Cantidad Proveedor
-      { wch: 20 },  // Precio Unitario
-      { wch: 22 },  // Cantidad Faltante (formula)
-      { wch: 40 }   // ID Sistema
+
+    ws["!cols"] = [
+      { wch: 6 },
+      { wch: 18 },
+      { wch: 50 },
+      { wch: 26 },
+      { wch: 22 },
+      { wch: 20 },
+      { wch: 22 },
+      { wch: 40 },
     ];
 
-    // Add formulas for "Cantidad Faltante" column (column G)
+    // Cantidad Faltante = Pendiente - Proveedor
     for (let i = 0; i < data.length; i++) {
       const rowNum = i + 2;
-      const cellRef = `G${rowNum}`;
-      ws[cellRef] = { 
-        t: 'n', 
-        f: `D${rowNum}-E${rowNum}`,
-        z: '0'
-      };
+      ws[`G${rowNum}`] = { t: "n", f: `D${rowNum}-E${rowNum}`, z: "0" };
     }
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Solicitud Proveedor');
-    
-    const totalPendiente = detallesPendientes.reduce((sum, d) => {
-      if (d.cantidad_pendiente !== null && d.cantidad_pendiente !== undefined) {
-        return sum + d.cantidad_pendiente;
-      }
-      return sum + (d.total_faltante_requerido - (d.cantidad_cubierta || 0));
-    }, 0);
-    
-    const infoData = [
-      { Campo: 'Fecha de Generación', Valor: new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) },
-      { Campo: 'Items Pendientes', Valor: detallesPendientes.length },
-      { Campo: 'Cantidad Total Pendiente', Valor: totalPendiente },
-      { Campo: 'ID Documento', Valor: documento.id },
-      { Campo: '', Valor: '' },
-      { Campo: 'IMPORTANTE', Valor: 'La columna "Cantidad Pendiente Requerida" YA considera órdenes anteriores.' },
-      { Campo: 'Instrucciones', Valor: 'Complete SOLO "Cantidad Proveedor" y "Precio Unitario".' },
-      { Campo: '', Valor: 'La columna "Cantidad Faltante" se calcula automáticamente (Pendiente - Proveedor).' },
-      { Campo: '', Valor: 'Al subir este archivo, el sistema actualizará las cantidades pendientes automáticamente.' }
-    ];
-    const wsInfo = XLSX.utils.json_to_sheet(infoData);
-    wsInfo['!cols'] = [{ wch: 25 }, { wch: 70 }];
-    XLSX.utils.book_append_sheet(wb, wsInfo, 'Información');
-    
-    XLSX.writeFile(wb, `Solicitud_Proveedor_${new Date().toISOString().split('T')[0]}_${documento.id.slice(0, 8)}.xlsx`);
-    
-    toast.success('Excel descargado con cantidades actualizadas');
+    XLSX.utils.book_append_sheet(wb, ws, "Solicitud Proveedor");
+
+    XLSX.writeFile(
+      wb,
+      `Solicitud_Proveedor_${new Date().toISOString().split("T")[0]}_${documento.id.slice(0, 8)}.xlsx`,
+    );
+
+    toast.success("Excel descargado con cantidad pendiente actualizada");
   };
 
+  /**
+   * SUBIR EXCEL (respuesta del proveedor)
+   * TU REGLA:
+   * - Si Cantidad Faltante trae número -> ese es el nuevo pendiente a guardar
+   * - Si Cantidad Faltante viene vacía -> se guarda nuevamente la Cantidad Pendiente Requerida del renglón
+   * - Se compre o no se compre (Cantidad Proveedor = 0/vacío), el pendiente se debe guardar para la siguiente iteración
+   * - Solo se crea OC si hay items con Cantidad Proveedor > 0
+   */
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !selectedDocId) return;
@@ -268,149 +279,179 @@ const GerenteAlmacenDashboard = () => {
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
+        const bytes = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(bytes, { type: "array" });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet) as Array<{
-          'No.': number;
-          'Clave': string;
-          'Nombre del Insumo': string;
-          'Cantidad Pendiente Requerida': number;
-          'Cantidad Proveedor': number;
-          'Precio Unitario ($)': number;
-          'Cantidad Faltante': number;
-          'ID Sistema': string;
+
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as Array<{
+          "No.": number;
+          Clave: string;
+          "Nombre del Insumo": string;
+          "Cantidad Pendiente Requerida": any;
+          "Cantidad Proveedor": any;
+          "Precio Unitario ($)": any;
+          "Cantidad Faltante": any;
+          "ID Sistema": string;
         }>;
 
-        const itemsConCantidad = jsonData.filter(row => 
-          row['Cantidad Proveedor'] && row['Cantidad Proveedor'] > 0
-        );
-
-        if (itemsConCantidad.length === 0) {
-          toast.error('No se encontraron items con cantidad de proveedor');
+        if (!jsonData || jsonData.length === 0) {
+          toast.error("El Excel no tiene filas válidas");
           return;
         }
 
-        const { data: { user } } = await supabase.auth.getUser();
-        const numeroPedido = `OC-${Date.now().toString(36).toUpperCase()}`;
+        // 1) Primero: actualizar pendientes (y cubierta si aplica) para TODOS los renglones
+        for (const row of jsonData) {
+          const insumoId = row["ID Sistema"];
+          if (!insumoId) continue;
 
-        // Calculate total from prices
-        const totalEstimado = itemsConCantidad.reduce((sum, row) => {
-          const precio = row['Precio Unitario ($)'] || 100;
-          return sum + (precio * row['Cantidad Proveedor']);
-        }, 0);
+          const cantProveedor = toNumberOrNull(row["Cantidad Proveedor"]) ?? 0;
+          const faltante = toNumberOrNull(row["Cantidad Faltante"]);
+          const pendienteReq = toNumberOrNull(row["Cantidad Pendiente Requerida"]);
 
-        const { data: orden, error: ordenError } = await supabase
-          .from('pedidos_compra')
-          .insert({
-            numero_pedido: numeroPedido,
-            creado_por: user?.id,
-            total_items: itemsConCantidad.length,
-            estado: 'pendiente',
-            proveedor: 'Por definir',
-            documento_origen_id: selectedDocId
-          })
-          .select()
-          .single();
+          // regla exacta:
+          const pendienteAguardar = isValidNonNegNumber(faltante)
+            ? clampMin0(faltante as number)
+            : isValidNonNegNumber(pendienteReq)
+              ? clampMin0(pendienteReq as number)
+              : null;
 
-        if (ordenError) throw ordenError;
-
-        const items = itemsConCantidad.map(row => ({
-          pedido_id: orden.id,
-          insumo_catalogo_id: row['ID Sistema'],
-          cantidad_solicitada: row['Cantidad Proveedor'],
-          cantidad_recibida: 0,
-          precio_unitario: row['Precio Unitario ($)'] || null,
-          estado: 'pendiente'
-        }));
-
-        const { error: itemsError } = await supabase
-          .from('pedido_items')
-          .insert(items);
-
-        if (itemsError) throw itemsError;
-
-        // Update cantidad_cubierta for each detail item
-        // cantidad_pendiente is a GENERATED column (total_faltante_requerido - cantidad_cubierta)
-        // so it will be automatically recalculated when we update cantidad_cubierta
-        for (const row of itemsConCantidad) {
-          const insumoId = row['ID Sistema'];
-          const cantidadProveedor = Number(row['Cantidad Proveedor']) || 0;
-          
-          if (!insumoId || cantidadProveedor === 0) continue;
-          
-          // Use maybeSingle() instead of single() to handle no results
           const { data: det, error: detError } = await supabase
-            .from('documento_agrupado_detalle')
-            .select('id, cantidad_cubierta, total_faltante_requerido')
-            .eq('documento_id', selectedDocId)
-            .eq('insumo_catalogo_id', insumoId)
+            .from("documento_agrupado_detalle")
+            .select("id, cantidad_cubierta")
+            .eq("documento_id", selectedDocId)
+            .eq("insumo_catalogo_id", insumoId)
             .maybeSingle();
 
           if (detError) {
-            console.error('Error fetching detail for update:', detError);
+            console.error("Error fetching detail for update:", detError);
             continue;
           }
+          if (!det) continue;
 
-          if (det) {
-            // Add provider quantity to what's already covered
-            const nuevaCubierta = (det.cantidad_cubierta || 0) + cantidadProveedor;
-            // Only update cantidad_cubierta - cantidad_pendiente is auto-calculated
-            const { error: updateError } = await supabase
-              .from('documento_agrupado_detalle')
+          const cubiertaActual = toNumberOrNull(det.cantidad_cubierta) ?? 0;
+          const nuevaCubierta = cantProveedor > 0 ? cubiertaActual + cantProveedor : cubiertaActual;
+
+          const payload: any = { cantidad_cubierta: nuevaCubierta };
+          if (pendienteAguardar !== null) payload.cantidad_pendiente = pendienteAguardar;
+
+          // intento actualizar cantidad_pendiente (si tu columna es editable)
+          const { error: updateErr } = await supabase
+            .from("documento_agrupado_detalle")
+            .update(payload)
+            .eq("id", det.id);
+
+          if (updateErr) {
+            // fallback: al menos actualiza cubierta
+            console.warn("Update con cantidad_pendiente falló. Fallback solo cubierta.", updateErr);
+
+            const { error: fallbackErr } = await supabase
+              .from("documento_agrupado_detalle")
               .update({ cantidad_cubierta: nuevaCubierta })
-              .eq('id', det.id);
-            
-            if (updateError) {
-              console.error('Error updating cantidad_cubierta:', updateError);
-            } else {
-              const nuevaPendiente = det.total_faltante_requerido - nuevaCubierta;
-              console.log(`Updated ${insumoId}: cubierta=${nuevaCubierta}, pendiente calculado=${nuevaPendiente}`);
-            }
+              .eq("id", det.id);
+
+            if (fallbackErr) console.error("Fallback update cantidad_cubierta falló:", fallbackErr);
           }
         }
 
-        // Check if all items are fully covered - only then mark as processed
-        const { data: allDetails } = await supabase
-          .from('documento_agrupado_detalle')
-          .select('total_faltante_requerido, cantidad_cubierta, cantidad_pendiente')
-          .eq('documento_id', selectedDocId);
+        // 2) Ahora: crear OC SOLO con items que sí se comprarán (Cantidad Proveedor > 0)
+        const itemsConCantidad = jsonData
+          .map((row) => ({
+            ...row,
+            _cantProveedor: toNumberOrNull(row["Cantidad Proveedor"]),
+            _precio: toNumberOrNull(row["Precio Unitario ($)"]),
+          }))
+          .filter((row) => (row._cantProveedor ?? 0) > 0);
 
-        const allCovered = allDetails?.every(d => 
-          (d.cantidad_pendiente === 0) || ((d.cantidad_cubierta || 0) >= d.total_faltante_requerido)
-        );
+        let numeroPedidoCreado: string | null = null;
 
-        if (allCovered) {
-          await supabase
-            .from('documentos_necesidades_agrupado')
-            .update({
-              procesado_por_almacen: true,
-              procesado_at: new Date().toISOString()
+        if (itemsConCantidad.length > 0) {
+          const { data: auth } = await supabase.auth.getUser();
+          const user = auth.user;
+
+          const numeroPedido = `OC-${Date.now().toString(36).toUpperCase()}`;
+
+          const { data: orden, error: ordenError } = await supabase
+            .from("pedidos_compra")
+            .insert({
+              numero_pedido: numeroPedido,
+              creado_por: user?.id,
+              total_items: itemsConCantidad.length,
+              estado: "pendiente",
+              proveedor: "Por definir",
+              documento_origen_id: selectedDocId,
             })
-            .eq('id', selectedDocId);
+            .select()
+            .single();
+
+          if (ordenError) throw ordenError;
+
+          const items = itemsConCantidad.map((row) => ({
+            pedido_id: orden.id,
+            insumo_catalogo_id: row["ID Sistema"],
+            cantidad_solicitada: row._cantProveedor ?? 0,
+            cantidad_recibida: 0,
+            precio_unitario: row._precio ?? null,
+            estado: "pendiente",
+          }));
+
+          const { error: itemsError } = await supabase.from("pedido_items").insert(items);
+          if (itemsError) throw itemsError;
+
+          numeroPedidoCreado = numeroPedido;
         }
 
-        toast.success(`Orden de compra ${numeroPedido} creada con ${itemsConCantidad.length} items`);
+        // 3) Revisión final: si todo pendiente quedó en 0, marcar documento procesado
+        const { data: allDetails, error: allDetailsErr } = await supabase
+          .from("documento_agrupado_detalle")
+          .select("cantidad_pendiente, total_faltante_requerido, cantidad_cubierta")
+          .eq("documento_id", selectedDocId);
+
+        if (!allDetailsErr && allDetails) {
+          const allCovered = allDetails.every((d: any) => {
+            const pendDB = toNumberOrNull(d.cantidad_pendiente);
+            const total = toNumberOrNull(d.total_faltante_requerido) ?? 0;
+            const cub = toNumberOrNull(d.cantidad_cubierta) ?? 0;
+
+            const pend = isValidNonNegNumber(pendDB) ? (pendDB as number) : clampMin0(total - cub);
+            return pend <= 0;
+          });
+
+          if (allCovered) {
+            await supabase
+              .from("documentos_necesidades_agrupado")
+              .update({
+                procesado_por_almacen: true,
+                procesado_at: new Date().toISOString(),
+              })
+              .eq("id", selectedDocId);
+          }
+        }
+
+        if (numeroPedidoCreado) {
+          toast.success(`Pendientes actualizados + OC ${numeroPedidoCreado} creada (${itemsConCantidad.length} items)`);
+        } else {
+          toast.success("Pendientes actualizados (no se creó OC porque el proveedor no surtió nada)");
+        }
+
         setSelectedDocId(null);
         fetchData();
       };
+
       reader.readAsArrayBuffer(file);
     } catch (error) {
-      console.error('Error processing file:', error);
-      toast.error('Error al procesar archivo');
+      console.error("Error processing file:", error);
+      toast.error("Error al procesar archivo");
     } finally {
       setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const abrirPreciosDialog = (orden: OrdenCompra) => {
     setOrdenEditando(orden);
     const initialPrecios: Record<string, number> = {};
-    orden.items?.forEach(item => {
+    orden.items?.forEach((item) => {
       initialPrecios[item.id] = item.precio_unitario || 100;
     });
     setPrecios(initialPrecios);
@@ -422,30 +463,28 @@ const GerenteAlmacenDashboard = () => {
 
     setProcessingDoc(ordenEditando.id);
     try {
-      // Update prices for all items
       for (const item of ordenEditando.items || []) {
         await supabase
-          .from('pedido_items')
+          .from("pedido_items")
           .update({ precio_unitario: precios[item.id] || 100 })
-          .eq('id', item.id);
+          .eq("id", item.id);
       }
 
-      // Update order status to sent to finance
       await supabase
-        .from('pedidos_compra')
+        .from("pedidos_compra")
         .update({
-          estado: 'enviado_a_finanzas',
-          updated_at: new Date().toISOString()
+          estado: "enviado_a_finanzas",
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', ordenEditando.id);
+        .eq("id", ordenEditando.id);
 
       toast.success(`Orden ${ordenEditando.numero_pedido} enviada a Finanzas para pago`);
       setPreciosDialogOpen(false);
       setOrdenEditando(null);
       fetchData();
     } catch (error) {
-      console.error('Error sending to finance:', error);
-      toast.error('Error al enviar a finanzas');
+      console.error("Error sending to finance:", error);
+      toast.error("Error al enviar a finanzas");
     } finally {
       setProcessingDoc(null);
     }
@@ -455,7 +494,7 @@ const GerenteAlmacenDashboard = () => {
     if (!orden.items) return 0;
     return orden.items.reduce((sum, item) => {
       const precio = item.precio_unitario || 100;
-      return sum + (precio * item.cantidad_solicitada);
+      return sum + precio * item.cantidad_solicitada;
     }, 0);
   };
 
@@ -463,35 +502,32 @@ const GerenteAlmacenDashboard = () => {
     return <StatusTimeline currentStatus={estado} tipo="pedido" />;
   };
 
-  // Simulación de confirmación de pago (provisional)
   const simularConfirmacionPago = async (orden: OrdenCompra) => {
     setProcessingDoc(orden.id);
     try {
-      // Actualizar estado a pagado y enviado a cadena
       await supabase
-        .from('pedidos_compra')
+        .from("pedidos_compra")
         .update({
-          estado: 'pagado_espera_confirmacion',
+          estado: "pagado_espera_confirmacion",
           aprobado_at: new Date().toISOString(),
           enviado_a_cadena: true,
           enviado_a_cadena_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', orden.id);
+        .eq("id", orden.id);
 
       toast.success(`Pago confirmado. Orden ${orden.numero_pedido} enviada a Cadena de Suministros`);
       fetchData();
     } catch (error) {
-      console.error('Error confirming payment:', error);
-      toast.error('Error al confirmar pago');
+      console.error("Error confirming payment:", error);
+      toast.error("Error al confirmar pago");
     } finally {
       setProcessingDoc(null);
     }
   };
 
-  const documentosPendientes = documentos.filter(d => !d.procesado_por_almacen);
-  const ordenesPendientes = ordenesCompra.filter(o => o.estado === 'pendiente');
-  const ordenesEnFinanzas = ordenesCompra.filter(o => o.estado === 'enviado_a_finanzas');
+  const documentosPendientes = documentos.filter((d) => !d.procesado_por_almacen);
+  const ordenesPendientes = ordenesCompra.filter((o) => o.estado === "pendiente");
 
   return (
     <div className="space-y-6">
@@ -506,7 +542,6 @@ const GerenteAlmacenDashboard = () => {
         </Button>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -553,15 +588,12 @@ const GerenteAlmacenDashboard = () => {
           <TabsTrigger value="documentos">
             Documentos Recibidos
             {documentosPendientes.length > 0 && (
-              <Badge variant="destructive" className="ml-2">{documentosPendientes.length}</Badge>
+              <Badge variant="destructive" className="ml-2">
+                {documentosPendientes.length}
+              </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="ordenes">
-            Órdenes de Compra
-            {ordenesPendientes.length > 0 && (
-              <Badge variant="secondary" className="ml-2">{ordenesPendientes.length}</Badge>
-            )}
-          </TabsTrigger>
+          <TabsTrigger value="ordenes">Órdenes de Compra</TabsTrigger>
           <TabsTrigger value="almacen">Almacén Central</TabsTrigger>
         </TabsList>
 
@@ -570,7 +602,8 @@ const GerenteAlmacenDashboard = () => {
             <CardHeader>
               <CardTitle>Documentos de Necesidades Recibidos</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Descarga el Excel, consulta con proveedores, y sube la respuesta con precios.
+                Descarga el Excel, consulta con proveedores, y sube la respuesta con precios (aunque no surtan nada,
+                actualiza pendientes).
               </p>
             </CardHeader>
             <CardContent>
@@ -585,9 +618,7 @@ const GerenteAlmacenDashboard = () => {
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Cargando...</div>
               ) : documentos.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No hay documentos recibidos
-                </div>
+                <div className="text-center py-8 text-muted-foreground">No hay documentos recibidos</div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -603,12 +634,12 @@ const GerenteAlmacenDashboard = () => {
                     {documentos.map((doc) => (
                       <TableRow key={doc.id}>
                         <TableCell>
-                          {new Date(doc.fecha_generacion).toLocaleDateString('es-MX', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
+                          {new Date(doc.fecha_generacion).toLocaleDateString("es-MX", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
                           })}
                         </TableCell>
                         <TableCell className="text-right">{doc.detalles?.length || 0}</TableCell>
@@ -630,16 +661,13 @@ const GerenteAlmacenDashboard = () => {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => descargarExcelParaProveedor(doc)}
-                            >
+                            <Button variant="outline" size="sm" onClick={() => descargarExcelParaProveedor(doc)}>
                               <Download className="mr-2 h-4 w-4" />
                               Descargar Excel
                             </Button>
+
                             {!doc.procesado_por_almacen && (
-                              <Button 
+                              <Button
                                 variant="default"
                                 size="sm"
                                 onClick={() => {
@@ -649,7 +677,7 @@ const GerenteAlmacenDashboard = () => {
                                 disabled={uploading}
                               >
                                 <Upload className="mr-2 h-4 w-4" />
-                                {uploading ? 'Procesando...' : 'Subir Respuesta'}
+                                {uploading ? "Procesando..." : "Subir Respuesta"}
                               </Button>
                             )}
                           </div>
@@ -673,9 +701,7 @@ const GerenteAlmacenDashboard = () => {
             </CardHeader>
             <CardContent>
               {ordenesCompra.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No hay órdenes de compra
-                </div>
+                <div className="text-center py-8 text-muted-foreground">No hay órdenes de compra</div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -692,19 +718,15 @@ const GerenteAlmacenDashboard = () => {
                     {ordenesCompra.map((orden) => (
                       <TableRow key={orden.id}>
                         <TableCell className="font-mono font-bold">{orden.numero_pedido}</TableCell>
-                        <TableCell>
-                          {new Date(orden.created_at).toLocaleDateString('es-MX')}
-                        </TableCell>
+                        <TableCell>{new Date(orden.created_at).toLocaleDateString("es-MX")}</TableCell>
                         <TableCell className="text-right">{orden.total_items}</TableCell>
                         <TableCell className="text-right font-mono font-bold">
                           ${calcularTotalOrden(orden).toLocaleString()}
                         </TableCell>
+                        <TableCell>{getEstadoBadge(orden.estado)}</TableCell>
                         <TableCell>
-                          {getEstadoBadge(orden.estado)}
-                        </TableCell>
-                        <TableCell>
-                          {orden.estado === 'pendiente' && (
-                            <Button 
+                          {orden.estado === "pendiente" && (
+                            <Button
                               size="sm"
                               onClick={() => abrirPreciosDialog(orden)}
                               disabled={processingDoc === orden.id}
@@ -713,8 +735,8 @@ const GerenteAlmacenDashboard = () => {
                               Enviar a Finanzas
                             </Button>
                           )}
-                          {orden.estado === 'enviado_a_finanzas' && (
-                            <Button 
+                          {orden.estado === "enviado_a_finanzas" && (
+                            <Button
                               size="sm"
                               variant="outline"
                               className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
@@ -722,16 +744,16 @@ const GerenteAlmacenDashboard = () => {
                               disabled={processingDoc === orden.id}
                             >
                               <CreditCard className="mr-2 h-4 w-4" />
-                              {processingDoc === orden.id ? 'Procesando...' : 'Simular Confirmación de Pago'}
+                              {processingDoc === orden.id ? "Procesando..." : "Simular Confirmación de Pago"}
                             </Button>
                           )}
-                          {orden.estado === 'pagado_espera_confirmacion' && (
+                          {orden.estado === "pagado_espera_confirmacion" && (
                             <Badge className="bg-cyan-100 text-cyan-800">
                               <Truck className="mr-1 h-3 w-3" />
                               Esperando recepción
                             </Badge>
                           )}
-                          {orden.estado === 'recibido' && (
+                          {orden.estado === "recibido" && (
                             <Badge variant="outline" className="bg-green-50 text-green-700">
                               <CheckCircle className="mr-1 h-3 w-3" />
                               Completado
@@ -754,9 +776,7 @@ const GerenteAlmacenDashboard = () => {
             </CardHeader>
             <CardContent>
               {almacenCentral.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No hay stock en el almacén central
-                </div>
+                <div className="text-center py-8 text-muted-foreground">No hay stock en el almacén central</div>
               ) : (
                 <Table>
                   <TableHeader>
@@ -786,7 +806,6 @@ const GerenteAlmacenDashboard = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Dialog: Edit prices and send to finance */}
       <Dialog open={preciosDialogOpen} onOpenChange={setPreciosDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -795,6 +814,7 @@ const GerenteAlmacenDashboard = () => {
               Revisar Precios - Orden {ordenEditando?.numero_pedido}
             </DialogTitle>
           </DialogHeader>
+
           {ordenEditando && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
@@ -822,10 +842,12 @@ const GerenteAlmacenDashboard = () => {
                             type="number"
                             min={0}
                             value={precios[item.id] || 100}
-                            onChange={(e) => setPrecios({
-                              ...precios,
-                              [item.id]: Number(e.target.value)
-                            })}
+                            onChange={(e) =>
+                              setPrecios({
+                                ...precios,
+                                [item.id]: Number(e.target.value),
+                              })
+                            }
                             className="w-24 h-8 text-right"
                           />
                         </TableCell>
@@ -837,28 +859,28 @@ const GerenteAlmacenDashboard = () => {
                   </TableBody>
                 </Table>
               </ScrollArea>
+
               <div className="flex justify-end border-t pt-4">
                 <div className="text-right">
                   <p className="text-muted-foreground text-sm">Total de la Orden</p>
                   <p className="text-2xl font-bold">
-                    ${ordenEditando.items?.reduce((sum, item) => 
-                      sum + ((precios[item.id] || 100) * item.cantidad_solicitada), 0
-                    ).toLocaleString()}
+                    $
+                    {ordenEditando.items
+                      ?.reduce((sum, item) => sum + (precios[item.id] || 100) * item.cantidad_solicitada, 0)
+                      .toLocaleString()}
                   </p>
                 </div>
               </div>
             </div>
           )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setPreciosDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button 
-              onClick={guardarPreciosYEnviarAFinanzas}
-              disabled={processingDoc === ordenEditando?.id}
-            >
+            <Button onClick={guardarPreciosYEnviarAFinanzas} disabled={processingDoc === ordenEditando?.id}>
               <Send className="mr-2 h-4 w-4" />
-              {processingDoc === ordenEditando?.id ? 'Enviando...' : 'Enviar a Finanzas'}
+              {processingDoc === ordenEditando?.id ? "Enviando..." : "Enviar a Finanzas"}
             </Button>
           </DialogFooter>
         </DialogContent>

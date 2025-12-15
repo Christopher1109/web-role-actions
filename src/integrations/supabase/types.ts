@@ -569,6 +569,7 @@ export type Database = {
           paciente_edad: number | null
           paciente_edad_unidad: string | null
           paciente_edad_valor: number | null
+          paciente_fecha_nacimiento: string | null
           paciente_genero: string | null
           paciente_nombre: string | null
           paciente_nss: string | null
@@ -610,6 +611,7 @@ export type Database = {
           paciente_edad?: number | null
           paciente_edad_unidad?: string | null
           paciente_edad_valor?: number | null
+          paciente_fecha_nacimiento?: string | null
           paciente_genero?: string | null
           paciente_nombre?: string | null
           paciente_nss?: string | null
@@ -651,6 +653,7 @@ export type Database = {
           paciente_edad?: number | null
           paciente_edad_unidad?: string | null
           paciente_edad_valor?: number | null
+          paciente_fecha_nacimiento?: string | null
           paciente_genero?: string | null
           paciente_nombre?: string | null
           paciente_nss?: string | null

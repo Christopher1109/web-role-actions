@@ -76,6 +76,7 @@ const folioSchema = z.object({
   pacienteNombre: z.string().nonempty("El nombre del paciente es obligatorio"),
   pacienteNSS: z.string().optional(),
   pacienteEdad: z.number().min(0).optional(),
+  pacienteFechaNacimiento: z.string().optional(),
   pacienteGenero: z.enum(["M", "F", "Otro"]).optional(),
   procedimientoQuirurgico: z.string().nonempty("El procedimiento es obligatorio"),
   especialidadQuirurgica: z.string().optional(),
@@ -155,6 +156,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
       pacienteNombre: "",
       pacienteNSS: "",
       pacienteEdad: 0,
+      pacienteFechaNacimiento: "",
       pacienteGenero: undefined,
       procedimientoQuirurgico: "",
       especialidadQuirurgica: "",
@@ -1005,7 +1007,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <FormField
               control={form.control}
               name="pacienteNSS"
@@ -1014,6 +1016,20 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
                   <FormLabel>NSS *</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder="12345678901" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="pacienteFechaNacimiento"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fecha de Nacimiento</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

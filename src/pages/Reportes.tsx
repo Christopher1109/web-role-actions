@@ -30,14 +30,27 @@ const Reportes = () => {
     
     try {
       setLoading(true);
-      const { data, error } = await (supabase as any)
+      // Fetch folios con sus insumos para T30
+      const { data, error } = await supabase
         .from('folios')
-        .select('*')
-        .eq('hospital_budget_code', selectedHospital.budget_code)
+        .select(`
+          *,
+          folios_insumos (
+            id,
+            cantidad,
+            insumo_id,
+            insumos_catalogo:insumo_id (
+              id,
+              nombre,
+              clave
+            )
+          )
+        `)
+        .eq('hospital_id', selectedHospital.id)
         .order('fecha', { ascending: false });
 
       if (error) throw error;
-      setFolios((data as any[]) || []);
+      setFolios(data || []);
     } catch (error: any) {
       toast.error('Error al cargar folios', {
         description: error.message,
@@ -118,12 +131,10 @@ const Reportes = () => {
   if (!selectedHospital) {
     return (
       <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Reportes</h1>
-        <p className="text-muted-foreground">
-          Generación de anexos T29 y T30 - {selectedHospital.display_name}
-        </p>
-      </div>
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Reportes</h1>
+          <p className="text-muted-foreground">Generación de anexos T29 y T30</p>
+        </div>
         <Alert>
           <AlertDescription>
             Debes seleccionar un hospital para generar reportes.

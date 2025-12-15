@@ -30,19 +30,28 @@ export const generateAnexoT29 = (
   fechaInicio: string,
   fechaFin: string
 ) => {
-  const data: T29Record[] = folios.map(folio => ({
-    folio: folio.numeroFolio,
-    fecha: folio.fechaHora,
-    nombrePaciente: folio.paciente.nombre,
-    edad: folio.paciente.edad,
-    genero: folio.paciente.genero === 'M' ? 'Masculino' : folio.paciente.genero === 'F' ? 'Femenino' : 'Otro',
-    cirugia: folio.cirugia,
-    tipoAnestesia: getTipoAnestesiaLabel(folio.tipoAnestesia),
-    cirujano: folio.cirujano,
-    anestesiologo: folio.anestesiologo,
-    unidad: folio.unidad,
-    estado: folio.estado === 'activo' ? 'Activo' : 'Cancelado',
-  }));
+  const data: T29Record[] = folios.map(folio => {
+    // Construir nombre completo del paciente
+    const nombrePaciente = [
+      folio.paciente_nombre,
+      folio.paciente_apellido_paterno,
+      folio.paciente_apellido_materno
+    ].filter(Boolean).join(' ') || 'Sin nombre';
+
+    return {
+      folio: folio.numero_folio || '',
+      fecha: folio.fecha || '',
+      nombrePaciente,
+      edad: folio.paciente_edad || folio.paciente_edad_valor || 0,
+      genero: folio.paciente_genero === 'M' ? 'Masculino' : folio.paciente_genero === 'F' ? 'Femenino' : 'Otro',
+      cirugia: folio.cirugia || folio.especialidad_quirurgica || '',
+      tipoAnestesia: getTipoAnestesiaLabel(folio.tipo_anestesia || folio.anestesia_principal || ''),
+      cirujano: folio.cirujano_nombre || '',
+      anestesiologo: folio.anestesiologo_nombre || '',
+      unidad: folio.unidad || folio.hospital_display_name || '',
+      estado: folio.estado === 'activo' ? 'Activo' : 'Cancelado',
+    };
+  });
 
   const worksheet = XLSX.utils.json_to_sheet(data, {
     header: [
@@ -123,16 +132,19 @@ export const generateAnexoT30 = (
   const data: T30Record[] = [];
 
   folios.forEach(folio => {
-    folio.insumosUtilizados.forEach((insumo: any) => {
+    // Usar folios_insumos si existe
+    const insumos = folio.folios_insumos || folio.insumosUtilizados || [];
+    
+    insumos.forEach((insumo: any) => {
       data.push({
-        fecha: folio.fechaHora,
-        folio: folio.numeroFolio,
-        nombreInsumo: insumo.nombre,
-        lote: insumo.lote,
-        cantidad: insumo.cantidad,
-        unidad: folio.unidad,
-        origen: 'LOAD', // En producción esto vendría de la BD
-        anestesiologo: folio.anestesiologo,
+        fecha: folio.fecha || '',
+        folio: folio.numero_folio || '',
+        nombreInsumo: insumo.insumos_catalogo?.nombre || insumo.nombre || 'Sin nombre',
+        lote: insumo.lote || 'N/A',
+        cantidad: insumo.cantidad || 0,
+        unidad: folio.unidad || folio.hospital_display_name || '',
+        origen: 'LOAD',
+        anestesiologo: folio.anestesiologo_nombre || '',
       });
     });
   });

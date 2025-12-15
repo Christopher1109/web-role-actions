@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { generateAnexoT29, generateAnexoT30 } from '@/utils/excelExport';
+import { generateAnexoT29Excel } from '@/utils/excelExportT29';
+import { generateAnexoT30 } from '@/utils/excelExport';
 
 const Reportes = () => {
   const { selectedHospital } = useHospital();
@@ -60,7 +61,7 @@ const Reportes = () => {
     }
   };
 
-  const handleDownloadT29 = () => {
+  const handleDownloadT29 = async () => {
     if (!selectedHospital) {
       toast.error('Debes seleccionar un hospital para continuar');
       return;
@@ -96,11 +97,12 @@ const Reportes = () => {
         display_name: selectedHospital.display_name,
       } : undefined;
       
-      generateAnexoT29(foliosFiltrados, t29FechaInicio, t29FechaFin, hospitalInfo);
+      await generateAnexoT29Excel(foliosFiltrados, t29FechaInicio, t29FechaFin, hospitalInfo);
       toast.success('Anexo T29 generado', {
         description: 'El archivo se descargó correctamente',
       });
     } catch (error) {
+      console.error('Error generando T29:', error);
       toast.error('Error al generar reporte');
     }
   };

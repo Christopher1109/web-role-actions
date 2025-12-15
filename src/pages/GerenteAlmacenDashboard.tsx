@@ -332,25 +332,14 @@ const GerenteAlmacenDashboard = () => {
           const cubiertaActual = toNumberOrNull(det.cantidad_cubierta) ?? 0;
           const nuevaCubierta = cantProveedor > 0 ? cubiertaActual + cantProveedor : cubiertaActual;
 
-          const payload: any = { cantidad_cubierta: nuevaCubierta };
-          if (pendienteAguardar !== null) payload.cantidad_pendiente = pendienteAguardar;
-
-          // intento actualizar cantidad_pendiente (si tu columna es editable)
+          // Solo actualizamos cantidad_cubierta - cantidad_pendiente es columna generada automáticamente
           const { error: updateErr } = await supabase
             .from("documento_agrupado_detalle")
-            .update(payload)
+            .update({ cantidad_cubierta: nuevaCubierta })
             .eq("id", det.id);
 
           if (updateErr) {
-            // fallback: al menos actualiza cubierta
-            console.warn("Update con cantidad_pendiente falló. Fallback solo cubierta.", updateErr);
-
-            const { error: fallbackErr } = await supabase
-              .from("documento_agrupado_detalle")
-              .update({ cantidad_cubierta: nuevaCubierta })
-              .eq("id", det.id);
-
-            if (fallbackErr) console.error("Fallback update cantidad_cubierta falló:", fallbackErr);
+            console.error("Error actualizando cantidad_cubierta:", updateErr);
           }
         }
 

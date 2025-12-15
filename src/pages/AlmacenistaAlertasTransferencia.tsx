@@ -273,7 +273,9 @@ const AlmacenistaAlertasTransferencia = () => {
 
       setDialogTiradaOpen(false);
       setSelectedTirada(null);
-      fetchAlertas();
+      
+      // Esperar a que se recarguen los datos antes de finalizar
+      await fetchAlertas();
 
     } catch (error) {
       console.error('Error processing tirada:', error);

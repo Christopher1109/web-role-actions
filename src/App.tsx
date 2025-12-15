@@ -23,7 +23,7 @@ import GenerateCredentials from './pages/GenerateCredentials';
 import PopulateInsumos from './pages/PopulateInsumos';
 import ImportProcedimientos from './pages/ImportProcedimientos';
 import SetupAlmacenes from './pages/SetupAlmacenes';
-import Kardex from './pages/Kardex';
+
 import GerenteOperacionesDashboard from './pages/GerenteOperacionesDashboard';
 import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
 import CadenaSuministrosDashboard from './pages/CadenaSuministrosDashboard';
@@ -82,7 +82,6 @@ const AppContent = () => {
               {(userRole === 'almacenista' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>
                   <Route path="/insumos" element={<Insumos />} />
-                  <Route path="/kardex" element={<Kardex />} />
                   <Route path="/alertas-transferencia" element={<AlmacenistaAlertasTransferencia />} />
                 </>
               )}

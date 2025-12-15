@@ -954,28 +954,32 @@ const CadenaSuministrosDashboard = () => {
           </DialogHeader>
           {selectedHospital && (
             <ScrollArea className="max-h-[60vh]">
-              <div className="space-y-3 pr-4">
+              <div className="space-y-2 pr-4">
                 {selectedHospital.insumos.map((insumo) => (
                   <Card key={insumo.insumo_catalogo_id} className={insumo.stockCentral === 0 ? 'opacity-50' : ''}>
-                    <CardContent className="py-3">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{insumo.nombre}</p>
-                          <p className="text-sm text-muted-foreground">{insumo.clave}</p>
+                    <CardContent className="py-3 px-4">
+                      <div className="space-y-2">
+                        {/* Nombre del insumo - ocupa todo el ancho */}
+                        <div className="w-full">
+                          <p className="font-medium text-sm leading-tight break-words">{insumo.nombre}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{insumo.clave}</p>
                         </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <div className="text-center">
-                            <p className="text-muted-foreground">Faltante</p>
-                            <p className="font-mono text-destructive font-bold">{insumo.faltante}</p>
+                        {/* Fila de cantidades */}
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t">
+                          <div className="flex items-center gap-4">
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground">Faltante</p>
+                              <p className="font-mono text-destructive font-bold text-base">{insumo.faltante}</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-muted-foreground">Stock Central</p>
+                              <p className={`font-mono font-bold text-base ${insumo.stockCentral > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                                {insumo.stockCentral}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-center">
-                            <p className="text-muted-foreground">Stock</p>
-                            <p className={`font-mono font-bold ${insumo.stockCentral > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
-                              {insumo.stockCentral}
-                            </p>
-                          </div>
-                          <div className="w-24">
-                            <Label className="text-xs text-muted-foreground">Enviar</Label>
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs text-muted-foreground whitespace-nowrap">Enviar:</Label>
                             <Input
                               type="number"
                               min={0}
@@ -983,7 +987,7 @@ const CadenaSuministrosDashboard = () => {
                               value={insumo.cantidadEnviar}
                               onChange={(e) => actualizarCantidad(insumo.insumo_catalogo_id, Number(e.target.value))}
                               disabled={insumo.stockCentral === 0}
-                              className="h-8"
+                              className="h-8 w-20 text-center font-mono font-bold"
                             />
                           </div>
                         </div>

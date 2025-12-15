@@ -85,7 +85,18 @@ const Reportes = () => {
         const fecha = new Date(f.fecha);
         return fecha >= new Date(t29FechaInicio) && fecha <= new Date(t29FechaFin);
       });
-      generateAnexoT29(foliosFiltrados, t29FechaInicio, t29FechaFin);
+      
+      // Pasar información del hospital para el formato T29
+      const hospitalInfo = selectedHospital ? {
+        state_name: selectedHospital.state_name,
+        hospital_type: selectedHospital.hospital_type,
+        clinic_number: selectedHospital.clinic_number,
+        locality: selectedHospital.locality,
+        budget_code: selectedHospital.budget_code,
+        display_name: selectedHospital.display_name,
+      } : undefined;
+      
+      generateAnexoT29(foliosFiltrados, t29FechaInicio, t29FechaFin, hospitalInfo);
       toast.success('Anexo T29 generado', {
         description: 'El archivo se descargó correctamente',
       });

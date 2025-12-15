@@ -218,6 +218,7 @@ const Folios = ({ userRole }: FoliosProps) => {
           paciente_nombre: data.pacienteNombre,
           paciente_nss: data.pacienteNSS,
           paciente_edad: data.pacienteEdad,
+          paciente_fecha_nacimiento: data.pacienteFechaNacimiento || null,
           paciente_genero: data.pacienteGenero,
           cirugia: data.procedimientoQuirurgico,
           especialidad_quirurgica: data.especialidadQuirurgica,

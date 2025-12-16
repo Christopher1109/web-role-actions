@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable, { RowInput } from "jspdf-autotable";
 import cbMedicaLogo from "@/assets/cb-medica-logo.jpg";
-import { PROCEDIMIENTOS_BY_TIPO } from "@/constants/procedimientosCatalog";
+import { PROCEDIMIENTOS_BY_CLAVE, PROCEDIMIENTOS_BY_TIPO } from "@/constants/procedimientosCatalog";
 
 export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabels: Record<string, string>) => {
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
@@ -299,10 +299,30 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   yPos = (doc as any).lastAutoTable.finalY;
 
   // 5) TABLA PRODUCTIVIDAD
-  // Obtener clave y nombre del procedimiento desde el catálogo
-  const procedimiento = folio.tipo_anestesia ? PROCEDIMIENTOS_BY_TIPO.get(folio.tipo_anestesia) : null;
-  const claveProcedimiento = procedimiento?.clave || "N/A";
-  const tipoProcedimiento = procedimiento?.nombre || tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia || "N/A";
+  // Nota: en algunos flujos `folio.tipo_anestesia` guarda la clave (19.01.001) y en otros el key interno.
+  const isClaveProcedimiento = (v: unknown): v is string =>
+    typeof v === "string" && /^\d{2}\.\d{2}\.\d{3}$/.test(v);
+
+  const resolveProcedimiento = (v: unknown) => {
+    if (typeof v !== "string" || !v) return null;
+    return PROCEDIMIENTOS_BY_TIPO.get(v) ?? PROCEDIMIENTOS_BY_CLAVE.get(v) ?? null;
+  };
+
+  const buildProcedimientoValues = (v: unknown) => {
+    const proc = resolveProcedimiento(v);
+    return {
+      clave: proc?.clave ?? (isClaveProcedimiento(v) ? v : "N/A"),
+      nombre: proc?.nombre ?? (typeof v === "string" && v ? v : "N/A"),
+    };
+  };
+
+  const procedimientos =
+    folio.tipo_anestesia === "anestesia_mixta"
+      ? [buildProcedimientoValues(folio.anestesia_principal), buildProcedimientoValues(folio.anestesia_secundaria)]
+      : [buildProcedimientoValues(folio.tipo_anestesia)];
+
+  const claveProcedimiento = procedimientos.map((p) => p.clave).filter(Boolean).join(" / ") || "N/A";
+  const tipoProcedimiento = procedimientos.map((p) => p.nombre).filter(Boolean).join(" / ") || "N/A";
 
   autoTable(doc, {
     startY: yPos,

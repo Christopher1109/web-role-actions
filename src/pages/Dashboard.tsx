@@ -186,6 +186,11 @@ const Dashboard = ({ userRole }: DashboardProps) => {
                   <h4 className="font-semibold">Almacenes Provisionales</h4>
                   <p className="text-sm text-muted-foreground">Gestionar almacenes</p>
                 </Link>
+                <Link to="/alertas-transferencia" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
+                  <AlertTriangle className="h-6 w-6 mb-2 text-primary" />
+                  <h4 className="font-semibold">Recepción Insumos</h4>
+                  <p className="text-sm text-muted-foreground">Recibir transferencias</p>
+                </Link>
                 <Link to="/registro-actividad" className="rounded-lg border bg-muted/50 p-4 transition-colors hover:bg-muted flex flex-col items-center text-center">
                   <Clock className="h-6 w-6 mb-2 text-muted-foreground" />
                   <h4 className="font-semibold">Registro Actividad</h4>

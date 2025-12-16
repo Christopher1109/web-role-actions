@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useHospital } from "@/contexts/HospitalContext";
+import { useRegistroActividad } from "@/hooks/useRegistroActividad";
 import { Plus, Warehouse, ArrowRight, ArrowLeft, Package, RefreshCw, Search, Trash2, CheckSquare } from "lucide-react";
 import { assertSupabaseOk, collectSupabaseErrors } from "@/utils/supabaseAssert";
 
@@ -42,6 +43,7 @@ interface InventarioGeneral {
 
 const AlmacenesProvisionales = () => {
   const { selectedHospital } = useHospital();
+  const { registrarActividad } = useRegistroActividad();
   const [almacenes, setAlmacenes] = useState<AlmacenProvisional[]>([]);
   const [selectedAlmacen, setSelectedAlmacen] = useState<AlmacenProvisional | null>(null);
   const [inventarioProvisional, setInventarioProvisional] = useState<InventarioProvisional[]>([]);
@@ -207,6 +209,17 @@ const AlmacenesProvisionales = () => {
         .single();
 
       if (error) throw error;
+
+      // Registrar actividad
+      await registrarActividad({
+        tipo_actividad: 'almacen_provisional_creado',
+        descripcion: `Almacén provisional "${nuevoNombre.trim()}" creado`,
+        almacen_destino_id: data.id,
+        almacen_destino_nombre: nuevoNombre.trim(),
+        detalles_adicionales: {
+          descripcion: nuevaDescripcion.trim() || null
+        }
+      });
 
       toast.success("Almacén provisional creado");
       setDialogCrearOpen(false);
@@ -450,6 +463,27 @@ const AlmacenesProvisionales = () => {
       }
       setProgresoTraspaso(100);
 
+      // Registrar actividad
+      const insumosAfectados = itemsTraspaso.map(([insumoCatalogoId, cantidad]) => {
+        const inv = inventarioGeneral.find(i => i.insumo_catalogo_id === insumoCatalogoId);
+        return {
+          insumo_id: insumoCatalogoId,
+          nombre: inv?.insumo?.nombre || 'Desconocido',
+          clave: inv?.insumo?.clave || '',
+          cantidad
+        };
+      });
+
+      await registrarActividad({
+        tipo_actividad: 'traspaso_almacen_provisional',
+        descripcion: `Traspaso de ${procesados} insumos al almacén provisional "${selectedAlmacen.nombre}"`,
+        almacen_origen_nombre: 'Almacén General',
+        almacen_destino_id: almacenId,
+        almacen_destino_nombre: selectedAlmacen.nombre,
+        insumos_afectados: insumosAfectados,
+        cantidad_total: insumosAfectados.reduce((sum, i) => sum + i.cantidad, 0)
+      });
+
       toast.success(`${procesados} insumos traspasados correctamente`);
       setDialogTraspasoOpen(false);
       setCantidadesTraspaso({});
@@ -567,6 +601,27 @@ const AlmacenesProvisionales = () => {
           observaciones: "Devolución a almacén general",
         });
       }
+
+      // Registrar actividad
+      const insumosAfectados = itemsDevolucion.map(([inventarioProvId, cantidad]) => {
+        const item = inventarioProvisional.find((i) => i.id === inventarioProvId);
+        return {
+          insumo_id: item?.insumo_catalogo_id || '',
+          nombre: item?.insumo?.nombre || 'Desconocido',
+          clave: item?.insumo?.clave || '',
+          cantidad
+        };
+      });
+
+      await registrarActividad({
+        tipo_actividad: 'devolucion_almacen_principal',
+        descripcion: `Devolución de ${itemsDevolucion.length} insumos del almacén provisional "${selectedAlmacen.nombre}" al almacén general`,
+        almacen_origen_id: selectedAlmacen.id,
+        almacen_origen_nombre: selectedAlmacen.nombre,
+        almacen_destino_nombre: 'Almacén General',
+        insumos_afectados: insumosAfectados,
+        cantidad_total: insumosAfectados.reduce((sum, i) => sum + i.cantidad, 0)
+      });
 
       toast.success(`${itemsDevolucion.length} insumos devueltos al almacén general`);
       setDialogDevolucionOpen(false);
@@ -714,6 +769,28 @@ const AlmacenesProvisionales = () => {
       setDialogEliminarOpen(false);
       setAlmacenAEliminar(null);
       setInventarioAlmacenEliminar([]);
+
+      // Registrar actividad
+      const insumosDevueltos = devolverTodo && inventarioAlmacenEliminar.length > 0 
+        ? inventarioAlmacenEliminar.map(item => ({
+            insumo_id: item.insumo_catalogo_id,
+            nombre: item.insumo?.nombre || 'Desconocido',
+            clave: item.insumo?.clave || '',
+            cantidad: item.cantidad_disponible
+          }))
+        : [];
+
+      await registrarActividad({
+        tipo_actividad: 'almacen_provisional_eliminado',
+        descripcion: `Almacén provisional "${almacenAEliminar.nombre}" eliminado${devolverTodo && insumosDevueltos.length > 0 ? ` (${insumosDevueltos.length} insumos devueltos al almacén general)` : ''}`,
+        almacen_origen_id: almacenIdEliminar,
+        almacen_origen_nombre: almacenAEliminar.nombre,
+        insumos_afectados: insumosDevueltos,
+        cantidad_total: insumosDevueltos.reduce((sum, i) => sum + i.cantidad, 0),
+        detalles_adicionales: {
+          devueltos_a_general: devolverTodo
+        }
+      });
 
       toast.success("Almacén eliminado correctamente");
     } catch (error) {

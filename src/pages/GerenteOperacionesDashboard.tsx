@@ -13,6 +13,7 @@ import { AlertTriangle, FileText, Send, RefreshCw, Building2, Package, CheckCirc
 import { StatusTimeline } from '@/components/StatusTimeline';
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications';
 import EdicionMasivaMínimos from '@/components/forms/EdicionMasivaMínimos';
+import { useAuth } from '@/hooks/useAuth';
 
 interface AlertaInventario {
   id: string;
@@ -56,6 +57,7 @@ interface DocumentoEnviado {
 }
 
 const GerenteOperacionesDashboard = () => {
+  const { userRole } = useAuth();
   const [alertas, setAlertas] = useState<AlertaInventario[]>([]);
   const [hospitalAlertas, setHospitalAlertas] = useState<HospitalAlerta[]>([]);
   const [necesidadesConsolidadas, setNecesidadesConsolidadas] = useState<NecesidadConsolidada[]>([]);
@@ -75,7 +77,7 @@ const GerenteOperacionesDashboard = () => {
   }, []);
 
   useRealtimeNotifications({
-    userRole: 'gerente_operaciones',
+    userRole: userRole || 'gerente_operaciones',
     onPedidoActualizado: fetchDataCallback,
   });
 
@@ -328,11 +330,13 @@ const GerenteOperacionesDashboard = () => {
   const totalInsumosUnicos = necesidadesConsolidadas.length;
   const totalUnidadesFaltantes = necesidadesConsolidadas.reduce((sum, n) => sum + n.total_faltante, 0);
 
+  const roleTitle = userRole === 'gerente_almacen' ? 'Gerente de Almacén' : 'Gerente de Operaciones';
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Panel de Gerente de Operaciones</h1>
+          <h1 className="text-3xl font-bold text-foreground">Panel de {roleTitle}</h1>
           <p className="text-muted-foreground">Gestión de alertas y necesidades de inventario</p>
         </div>
         <Button onClick={fetchData} variant="outline" size="sm">

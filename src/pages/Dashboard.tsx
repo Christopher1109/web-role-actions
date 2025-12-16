@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { UserRole } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, Package, Users, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { FileText, Package, Users, TrendingUp, AlertCircle, CheckCircle, AlertTriangle, Truck, Route, Warehouse, Clock } from 'lucide-react';
 
 interface DashboardProps {
   userRole: UserRole;
@@ -127,7 +127,7 @@ const Dashboard = ({ userRole }: DashboardProps) => {
           <CardTitle>Acciones Rápidas</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {(userRole === 'auxiliar' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
               <Link to="/folios" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20">
                 <h4 className="font-semibold">Nuevo Folio</h4>
@@ -151,6 +151,42 @@ const Dashboard = ({ userRole }: DashboardProps) => {
                 <h4 className="font-semibold">Gestionar Traspasos</h4>
                 <p className="text-sm text-muted-foreground">Entre unidades</p>
               </Link>
+            )}
+            
+            {/* Acciones rápidas para Gerente de Almacén y Cadena de Suministros */}
+            {(userRole === 'gerente_almacen' || userRole === 'cadena_suministros') && (
+              <>
+                <Link to="/alertas-necesidades" className="rounded-lg border bg-warning/10 p-4 transition-colors hover:bg-warning/20 flex flex-col items-center text-center">
+                  <AlertTriangle className="h-6 w-6 mb-2 text-warning" />
+                  <h4 className="font-semibold">Alertas y Necesidades</h4>
+                  <p className="text-sm text-muted-foreground">Ver consolidado de alertas</p>
+                </Link>
+                <Link to="/distribucion" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
+                  <Truck className="h-6 w-6 mb-2 text-primary" />
+                  <h4 className="font-semibold">Distribución</h4>
+                  <p className="text-sm text-muted-foreground">Enviar insumos a hospitales</p>
+                </Link>
+                <Link to="/rutas-distribucion" className="rounded-lg border bg-success/10 p-4 transition-colors hover:bg-success/20 flex flex-col items-center text-center">
+                  <Route className="h-6 w-6 mb-2 text-success" />
+                  <h4 className="font-semibold">Rutas de Distribución</h4>
+                  <p className="text-sm text-muted-foreground">Gestionar rutas</p>
+                </Link>
+                <Link to="/insumos" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
+                  <Package className="h-6 w-6 mb-2 text-primary" />
+                  <h4 className="font-semibold">Insumos</h4>
+                  <p className="text-sm text-muted-foreground">Catálogo de insumos</p>
+                </Link>
+                <Link to="/almacenes-provisionales" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
+                  <Warehouse className="h-6 w-6 mb-2 text-primary" />
+                  <h4 className="font-semibold">Almacenes Provisionales</h4>
+                  <p className="text-sm text-muted-foreground">Gestionar almacenes</p>
+                </Link>
+                <Link to="/registro-actividad" className="rounded-lg border bg-muted/50 p-4 transition-colors hover:bg-muted flex flex-col items-center text-center">
+                  <Clock className="h-6 w-6 mb-2 text-muted-foreground" />
+                  <h4 className="font-semibold">Registro Actividad</h4>
+                  <p className="text-sm text-muted-foreground">Historial de actividades</p>
+                </Link>
+              </>
             )}
           </div>
         </CardContent>

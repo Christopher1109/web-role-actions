@@ -180,6 +180,48 @@ export default function FolioForm({ onClose, onSubmit, defaultValues, editingDra
     }
   }, [selectedHospital, form]);
 
+  // Cargar datos del borrador si existe
+  useEffect(() => {
+    if (editingDraft) {
+      form.setValue("numeroQuirofano", editingDraft.numero_quirofano || "");
+      form.setValue("inicioProcedimiento", editingDraft.hora_inicio_procedimiento || "");
+      form.setValue("finProcedimiento", editingDraft.hora_fin_procedimiento || "");
+      form.setValue("inicioAnestesia", editingDraft.hora_inicio_anestesia || "");
+      form.setValue("finAnestesia", editingDraft.hora_fin_anestesia || "");
+      form.setValue("pacienteApellidoPaterno", editingDraft.paciente_apellido_paterno || "");
+      form.setValue("pacienteApellidoMaterno", editingDraft.paciente_apellido_materno || "");
+      form.setValue("pacienteNombre", editingDraft.paciente_nombre || "");
+      form.setValue("pacienteNSS", editingDraft.paciente_nss || "");
+      form.setValue("pacienteEdad", editingDraft.paciente_edad || 0);
+      form.setValue("pacienteFechaNacimiento", editingDraft.paciente_fecha_nacimiento || "");
+      form.setValue("pacienteGenero", editingDraft.paciente_genero || undefined);
+      form.setValue("procedimientoQuirurgico", editingDraft.cirugia || "");
+      form.setValue("especialidadQuirurgica", editingDraft.especialidad_quirurgica || "");
+      form.setValue("tipoCirugia", editingDraft.tipo_cirugia || "");
+      form.setValue("tipoEvento", editingDraft.tipo_evento || "");
+      form.setValue("tipo_anestesia", editingDraft.tipo_anestesia || "");
+      form.setValue("cirujano", editingDraft.cirujano_id || "");
+      form.setValue("anestesiologo", editingDraft.anestesiologo_id || "");
+      
+      // Establecer estados de anestesia
+      if (editingDraft.tipo_anestesia) {
+        setTipoAnestesia(editingDraft.tipo_anestesia);
+      }
+      if (editingDraft.anestesia_principal) {
+        setAnestesiaPrincipal(editingDraft.anestesia_principal);
+      }
+      if (editingDraft.anestesia_secundaria) {
+        setAnestesiaSecundaria(editingDraft.anestesia_secundaria);
+      }
+      if (editingDraft.paciente_edad_unidad) {
+        setPacienteEdadUnidad(editingDraft.paciente_edad_unidad);
+      }
+      if (editingDraft.almacen_provisional_id) {
+        setAlmacenProvSeleccionado(editingDraft.almacen_provisional_id);
+      }
+    }
+  }, [editingDraft, form]);
+
   // Cargar tipos de anestesia disponibles para el hospital seleccionado (usando hospital_procedimientos)
   useEffect(() => {
     const loadProcedimientosHospital = async () => {

@@ -402,10 +402,16 @@ const Folios = ({ userRole }: FoliosProps) => {
       const results = await Promise.all(updateOperations);
       collectSupabaseErrors(results as any, "Folios.handleCreateFolio: aplicar updates/inserts");
 
+      // Si estamos completando un borrador, eliminarlo
+      if (data.editingDraftId) {
+        await supabase.from("folios").delete().eq("id", data.editingDraftId);
+      }
+
       toast.success("Folio creado exitosamente", {
         description: `Número de folio: ${numeroFolio} (consumido de ${data.almacen_provisional_nombre})`,
       });
       setShowForm(false);
+      setEditingDraft(null);
       fetchFolios();
     } catch (error: any) {
       console.error("Error al crear folio:", error);
@@ -581,6 +587,80 @@ const Folios = ({ userRole }: FoliosProps) => {
           Nuevo Folio
         </Button>
       </div>
+
+      {/* Sección de Borradores Pendientes */}
+      {borradores.length > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-600">
+              <FileX className="h-5 w-5" />
+              Borradores Pendientes ({borradores.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {borradores.map((borrador) => (
+                <Card key={borrador.id} className="border-l-4 border-l-amber-500">
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300">
+                            Borrador
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {new Date(borrador.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="font-medium">Paciente:</span>{" "}
+                          {borrador.paciente_nombre || "Sin definir"} |{" "}
+                          <span className="font-medium">Cirugía:</span>{" "}
+                          {borrador.cirugia || "Sin definir"} |{" "}
+                          <span className="font-medium">Anestesia:</span>{" "}
+                          {tiposAnestesiaLabels[borrador.tipo_anestesia] || borrador.tipo_anestesia || "Sin definir"}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingDraft(borrador);
+                            setShowForm(true);
+                          }}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setEditingDraft({ ...borrador, completar: true });
+                            setShowForm(true);
+                          }}
+                        >
+                          Completar
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={async () => {
+                            await supabase.from("folios").delete().eq("id", borrador.id);
+                            toast.success("Borrador eliminado");
+                            fetchFolios();
+                          }}
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

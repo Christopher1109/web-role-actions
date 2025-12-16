@@ -574,8 +574,9 @@ const GerenteAlmacenDashboard = () => {
         </Card>
       </div>
 
-      <Tabs defaultValue="documentos" className="space-y-4">
+      <Tabs defaultValue="almacen" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="almacen">Almacén Central</TabsTrigger>
           <TabsTrigger value="documentos">
             Documentos Recibidos
             {documentosPendientes.length > 0 && (
@@ -585,8 +586,43 @@ const GerenteAlmacenDashboard = () => {
             )}
           </TabsTrigger>
           <TabsTrigger value="ordenes">Órdenes de Compra</TabsTrigger>
-          <TabsTrigger value="almacen">Almacén Central</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="almacen" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Stock del Almacén Central México</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {almacenCentral.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No hay stock en el almacén central</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Clave</TableHead>
+                      <TableHead>Insumo</TableHead>
+                      <TableHead>Lote</TableHead>
+                      <TableHead className="text-right">Cantidad Disponible</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {almacenCentral.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
+                        <TableCell className="font-medium">{item.insumo?.nombre}</TableCell>
+                        <TableCell className="font-mono text-sm">{item.lote}</TableCell>
+                        <TableCell className="text-right font-mono font-bold text-green-600">
+                          {item.cantidad_disponible.toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="documentos" className="space-y-4">
           <Card>
@@ -750,42 +786,6 @@ const GerenteAlmacenDashboard = () => {
                               Completado
                             </Badge>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="almacen" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Stock del Almacén Central México</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {almacenCentral.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No hay stock en el almacén central</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Clave</TableHead>
-                      <TableHead>Insumo</TableHead>
-                      <TableHead>Lote</TableHead>
-                      <TableHead className="text-right">Cantidad Disponible</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {almacenCentral.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
-                        <TableCell className="font-medium">{item.insumo?.nombre}</TableCell>
-                        <TableCell className="font-mono text-sm">{item.lote}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-green-600">
-                          {item.cantidad_disponible.toLocaleString()}
                         </TableCell>
                       </TableRow>
                     ))}

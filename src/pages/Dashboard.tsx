@@ -1,11 +1,99 @@
 import { Link } from 'react-router-dom';
 import { UserRole } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, Package, Users, TrendingUp, AlertCircle, CheckCircle, AlertTriangle, Truck, Route, Warehouse, Clock } from 'lucide-react';
+import { 
+  FileText, 
+  Package, 
+  Users, 
+  TrendingUp, 
+  AlertCircle, 
+  CheckCircle, 
+  AlertTriangle, 
+  Truck, 
+  Route, 
+  Warehouse, 
+  Clock,
+  FileSpreadsheet,
+  ArrowLeftRight,
+  UserCog,
+  ClipboardList,
+  DollarSign
+} from 'lucide-react';
 
 interface DashboardProps {
   userRole: UserRole;
 }
+
+// Definición de acciones rápidas por rol
+const quickActionsByRole: Record<string, Array<{
+  path: string;
+  icon: any;
+  label: string;
+  description: string;
+  colorClass: string;
+}>> = {
+  auxiliar: [
+    { path: '/folios', icon: FileText, label: 'Nuevo Folio', description: 'Registrar procedimiento', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+  ],
+  almacenista: [
+    { path: '/almacenes-provisionales', icon: Warehouse, label: 'Almacenes Provisionales', description: 'Gestionar almacenes', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/insumos', icon: Package, label: 'Insumos', description: 'Ver inventario', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/alertas-transferencia', icon: Truck, label: 'Recepción Insumos', description: 'Recibir transferencias', colorClass: 'bg-success/10 hover:bg-success/20 text-success' },
+  ],
+  lider: [
+    { path: '/folios', icon: FileText, label: 'Folios', description: 'Gestionar procedimientos', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/insumos', icon: Package, label: 'Insumos', description: 'Ver inventario', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/medicos', icon: Users, label: 'Médicos', description: 'Gestionar médicos', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', description: 'Anexos T29 y T30', colorClass: 'bg-success/10 hover:bg-success/20 text-success' },
+  ],
+  supervisor: [
+    { path: '/folios', icon: FileText, label: 'Folios', description: 'Gestionar procedimientos', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/insumos', icon: Package, label: 'Insumos', description: 'Ver inventario', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/medicos', icon: Users, label: 'Médicos', description: 'Gestionar médicos', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/procedimientos-hospital', icon: ClipboardList, label: 'Procedimientos', description: 'Autorizar procedimientos', colorClass: 'bg-warning/10 hover:bg-warning/20 text-warning' },
+    { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', description: 'Anexos T29 y T30', colorClass: 'bg-success/10 hover:bg-success/20 text-success' },
+    { path: '/registro-actividad', icon: Clock, label: 'Registro Actividad', description: 'Ver historial', colorClass: 'bg-muted hover:bg-muted/80 text-muted-foreground' },
+  ],
+  gerente_operaciones: [
+    { path: '/alertas-operaciones', icon: AlertTriangle, label: 'Alertas y Necesidades', description: 'Consolidar alertas', colorClass: 'bg-warning/10 hover:bg-warning/20 text-warning' },
+    { path: '/folios', icon: FileText, label: 'Folios', description: 'Gestionar procedimientos', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/almacenes-provisionales', icon: Warehouse, label: 'Almacenes Provisionales', description: 'Gestionar almacenes', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/insumos', icon: Package, label: 'Insumos', description: 'Ver inventario', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/alertas-transferencia', icon: Truck, label: 'Recepción Insumos', description: 'Recibir transferencias', colorClass: 'bg-success/10 hover:bg-success/20 text-success' },
+    { path: '/supervisor-asignaciones', icon: UserCog, label: 'Asignar Supervisores', description: 'Gestionar asignaciones', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', description: 'Anexos T29 y T30', colorClass: 'bg-success/10 hover:bg-success/20 text-success' },
+    { path: '/registro-actividad', icon: Clock, label: 'Registro Actividad', description: 'Ver historial', colorClass: 'bg-muted hover:bg-muted/80 text-muted-foreground' },
+  ],
+  gerente: [
+    { path: '/alertas-operaciones', icon: AlertTriangle, label: 'Alertas y Necesidades', description: 'Consolidar alertas', colorClass: 'bg-warning/10 hover:bg-warning/20 text-warning' },
+    { path: '/folios', icon: FileText, label: 'Folios', description: 'Gestionar procedimientos', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', description: 'Entre unidades', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', description: 'Anexos T29 y T30', colorClass: 'bg-success/10 hover:bg-success/20 text-success' },
+  ],
+  gerente_almacen: [
+    { path: '/alertas-operaciones', icon: AlertTriangle, label: 'Alertas y Necesidades', description: 'Ver consolidado de alertas', colorClass: 'bg-warning/10 hover:bg-warning/20 text-warning' },
+    { path: '/almacen-central', icon: Warehouse, label: 'LOAD', description: 'Gestión de almacén central', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/distribucion', icon: Truck, label: 'Distribución', description: 'Enviar insumos a hospitales', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/rutas-distribucion', icon: Route, label: 'Rutas de Distribución', description: 'Gestionar rutas', colorClass: 'bg-success/10 hover:bg-success/20 text-success' },
+    { path: '/insumos', icon: Package, label: 'Insumos', description: 'Catálogo de insumos', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/almacenes-provisionales', icon: Warehouse, label: 'Almacenes Provisionales', description: 'Gestionar almacenes', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/alertas-transferencia', icon: AlertTriangle, label: 'Recepción Insumos', description: 'Recibir transferencias', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/registro-actividad', icon: Clock, label: 'Registro Actividad', description: 'Historial de actividades', colorClass: 'bg-muted hover:bg-muted/80 text-muted-foreground' },
+  ],
+  cadena_suministros: [
+    { path: '/alertas-operaciones', icon: AlertTriangle, label: 'Alertas y Necesidades', description: 'Ver consolidado de alertas', colorClass: 'bg-warning/10 hover:bg-warning/20 text-warning' },
+    { path: '/almacen-central', icon: Warehouse, label: 'LOAD', description: 'Gestión de almacén central', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/distribucion', icon: Truck, label: 'Distribución', description: 'Enviar insumos a hospitales', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/rutas-distribucion', icon: Route, label: 'Rutas de Distribución', description: 'Gestionar rutas', colorClass: 'bg-success/10 hover:bg-success/20 text-success' },
+    { path: '/insumos', icon: Package, label: 'Insumos', description: 'Catálogo de insumos', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/almacenes-provisionales', icon: Warehouse, label: 'Almacenes Provisionales', description: 'Gestionar almacenes', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/alertas-transferencia', icon: AlertTriangle, label: 'Recepción Insumos', description: 'Recibir transferencias', colorClass: 'bg-primary/10 hover:bg-primary/20 text-primary' },
+    { path: '/registro-actividad', icon: Clock, label: 'Registro Actividad', description: 'Historial de actividades', colorClass: 'bg-muted hover:bg-muted/80 text-muted-foreground' },
+  ],
+  finanzas: [
+    { path: '/finanzas', icon: DollarSign, label: 'Finanzas', description: 'Aprobar pagos', colorClass: 'bg-success/10 hover:bg-success/20 text-success' },
+  ],
+};
 
 const Dashboard = ({ userRole }: DashboardProps) => {
   const roleLabels: Record<UserRole, string> = {
@@ -71,6 +159,7 @@ const Dashboard = ({ userRole }: DashboardProps) => {
 
   const filteredStats = stats.filter(stat => stat.visible.includes(userRole));
   const filteredAlerts = alerts.filter(alert => alert.visible.includes(userRole));
+  const quickActions = quickActionsByRole[userRole] || [];
 
   return (
     <div className="space-y-6">
@@ -79,33 +168,35 @@ const Dashboard = ({ userRole }: DashboardProps) => {
         <p className="text-muted-foreground">Bienvenido, {roleLabels[userRole]}</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {filteredStats.map((stat) => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">
-                <span className={stat.trend.startsWith('+') ? 'text-success' : 'text-destructive'}>
-                  {stat.trend}
-                </span>
-                {' '}vs. mes anterior
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {filteredStats.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {filteredStats.map((stat) => (
+            <Card key={stat.title}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                <stat.icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground">
+                  <span className={stat.trend.startsWith('+') ? 'text-success' : 'text-destructive'}>
+                    {stat.trend}
+                  </span>
+                  {' '}vs. mes anterior
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Alertas y Notificaciones</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {filteredAlerts.length > 0 ? (
-            filteredAlerts.map((alert, index) => (
+      {filteredAlerts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Alertas y Notificaciones</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {filteredAlerts.map((alert, index) => (
               <div 
                 key={index}
                 className="flex items-center gap-3 rounded-lg border p-3"
@@ -115,92 +206,33 @@ const Dashboard = ({ userRole }: DashboardProps) => {
                 {alert.type === 'success' && <CheckCircle className="h-5 w-5 text-success" />}
                 <span className="text-sm">{alert.message}</span>
               </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">No hay alertas en este momento</p>
-          )}
-        </CardContent>
-      </Card>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Acciones Rápidas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {(userRole === 'auxiliar' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
-              <Link to="/folios" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20">
-                <h4 className="font-semibold">Nuevo Folio</h4>
-                <p className="text-sm text-muted-foreground">Registrar procedimiento</p>
-              </Link>
-            )}
-            {(userRole === 'almacenista' || userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
-              <Link to="/insumos" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20">
-                <h4 className="font-semibold">Registrar Insumos</h4>
-                <p className="text-sm text-muted-foreground">Entrada de material</p>
-              </Link>
-            )}
-            {(userRole === 'lider' || userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
-              <Link to="/reportes" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20">
-                <h4 className="font-semibold">Generar Reporte</h4>
-                <p className="text-sm text-muted-foreground">Anexos T29 y T30</p>
-              </Link>
-            )}
-            {(userRole === 'gerente' || userRole === 'gerente_operaciones') && (
-              <Link to="/traspasos" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20">
-                <h4 className="font-semibold">Gestionar Traspasos</h4>
-                <p className="text-sm text-muted-foreground">Entre unidades</p>
-              </Link>
-            )}
-            
-            {/* Acciones rápidas para Gerente de Almacén y Cadena de Suministros */}
-            {(userRole === 'gerente_almacen' || userRole === 'cadena_suministros') && (
-              <>
-                <Link to="/alertas-operaciones" className="rounded-lg border bg-warning/10 p-4 transition-colors hover:bg-warning/20 flex flex-col items-center text-center">
-                  <AlertTriangle className="h-6 w-6 mb-2 text-warning" />
-                  <h4 className="font-semibold">Alertas y Necesidades</h4>
-                  <p className="text-sm text-muted-foreground">Ver consolidado de alertas</p>
+      {quickActions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Acciones Rápidas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {quickActions.map((action) => (
+                <Link 
+                  key={action.path}
+                  to={action.path} 
+                  className={`rounded-lg border p-4 transition-colors flex flex-col items-center text-center ${action.colorClass}`}
+                >
+                  <action.icon className="h-6 w-6 mb-2" />
+                  <h4 className="font-semibold text-sm">{action.label}</h4>
+                  <p className="text-xs text-muted-foreground">{action.description}</p>
                 </Link>
-                <Link to="/almacen-central" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
-                  <Warehouse className="h-6 w-6 mb-2 text-primary" />
-                  <h4 className="font-semibold">LOAD</h4>
-                  <p className="text-sm text-muted-foreground">Gestión de almacén central</p>
-                </Link>
-                <Link to="/distribucion" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
-                  <Truck className="h-6 w-6 mb-2 text-primary" />
-                  <h4 className="font-semibold">Distribución</h4>
-                  <p className="text-sm text-muted-foreground">Enviar insumos a hospitales</p>
-                </Link>
-                <Link to="/rutas-distribucion" className="rounded-lg border bg-success/10 p-4 transition-colors hover:bg-success/20 flex flex-col items-center text-center">
-                  <Route className="h-6 w-6 mb-2 text-success" />
-                  <h4 className="font-semibold">Rutas de Distribución</h4>
-                  <p className="text-sm text-muted-foreground">Gestionar rutas</p>
-                </Link>
-                <Link to="/insumos" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
-                  <Package className="h-6 w-6 mb-2 text-primary" />
-                  <h4 className="font-semibold">Insumos</h4>
-                  <p className="text-sm text-muted-foreground">Catálogo de insumos</p>
-                </Link>
-                <Link to="/almacenes-provisionales" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
-                  <Warehouse className="h-6 w-6 mb-2 text-primary" />
-                  <h4 className="font-semibold">Almacenes Provisionales</h4>
-                  <p className="text-sm text-muted-foreground">Gestionar almacenes</p>
-                </Link>
-                <Link to="/alertas-transferencia" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
-                  <AlertTriangle className="h-6 w-6 mb-2 text-primary" />
-                  <h4 className="font-semibold">Recepción Insumos</h4>
-                  <p className="text-sm text-muted-foreground">Recibir transferencias</p>
-                </Link>
-                <Link to="/registro-actividad" className="rounded-lg border bg-muted/50 p-4 transition-colors hover:bg-muted flex flex-col items-center text-center">
-                  <Clock className="h-6 w-6 mb-2 text-muted-foreground" />
-                  <h4 className="font-semibold">Registro Actividad</h4>
-                  <p className="text-sm text-muted-foreground">Historial de actividades</p>
-                </Link>
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

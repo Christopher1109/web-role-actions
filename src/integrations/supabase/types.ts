@@ -2367,7 +2367,7 @@ export type Database = {
         | "ginecologia"
         | "urologia"
         | "otra"
-      estado_folio: "activo" | "cancelado" | "completado"
+      estado_folio: "activo" | "cancelado" | "completado" | "borrador"
       estado_traspaso: "pendiente" | "aprobado" | "rechazado" | "completado"
       genero: "masculino" | "femenino"
     }
@@ -2516,7 +2516,7 @@ export const Constants = {
         "urologia",
         "otra",
       ],
-      estado_folio: ["activo", "cancelado", "completado"],
+      estado_folio: ["activo", "cancelado", "completado", "borrador"],
       estado_traspaso: ["pendiente", "aprobado", "rechazado", "completado"],
       genero: ["masculino", "femenino"],
     },

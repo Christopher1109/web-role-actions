@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { InsumoSearchCombobox } from "./InsumoSearchCombobox";
 import { toast } from "sonner";
-import { Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Save } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { PROCEDIMIENTOS_CATALOG, PROCEDIMIENTOS_BY_CLAVE, getTipoAnestesiaKey } from "@/constants/procedimientosCatalog";
@@ -91,8 +91,9 @@ type FolioFormValues = z.infer<typeof folioSchema>;
 
 interface FolioFormProps {
   onClose: () => void;
-  onSubmit: (values: any) => void;
+  onSubmit: (values: any, isBorrador?: boolean) => void;
   defaultValues?: Partial<FolioFormValues>;
+  editingDraft?: any; // Folio borrador que se está editando
 }
 
 type Medico = {
@@ -101,7 +102,7 @@ type Medico = {
   especialidad: string;
 };
 
-export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFormProps) {
+export default function FolioForm({ onClose, onSubmit, defaultValues, editingDraft }: FolioFormProps) {
   const { selectedHospital, availableHospitals, canSelectHospital, setSelectedHospital } = useHospital();
 
   // Estado para tipo de anestesia (anestesia normal o mixta)
@@ -140,6 +141,9 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
   const [almacenesProvisionales, setAlmacenesProvisionales] = useState<Array<{ id: string; nombre: string }>>([]);
   const [almacenProvSeleccionado, setAlmacenProvSeleccionado] = useState<string>("");
   const [loadingAlmacenes, setLoadingAlmacenes] = useState(false);
+
+  // Estado para unidad de edad del paciente
+  const [pacienteEdadUnidad, setPacienteEdadUnidad] = useState<string>(editingDraft?.paciente_edad_unidad || "años");
 
   // Configuración inicial del formulario
   const form = useForm<FolioFormValues>({
@@ -786,6 +790,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
 
       const submitData = {
         ...values,
+        pacienteEdadUnidad: pacienteEdadUnidad,
         cirujanoNombre: cirujanoSeleccionado?.nombre,
         anestesiologoNombre: anestesiologoSeleccionado?.nombre,
         insumos: insumosFolio,
@@ -796,16 +801,53 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
         state_name: selectedHospital?.state_name,
         almacen_provisional_id: almacenProvSeleccionado,
         almacen_provisional_nombre: almacenSeleccionado?.nombre,
+        editingDraftId: editingDraft?.id || null,
         ...(tipoAnestesia === "anestesia_mixta" && {
           anestesiaPrincipal: anestesiaPrincipal,
           anestesiaSecundaria: anestesiaSecundaria,
         }),
       };
-      onSubmit(submitData);
+      onSubmit(submitData, false);
     } catch (error) {
       console.error("Error al validar el tipo de anestesia:", error);
       toast.error("Error al validar el formulario. Por favor, intente nuevamente.");
     }
+  };
+
+  // Handler para guardar como borrador (sin validaciones estrictas, sin afectar inventario)
+  const handleSaveDraft = async () => {
+    const values = form.getValues();
+    
+    // Validaciones mínimas para borrador
+    if (!selectedHospital) {
+      toast.error("Debe seleccionar un hospital");
+      return;
+    }
+
+    const cirujanoSeleccionado = cirujanos.find((m) => m.id === values.cirujano);
+    const anestesiologoSeleccionado = anestesiologos.find((m) => m.id === values.anestesiologo);
+    const almacenSeleccionado = almacenesProvisionales.find((a) => a.id === almacenProvSeleccionado);
+
+    const submitData = {
+      ...values,
+      pacienteEdadUnidad: pacienteEdadUnidad,
+      cirujanoNombre: cirujanoSeleccionado?.nombre,
+      anestesiologoNombre: anestesiologoSeleccionado?.nombre,
+      insumos: insumosFolio,
+      insumosAdicionales: insumosAdicionales,
+      hospital_id: selectedHospital?.id,
+      hospital_display_name: selectedHospital?.display_name,
+      hospital_budget_code: selectedHospital?.budget_code,
+      state_name: selectedHospital?.state_name,
+      almacen_provisional_id: almacenProvSeleccionado || null,
+      almacen_provisional_nombre: almacenSeleccionado?.nombre,
+      editingDraftId: editingDraft?.id || null,
+      ...(tipoAnestesia === "anestesia_mixta" && {
+        anestesiaPrincipal: anestesiaPrincipal,
+        anestesiaSecundaria: anestesiaSecundaria,
+      }),
+    };
+    onSubmit(submitData, true);
   };
 
   return (
@@ -1036,24 +1078,40 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="pacienteEdad"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Edad *</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      {...field}
-                      placeholder="35"
-                      onChange={(e) => field.onChange(Number(e.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <FormField
+                control={form.control}
+                name="pacienteEdad"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Edad *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        {...field}
+                        placeholder="35"
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormItem>
+                <FormLabel>Unidad</FormLabel>
+                <Select value={pacienteEdadUnidad} onValueChange={setPacienteEdadUnidad}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Años" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="años">Años</SelectItem>
+                    <SelectItem value="meses">Meses</SelectItem>
+                    <SelectItem value="semanas">Semanas</SelectItem>
+                    <SelectItem value="días">Días</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            </div>
 
             <FormField
               control={form.control}
@@ -1434,12 +1492,16 @@ export default function FolioForm({ onClose, onSubmit, defaultValues }: FolioFor
           </div>
         )}
 
-        {/* Botones de cancelar/crear */}
+        {/* Botones de cancelar/borrador/crear */}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="submit">Crear Folio</Button>
+          <Button type="button" variant="secondary" onClick={handleSaveDraft}>
+            <Save className="h-4 w-4 mr-2" />
+            Guardar Borrador
+          </Button>
+          <Button type="submit">{editingDraft ? "Finalizar Folio" : "Crear Folio"}</Button>
         </div>
       </form>
 

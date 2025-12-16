@@ -207,7 +207,6 @@ const RegistroActividadPage = ({ userRole }: RegistroActividadProps) => {
             Historial completo de todas las operaciones realizadas en el sistema
           </p>
         </div>
-        {(userRole === 'supervisor' || userRole === 'gerente_operaciones') && <HospitalSelector />}
       </div>
 
       {!selectedHospital ? (

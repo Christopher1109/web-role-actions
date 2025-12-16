@@ -88,7 +88,7 @@ const RegistroActividadPage = ({ userRole }: RegistroActividadProps) => {
   const [usuarios, setUsuarios] = useState<{ id: string; nombre: string }[]>([]);
   const [selectedRegistro, setSelectedRegistro] = useState<RegistroActividad | null>(null);
 
-  const canAccess = userRole === 'gerente_operaciones' || userRole === 'supervisor' || userRole === 'gerente_almacen';
+  const canAccess = userRole === 'gerente_operaciones' || userRole === 'supervisor' || userRole === 'gerente_almacen' || userRole === 'cadena_suministros';
 
   useEffect(() => {
     if (user && canAccess) {

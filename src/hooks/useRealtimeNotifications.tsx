@@ -143,8 +143,8 @@ export const useRealtimeNotifications = ({
       channels.push(pedidosFinanzasChannel);
     }
 
-    // Gerente de Operaciones - recibe actualizaciones de estado
-    if (userRole === 'gerente_operaciones') {
+    // Gerente de Operaciones y Gerente de Almacén - reciben actualizaciones de estado
+    if (userRole === 'gerente_operaciones' || userRole === 'gerente_almacen') {
       const estadosChannel = supabase
         .channel('estados-operaciones-changes')
         .on(
@@ -174,8 +174,8 @@ export const useRealtimeNotifications = ({
       channels.push(estadosChannel);
     }
 
-    // Almacenistas - reciben alertas de transferencia
-    if (userRole === 'almacenista' || userRole === 'lider') {
+    // Almacenistas y Gerente de Almacén - reciben alertas de transferencia
+    if (userRole === 'almacenista' || userRole === 'lider' || userRole === 'gerente_almacen') {
       const alertasChannel = supabase
         .channel('alertas-transferencia-changes')
         .on(

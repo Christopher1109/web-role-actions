@@ -76,8 +76,14 @@ const Folios = ({ userRole }: FoliosProps) => {
 
       // Si es borrador, guardar sin validar stock ni afectar inventario
       if (isBorrador) {
-        const numeroFolio = data.editingDraftId 
-          ? (await supabase.from("folios").select("numero_folio").eq("id", data.editingDraftId).single()).data?.numero_folio
+        const existingNumeroFolioResult = data.editingDraftId
+          ? await supabase.from("folios").select("numero_folio").eq("id", data.editingDraftId).single()
+          : null;
+
+        if (existingNumeroFolioResult?.error) throw existingNumeroFolioResult.error;
+
+        const numeroFolio = data.editingDraftId
+          ? existingNumeroFolioResult?.data?.numero_folio
           : `BORRADOR-${Date.now()}`;
 
         const folioPayload = {
@@ -88,24 +94,24 @@ const Folios = ({ userRole }: FoliosProps) => {
           hospital_id: selectedHospital.id,
           almacen_provisional_id: data.almacen_provisional_id || null,
           unidad: data.unidad,
-          numero_quirofano: data.numeroQuirofano,
-          hora_inicio_procedimiento: data.inicioProcedimiento,
-          hora_fin_procedimiento: data.finProcedimiento,
-          hora_inicio_anestesia: data.inicioAnestesia,
-          hora_fin_anestesia: data.finAnestesia,
-          paciente_apellido_paterno: data.pacienteApellidoPaterno,
-          paciente_apellido_materno: data.pacienteApellidoMaterno,
-          paciente_nombre: data.pacienteNombre,
-          paciente_nss: data.pacienteNSS,
+          numero_quirofano: data.numeroQuirofano || null,
+          hora_inicio_procedimiento: data.inicioProcedimiento || null,
+          hora_fin_procedimiento: data.finProcedimiento || null,
+          hora_inicio_anestesia: data.inicioAnestesia || null,
+          hora_fin_anestesia: data.finAnestesia || null,
+          paciente_apellido_paterno: data.pacienteApellidoPaterno || null,
+          paciente_apellido_materno: data.pacienteApellidoMaterno || null,
+          paciente_nombre: data.pacienteNombre || null,
+          paciente_nss: data.pacienteNSS || null,
           paciente_edad: data.pacienteEdad,
           paciente_edad_unidad: data.pacienteEdadUnidad || "años",
           paciente_fecha_nacimiento: data.pacienteFechaNacimiento || null,
-          paciente_genero: data.pacienteGenero,
-          cirugia: data.procedimientoQuirurgico,
-          especialidad_quirurgica: data.especialidadQuirurgica,
-          tipo_cirugia: data.tipoCirugia,
-          tipo_evento: data.tipoEvento,
-          tipo_anestesia: data.tipo_anestesia,
+          paciente_genero: data.pacienteGenero || null,
+          cirugia: data.procedimientoQuirurgico || null,
+          especialidad_quirurgica: data.especialidadQuirurgica || null,
+          tipo_cirugia: data.tipoCirugia || null,
+          tipo_evento: data.tipoEvento || null,
+          tipo_anestesia: data.tipo_anestesia || null,
           anestesia_principal: data.anestesiaPrincipal || null,
           anestesia_secundaria: data.anestesiaSecundaria || null,
           cirujano_id: data.cirujano || null,
@@ -116,13 +122,15 @@ const Folios = ({ userRole }: FoliosProps) => {
         };
 
         if (data.editingDraftId) {
-          await supabase.from("folios").update(folioPayload).eq("id", data.editingDraftId);
+          const updateResult = await supabase.from("folios").update(folioPayload).eq("id", data.editingDraftId);
+          if (updateResult.error) throw updateResult.error;
           toast.success("Borrador actualizado");
         } else {
-          await supabase.from("folios").insert(folioPayload);
+          const insertResult = await supabase.from("folios").insert(folioPayload);
+          if (insertResult.error) throw insertResult.error;
           toast.success("Borrador guardado");
         }
-        
+
         setShowForm(false);
         setEditingDraft(null);
         fetchFolios();

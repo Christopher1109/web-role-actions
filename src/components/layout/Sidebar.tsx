@@ -91,9 +91,8 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     item.roles.includes(userRole)
   );
 
-  // Roles que usan separadores por categoría
-  const rolesWithCategories = ['gerente_operaciones', 'gerente', 'supervisor'];
-  const showCategories = rolesWithCategories.includes(userRole);
+  // Todos los roles usan separadores por categoría
+  const showCategories = true;
 
   // Agrupar por categoría si aplica
   const groupedItems = showCategories 

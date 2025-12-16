@@ -27,6 +27,14 @@ interface SidebarProps {
   onLogout: () => void;
 }
 
+interface MenuItem {
+  path: string;
+  icon: any;
+  label: string;
+  roles: string[];
+  category?: string;
+}
+
 const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
   const location = useLocation();
 
@@ -42,45 +50,60 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     finanzas: 'Finanzas',
   };
 
-  const menuItems = [
-    // Principal
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros', 'finanzas'] },
+  // Menú items con categorías para gerente_operaciones
+  const menuItems: MenuItem[] = [
+    // Principal - todos los roles
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros', 'finanzas'], category: 'Principal' },
     
-    // Operaciones Hospitalarias
-    { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
-    { path: '/alertas-operaciones', icon: AlertTriangle, label: 'Alertas y Necesidades', roles: ['gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
+    // Operaciones (gerente_operaciones)
+    { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'], category: 'Operaciones' },
+    { path: '/alertas-operaciones', icon: AlertTriangle, label: 'Alertas y Necesidades', roles: ['gerente_operaciones', 'gerente_almacen', 'cadena_suministros'], category: 'Operaciones' },
     
-    // Gestión de Inventario Central
-    { path: '/almacen-central', icon: Warehouse, label: 'LOAD', roles: ['gerente_almacen', 'cadena_suministros'] },
-    { path: '/distribucion', icon: Truck, label: 'Distribución', roles: ['cadena_suministros', 'gerente_almacen'] },
-    { path: '/rutas-distribucion', icon: Route, label: 'Rutas de Distribución', roles: ['cadena_suministros', 'gerente_almacen'] },
+    // Inventario Central (gerente_almacen, cadena_suministros)
+    { path: '/almacen-central', icon: Warehouse, label: 'LOAD', roles: ['gerente_almacen', 'cadena_suministros'], category: 'Inventario Central' },
+    { path: '/distribucion', icon: Truck, label: 'Distribución', roles: ['cadena_suministros', 'gerente_almacen'], category: 'Inventario Central' },
+    { path: '/rutas-distribucion', icon: Route, label: 'Rutas de Distribución', roles: ['cadena_suministros', 'gerente_almacen'], category: 'Inventario Central' },
     
     // Inventario Hospitalario
-    { path: '/almacenes-provisionales', icon: Warehouse, label: 'Almacenes Provisionales', roles: ['almacenista', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
-    { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
-    { path: '/alertas-transferencia', icon: AlertTriangle, label: 'Recepción Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
+    { path: '/almacenes-provisionales', icon: Warehouse, label: 'Almacenes Provisionales', roles: ['almacenista', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'], category: 'Inventario' },
+    { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'], category: 'Inventario' },
+    { path: '/alertas-transferencia', icon: AlertTriangle, label: 'Recepción Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'], category: 'Inventario' },
     
     // Finanzas
-    { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['finanzas'] },
+    { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['finanzas'], category: 'Finanzas' },
     
-    // Catálogos y Configuración
-    { path: '/medicos', icon: Users, label: 'Médicos', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
-    { path: '/paquetes', icon: Database, label: 'Paquetes Anestesia', roles: ['supervisor', 'gerente', 'gerente_operaciones'] },
-    { path: '/procedimientos-hospital', icon: ClipboardList, label: 'Procedimientos', roles: ['supervisor', 'gerente', 'gerente_operaciones'] },
+    // Catálogos
+    { path: '/medicos', icon: Users, label: 'Médicos', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'], category: 'Catálogos' },
+    { path: '/paquetes', icon: Database, label: 'Paquetes Anestesia', roles: ['supervisor', 'gerente', 'gerente_operaciones'], category: 'Catálogos' },
+    { path: '/procedimientos-hospital', icon: ClipboardList, label: 'Procedimientos', roles: ['supervisor', 'gerente', 'gerente_operaciones'], category: 'Catálogos' },
     
     // Administración
-    { path: '/supervisor-asignaciones', icon: Users, label: 'Asignar Supervisores', roles: ['gerente', 'gerente_operaciones'] },
-    { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente', 'gerente_operaciones'] },
-    { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente', 'gerente_operaciones'] },
+    { path: '/supervisor-asignaciones', icon: Users, label: 'Asignar Supervisores', roles: ['gerente', 'gerente_operaciones'], category: 'Administración' },
+    { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente', 'gerente_operaciones'], category: 'Administración' },
+    { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente', 'gerente_operaciones'], category: 'Administración' },
     
-    // Reportes y Auditoría
-    { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
-    { path: '/registro-actividad', icon: History, label: 'Registro de Actividad', roles: ['supervisor', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
+    // Auditoría y Reportes
+    { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'], category: 'Auditoría' },
+    { path: '/registro-actividad', icon: History, label: 'Registro de Actividad', roles: ['supervisor', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'], category: 'Auditoría' },
   ];
 
   const filteredMenuItems = menuItems.filter(item => 
     item.roles.includes(userRole)
   );
+
+  // Roles que usan separadores por categoría
+  const rolesWithCategories = ['gerente_operaciones', 'gerente', 'supervisor'];
+  const showCategories = rolesWithCategories.includes(userRole);
+
+  // Agrupar por categoría si aplica
+  const groupedItems = showCategories 
+    ? filteredMenuItems.reduce((acc, item) => {
+        const cat = item.category || 'Otros';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(item);
+        return acc;
+      }, {} as Record<string, MenuItem[]>)
+    : { 'menu': filteredMenuItems };
 
   return (
     <div className="flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground">
@@ -98,24 +121,55 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
           <HospitalSelector />
         </div>
 
-        <nav className="space-y-1">{filteredMenuItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent'
+        <nav className="space-y-1">
+          {showCategories ? (
+            Object.entries(groupedItems).map(([category, items]) => (
+              <div key={category} className="mb-3">
+                {category !== 'Principal' && (
+                  <p className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
+                    {category}
+                  </p>
                 )}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.label}
-              </Link>
-            );
-          })}
+                {items.map((item) => {
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                          : 'text-sidebar-foreground hover:bg-sidebar-accent'
+                      )}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))
+          ) : (
+            filteredMenuItems.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent'
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.label}
+                </Link>
+              );
+            })
+          )}
         </nav>
       </div>
 

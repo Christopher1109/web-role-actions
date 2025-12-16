@@ -121,6 +121,11 @@ const AppContent = () => {
                 <>
                   <Route path="/almacen-central" element={<GerenteAlmacenDashboard />} />
                   <Route path="/traspasos" element={<Traspasos />} />
+                  <Route path="/alertas-operaciones" element={<GerenteOperacionesDashboard />} />
+                  <Route path="/insumos" element={<Insumos />} />
+                  <Route path="/almacenes-provisionales" element={<AlmacenesProvisionales />} />
+                  <Route path="/alertas-transferencia" element={<AlmacenistaAlertasTransferencia />} />
+                  <Route path="/registro-actividad" element={<RegistroActividad userRole={userRole} />} />
                 </>
               )}
               {userRole === 'cadena_suministros' && (

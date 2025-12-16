@@ -33,6 +33,7 @@ import AlmacenesProvisionales from './pages/AlmacenesProvisionales';
 import SupervisorProcedimientos from './pages/SupervisorProcedimientos';
 import SupervisorAsignaciones from './pages/SupervisorAsignaciones';
 import RutasDistribucion from './pages/RutasDistribucion';
+import RegistroActividad from './pages/RegistroActividad';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
@@ -93,7 +94,10 @@ const AppContent = () => {
                 </>
               )}
               {(userRole === 'supervisor' || userRole === 'gerente' || userRole === 'gerente_operaciones') && (
-                <Route path="/procedimientos-hospital" element={<SupervisorProcedimientos />} />
+                <>
+                  <Route path="/procedimientos-hospital" element={<SupervisorProcedimientos />} />
+                  <Route path="/registro-actividad" element={<RegistroActividad userRole={userRole} />} />
+                </>
               )}
               {(userRole === 'gerente' || userRole === 'gerente_operaciones') && (
                 <>

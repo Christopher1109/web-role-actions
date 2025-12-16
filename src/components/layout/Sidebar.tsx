@@ -11,15 +11,13 @@ import {
   Database,
   LogOut,
   UserCog,
-  Upload,
-  Download,
-  History,
   AlertTriangle,
   Warehouse,
   Truck,
   DollarSign,
   ClipboardList,
-  Route
+  Route,
+  History
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HospitalSelector } from '@/components/HospitalSelector';
@@ -59,6 +57,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/paquetes', icon: Database, label: 'Paquetes Anestesia', roles: ['supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/procedimientos-hospital', icon: ClipboardList, label: 'Procedimientos', roles: ['supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/supervisor-asignaciones', icon: Users, label: 'Asignar Supervisores', roles: ['gerente', 'gerente_operaciones'] },
+    { path: '/registro-actividad', icon: History, label: 'Registro de Actividad', roles: ['supervisor', 'gerente_operaciones'] },
     { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente', 'gerente_operaciones'] },

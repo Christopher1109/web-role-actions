@@ -1943,6 +1943,78 @@ export type Database = {
         }
         Relationships: []
       }
+      registro_actividad: {
+        Row: {
+          almacen_destino_id: string | null
+          almacen_destino_nombre: string | null
+          almacen_origen_id: string | null
+          almacen_origen_nombre: string | null
+          cantidad_total: number | null
+          created_at: string
+          descripcion: string
+          detalles_adicionales: Json | null
+          folio_id: string | null
+          hospital_id: string
+          id: string
+          insumos_afectados: Json | null
+          numero_folio: string | null
+          tipo_actividad: Database["public"]["Enums"]["tipo_actividad"]
+          usuario_id: string
+          usuario_nombre: string
+        }
+        Insert: {
+          almacen_destino_id?: string | null
+          almacen_destino_nombre?: string | null
+          almacen_origen_id?: string | null
+          almacen_origen_nombre?: string | null
+          cantidad_total?: number | null
+          created_at?: string
+          descripcion: string
+          detalles_adicionales?: Json | null
+          folio_id?: string | null
+          hospital_id: string
+          id?: string
+          insumos_afectados?: Json | null
+          numero_folio?: string | null
+          tipo_actividad: Database["public"]["Enums"]["tipo_actividad"]
+          usuario_id: string
+          usuario_nombre: string
+        }
+        Update: {
+          almacen_destino_id?: string | null
+          almacen_destino_nombre?: string | null
+          almacen_origen_id?: string | null
+          almacen_origen_nombre?: string | null
+          cantidad_total?: number | null
+          created_at?: string
+          descripcion?: string
+          detalles_adicionales?: Json | null
+          folio_id?: string | null
+          hospital_id?: string
+          id?: string
+          insumos_afectados?: Json | null
+          numero_folio?: string | null
+          tipo_actividad?: Database["public"]["Enums"]["tipo_actividad"]
+          usuario_id?: string
+          usuario_nombre?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registro_actividad_folio_id_fkey"
+            columns: ["folio_id"]
+            isOneToOne: false
+            referencedRelation: "folios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registro_actividad_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rutas_distribucion: {
         Row: {
           activo: boolean | null
@@ -2370,6 +2442,19 @@ export type Database = {
       estado_folio: "activo" | "cancelado" | "completado" | "borrador"
       estado_traspaso: "pendiente" | "aprobado" | "rechazado" | "completado"
       genero: "masculino" | "femenino"
+      tipo_actividad:
+        | "folio_creado"
+        | "folio_cancelado"
+        | "folio_borrador_creado"
+        | "folio_borrador_eliminado"
+        | "traspaso_almacen_provisional"
+        | "devolucion_almacen_principal"
+        | "recepcion_almacen_central"
+        | "ajuste_inventario"
+        | "almacen_provisional_creado"
+        | "almacen_provisional_eliminado"
+        | "insumo_agregado"
+        | "insumo_modificado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2519,6 +2604,20 @@ export const Constants = {
       estado_folio: ["activo", "cancelado", "completado", "borrador"],
       estado_traspaso: ["pendiente", "aprobado", "rechazado", "completado"],
       genero: ["masculino", "femenino"],
+      tipo_actividad: [
+        "folio_creado",
+        "folio_cancelado",
+        "folio_borrador_creado",
+        "folio_borrador_eliminado",
+        "traspaso_almacen_provisional",
+        "devolucion_almacen_principal",
+        "recepcion_almacen_central",
+        "ajuste_inventario",
+        "almacen_provisional_creado",
+        "almacen_provisional_eliminado",
+        "insumo_agregado",
+        "insumo_modificado",
+      ],
     },
   },
 } as const

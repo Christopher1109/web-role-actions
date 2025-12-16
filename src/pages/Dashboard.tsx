@@ -156,7 +156,7 @@ const Dashboard = ({ userRole }: DashboardProps) => {
             {/* Acciones rápidas para Gerente de Almacén y Cadena de Suministros */}
             {(userRole === 'gerente_almacen' || userRole === 'cadena_suministros') && (
               <>
-                <Link to="/alertas-necesidades" className="rounded-lg border bg-warning/10 p-4 transition-colors hover:bg-warning/20 flex flex-col items-center text-center">
+                <Link to="/alertas-operaciones" className="rounded-lg border bg-warning/10 p-4 transition-colors hover:bg-warning/20 flex flex-col items-center text-center">
                   <AlertTriangle className="h-6 w-6 mb-2 text-warning" />
                   <h4 className="font-semibold">Alertas y Necesidades</h4>
                   <p className="text-sm text-muted-foreground">Ver consolidado de alertas</p>

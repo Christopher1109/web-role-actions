@@ -43,24 +43,39 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
   };
 
   const menuItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
+    // Principal
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['auxiliar', 'almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros', 'finanzas'] },
+    
+    // Operaciones Hospitalarias
+    { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/alertas-operaciones', icon: AlertTriangle, label: 'Alertas y Necesidades', roles: ['gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
-    { path: '/almacen-central', icon: Warehouse, label: 'Almacén Central', roles: ['gerente_almacen', 'cadena_suministros'] },
+    
+    // Gestión de Inventario Central
+    { path: '/almacen-central', icon: Warehouse, label: 'LOAD', roles: ['gerente_almacen', 'cadena_suministros'] },
     { path: '/distribucion', icon: Truck, label: 'Distribución', roles: ['cadena_suministros', 'gerente_almacen'] },
     { path: '/rutas-distribucion', icon: Route, label: 'Rutas de Distribución', roles: ['cadena_suministros', 'gerente_almacen'] },
-    { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['finanzas'] },
-    { path: '/folios', icon: FileText, label: 'Folios', roles: ['auxiliar', 'lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
+    
+    // Inventario Hospitalario
     { path: '/almacenes-provisionales', icon: Warehouse, label: 'Almacenes Provisionales', roles: ['almacenista', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
     { path: '/insumos', icon: Package, label: 'Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
     { path: '/alertas-transferencia', icon: AlertTriangle, label: 'Recepción Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
+    
+    // Finanzas
+    { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['finanzas'] },
+    
+    // Catálogos y Configuración
     { path: '/medicos', icon: Users, label: 'Médicos', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/paquetes', icon: Database, label: 'Paquetes Anestesia', roles: ['supervisor', 'gerente', 'gerente_operaciones'] },
     { path: '/procedimientos-hospital', icon: ClipboardList, label: 'Procedimientos', roles: ['supervisor', 'gerente', 'gerente_operaciones'] },
+    
+    // Administración
     { path: '/supervisor-asignaciones', icon: Users, label: 'Asignar Supervisores', roles: ['gerente', 'gerente_operaciones'] },
-    { path: '/registro-actividad', icon: History, label: 'Registro de Actividad', roles: ['supervisor', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
-    { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
-    { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente', 'gerente_operaciones'] },
     { path: '/usuarios', icon: UserCog, label: 'Usuarios', roles: ['gerente', 'gerente_operaciones'] },
+    { path: '/traspasos', icon: ArrowLeftRight, label: 'Traspasos', roles: ['gerente', 'gerente_operaciones'] },
+    
+    // Reportes y Auditoría
+    { path: '/reportes', icon: FileSpreadsheet, label: 'Reportes', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'] },
+    { path: '/registro-actividad', icon: History, label: 'Registro de Actividad', roles: ['supervisor', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'] },
   ];
 
   const filteredMenuItems = menuItems.filter(item => 

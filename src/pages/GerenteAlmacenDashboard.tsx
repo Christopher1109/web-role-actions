@@ -299,53 +299,59 @@ const GerenteAlmacenDashboard = () => {
 
         if (!jsonData || jsonData.length === 0) {
           toast.error("El Excel no tiene filas válidas");
+          setUploading(false);
           return;
         }
 
-        // 1) Primero: actualizar pendientes (y cubierta si aplica) para TODOS los renglones
+        // 1) Cargar TODOS los detalles del documento en UNA sola query
+        const { data: allDetalles, error: detallesError } = await supabase
+          .from("documento_agrupado_detalle")
+          .select("id, insumo_catalogo_id, cantidad_cubierta")
+          .eq("documento_id", selectedDocId);
+
+        if (detallesError) {
+          toast.error("Error al cargar detalles del documento");
+          setUploading(false);
+          return;
+        }
+
+        // Crear mapa para lookup O(1)
+        const detallesMap = new Map(
+          (allDetalles || []).map((d) => [d.insumo_catalogo_id, d])
+        );
+
+        // 2) Preparar todos los updates en memoria
+        const updates: Array<{ id: string; cantidad_cubierta: number }> = [];
+
         for (const row of jsonData) {
           const insumoId = row["ID Sistema"];
           if (!insumoId) continue;
 
-          const cantProveedor = toNumberOrNull(row["Cantidad Proveedor"]) ?? 0;
-          const faltante = toNumberOrNull(row["Cantidad Faltante"]);
-          const pendienteReq = toNumberOrNull(row["Cantidad Pendiente Requerida"]);
-
-          // regla exacta:
-          const pendienteAguardar = isValidNonNegNumber(faltante)
-            ? clampMin0(faltante as number)
-            : isValidNonNegNumber(pendienteReq)
-              ? clampMin0(pendienteReq as number)
-              : null;
-
-          const { data: det, error: detError } = await supabase
-            .from("documento_agrupado_detalle")
-            .select("id, cantidad_cubierta")
-            .eq("documento_id", selectedDocId)
-            .eq("insumo_catalogo_id", insumoId)
-            .maybeSingle();
-
-          if (detError) {
-            console.error("Error fetching detail for update:", detError);
-            continue;
-          }
+          const det = detallesMap.get(insumoId);
           if (!det) continue;
 
+          const cantProveedor = toNumberOrNull(row["Cantidad Proveedor"]) ?? 0;
           const cubiertaActual = toNumberOrNull(det.cantidad_cubierta) ?? 0;
           const nuevaCubierta = cantProveedor > 0 ? cubiertaActual + cantProveedor : cubiertaActual;
 
-          // Solo actualizamos cantidad_cubierta - cantidad_pendiente es columna generada automáticamente
-          const { error: updateErr } = await supabase
-            .from("documento_agrupado_detalle")
-            .update({ cantidad_cubierta: nuevaCubierta })
-            .eq("id", det.id);
-
-          if (updateErr) {
-            console.error("Error actualizando cantidad_cubierta:", updateErr);
-          }
+          updates.push({ id: det.id, cantidad_cubierta: nuevaCubierta });
         }
 
-        // 2) Ahora: crear OC SOLO con items que sí se comprarán (Cantidad Proveedor > 0)
+        // 3) Ejecutar TODOS los updates en paralelo (batches de 50)
+        const BATCH_SIZE = 50;
+        for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+          const batch = updates.slice(i, i + BATCH_SIZE);
+          await Promise.all(
+            batch.map((u) =>
+              supabase
+                .from("documento_agrupado_detalle")
+                .update({ cantidad_cubierta: u.cantidad_cubierta })
+                .eq("id", u.id)
+            )
+          );
+        }
+
+        // 4) Crear OC SOLO con items que sí se comprarán (Cantidad Proveedor > 0)
         const itemsConCantidad = jsonData
           .map((row) => ({
             ...row,
@@ -392,7 +398,7 @@ const GerenteAlmacenDashboard = () => {
           numeroPedidoCreado = numeroPedido;
         }
 
-        // 3) Revisión final: si todo pendiente quedó en 0, marcar documento procesado
+        // 5) Revisión final: si todo pendiente quedó en 0, marcar documento procesado
         const { data: allDetails, error: allDetailsErr } = await supabase
           .from("documento_agrupado_detalle")
           .select("cantidad_pendiente, total_faltante_requerido, cantidad_cubierta")
@@ -420,7 +426,7 @@ const GerenteAlmacenDashboard = () => {
         }
 
         if (numeroPedidoCreado) {
-          toast.success(`Pendientes actualizados + OC ${numeroPedidoCreado} creada (${itemsConCantidad.length} items)`);
+          toast.success(`OC ${numeroPedidoCreado} creada (${itemsConCantidad.length} items)`);
         } else {
           toast.success("Pendientes actualizados (no se creó OC porque el proveedor no surtió nada)");
         }

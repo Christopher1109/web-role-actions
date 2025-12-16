@@ -26,10 +26,12 @@ const Folios = ({ userRole }: FoliosProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [folios, setFolios] = useState<any[]>([]);
+  const [borradores, setBorradores] = useState<any[]>([]);
   const [selectedFolio, setSelectedFolio] = useState<any>(null);
   const [selectedFolioInsumos, setSelectedFolioInsumos] = useState<any[]>([]);
   const [showDetail, setShowDetail] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editingDraft, setEditingDraft] = useState<any>(null);
 
   const canCancel = userRole === "supervisor" || userRole === "gerente" || userRole === "gerente_operaciones";
 
@@ -51,7 +53,11 @@ const Folios = ({ userRole }: FoliosProps) => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setFolios(data || []);
+      
+      // Separar borradores de folios finalizados
+      const allFolios = data || [];
+      setBorradores(allFolios.filter((f: any) => f.estado === "borrador"));
+      setFolios(allFolios.filter((f: any) => f.estado !== "borrador"));
     } catch (error: any) {
       toast.error("Error al cargar folios", {
         description: error.message,
@@ -61,10 +67,65 @@ const Folios = ({ userRole }: FoliosProps) => {
     }
   };
 
-  const handleCreateFolio = async (data: any) => {
+  const handleCreateFolio = async (data: any, isBorrador: boolean = false) => {
     try {
       if (!user || !selectedHospital) {
         toast.error("Debes seleccionar un hospital para continuar");
+        return;
+      }
+
+      // Si es borrador, guardar sin validar stock ni afectar inventario
+      if (isBorrador) {
+        const numeroFolio = data.editingDraftId 
+          ? (await supabase.from("folios").select("numero_folio").eq("id", data.editingDraftId).single()).data?.numero_folio
+          : `BORRADOR-${Date.now()}`;
+
+        const folioPayload = {
+          numero_folio: numeroFolio,
+          state_name: selectedHospital.state_name,
+          hospital_budget_code: selectedHospital.budget_code,
+          hospital_display_name: selectedHospital.display_name,
+          hospital_id: selectedHospital.id,
+          almacen_provisional_id: data.almacen_provisional_id || null,
+          unidad: data.unidad,
+          numero_quirofano: data.numeroQuirofano,
+          hora_inicio_procedimiento: data.inicioProcedimiento,
+          hora_fin_procedimiento: data.finProcedimiento,
+          hora_inicio_anestesia: data.inicioAnestesia,
+          hora_fin_anestesia: data.finAnestesia,
+          paciente_apellido_paterno: data.pacienteApellidoPaterno,
+          paciente_apellido_materno: data.pacienteApellidoMaterno,
+          paciente_nombre: data.pacienteNombre,
+          paciente_nss: data.pacienteNSS,
+          paciente_edad: data.pacienteEdad,
+          paciente_edad_unidad: data.pacienteEdadUnidad || "años",
+          paciente_fecha_nacimiento: data.pacienteFechaNacimiento || null,
+          paciente_genero: data.pacienteGenero,
+          cirugia: data.procedimientoQuirurgico,
+          especialidad_quirurgica: data.especialidadQuirurgica,
+          tipo_cirugia: data.tipoCirugia,
+          tipo_evento: data.tipoEvento,
+          tipo_anestesia: data.tipo_anestesia,
+          anestesia_principal: data.anestesiaPrincipal || null,
+          anestesia_secundaria: data.anestesiaSecundaria || null,
+          cirujano_id: data.cirujano || null,
+          anestesiologo_id: data.anestesiologo || null,
+          cirujano_nombre: data.cirujanoNombre || null,
+          anestesiologo_nombre: data.anestesiologoNombre || null,
+          estado: "borrador" as const,
+        };
+
+        if (data.editingDraftId) {
+          await supabase.from("folios").update(folioPayload).eq("id", data.editingDraftId);
+          toast.success("Borrador actualizado");
+        } else {
+          await supabase.from("folios").insert(folioPayload);
+          toast.success("Borrador guardado");
+        }
+        
+        setShowForm(false);
+        setEditingDraft(null);
+        fetchFolios();
         return;
       }
 
@@ -677,9 +738,13 @@ const Folios = ({ userRole }: FoliosProps) => {
         </CardContent>
       </Card>
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if (!open) setEditingDraft(null); }}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-          <FolioForm onClose={() => setShowForm(false)} onSubmit={handleCreateFolio} />
+          <FolioForm 
+            onClose={() => { setShowForm(false); setEditingDraft(null); }} 
+            onSubmit={handleCreateFolio}
+            editingDraft={editingDraft}
+          />
         </DialogContent>
       </Dialog>
 

@@ -278,9 +278,18 @@ const GerenteAlmacenDashboard = () => {
     if (!file || !selectedDocId) return;
 
     setUploading(true);
-    try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
+    
+    const reader = new FileReader();
+    
+    reader.onerror = () => {
+      console.error("Error reading file");
+      toast.error("Error al leer el archivo");
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+    
+    reader.onload = async (e) => {
+      try {
         const bytes = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(bytes, { type: "array" });
         const sheetName = workbook.SheetNames[0];
@@ -297,30 +306,44 @@ const GerenteAlmacenDashboard = () => {
           "ID Sistema": string;
         }>;
 
+        console.log("Excel parseado, filas:", jsonData.length);
+
         if (!jsonData || jsonData.length === 0) {
           toast.error("El Excel no tiene filas válidas");
           setUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
           return;
         }
 
         // 1) Cargar TODOS los detalles del documento en UNA sola query
         const { data: allDetalles, error: detallesError } = await supabase
           .from("documento_agrupado_detalle")
-          .select("id, insumo_catalogo_id, cantidad_cubierta")
+          .select("id, insumo_catalogo_id, cantidad_cubierta, total_faltante_requerido")
           .eq("documento_id", selectedDocId);
 
         if (detallesError) {
+          console.error("Error cargando detalles:", detallesError);
           toast.error("Error al cargar detalles del documento");
           setUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
           return;
         }
+
+        console.log("Detalles cargados:", allDetalles?.length);
 
         // Crear mapa para lookup O(1)
         const detallesMap = new Map(
           (allDetalles || []).map((d) => [d.insumo_catalogo_id, d])
         );
 
-        // 2) Preparar todos los updates en memoria
+        // 2) Preparar items con cantidad proveedor > 0 para la OC
+        const itemsParaOC: Array<{
+          insumoId: string;
+          cantProveedor: number;
+          precio: number | null;
+        }> = [];
+
+        // 3) Preparar updates de cantidad_cubierta
         const updates: Array<{ id: string; cantidad_cubierta: number }> = [];
 
         for (const row of jsonData) {
@@ -328,52 +351,65 @@ const GerenteAlmacenDashboard = () => {
           if (!insumoId) continue;
 
           const det = detallesMap.get(insumoId);
-          if (!det) continue;
+          if (!det) {
+            console.log("No se encontró detalle para insumo:", insumoId);
+            continue;
+          }
 
           const cantProveedor = toNumberOrNull(row["Cantidad Proveedor"]) ?? 0;
-          const cubiertaActual = toNumberOrNull(det.cantidad_cubierta) ?? 0;
-          const nuevaCubierta = cantProveedor > 0 ? cubiertaActual + cantProveedor : cubiertaActual;
-
-          updates.push({ id: det.id, cantidad_cubierta: nuevaCubierta });
+          const precio = toNumberOrNull(row["Precio Unitario ($)"]);
+          
+          if (cantProveedor > 0) {
+            itemsParaOC.push({ insumoId, cantProveedor, precio });
+            
+            // Actualizar cantidad_cubierta sumando lo que el proveedor puede dar
+            const cubiertaActual = toNumberOrNull(det.cantidad_cubierta) ?? 0;
+            const nuevaCubierta = cubiertaActual + cantProveedor;
+            updates.push({ id: det.id, cantidad_cubierta: nuevaCubierta });
+          }
         }
 
-        // 3) Ejecutar TODOS los updates en paralelo (batches de 50)
-        const BATCH_SIZE = 50;
-        for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-          const batch = updates.slice(i, i + BATCH_SIZE);
-          await Promise.all(
-            batch.map((u) =>
-              supabase
-                .from("documento_agrupado_detalle")
-                .update({ cantidad_cubierta: u.cantidad_cubierta })
-                .eq("id", u.id)
-            )
-          );
+        console.log("Items para OC:", itemsParaOC.length, "Updates:", updates.length);
+
+        // 4) Ejecutar updates de cantidad_cubierta en paralelo
+        if (updates.length > 0) {
+          const BATCH_SIZE = 50;
+          for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+            const batch = updates.slice(i, i + BATCH_SIZE);
+            const results = await Promise.all(
+              batch.map((u) =>
+                supabase
+                  .from("documento_agrupado_detalle")
+                  .update({ cantidad_cubierta: u.cantidad_cubierta })
+                  .eq("id", u.id)
+              )
+            );
+            
+            // Verificar errores
+            const errors = results.filter(r => r.error);
+            if (errors.length > 0) {
+              console.error("Errores en updates:", errors);
+            }
+          }
+          console.log("Cantidad cubierta actualizada");
         }
 
-        // 4) Crear OC SOLO con items que sí se comprarán (Cantidad Proveedor > 0)
-        const itemsConCantidad = jsonData
-          .map((row) => ({
-            ...row,
-            _cantProveedor: toNumberOrNull(row["Cantidad Proveedor"]),
-            _precio: toNumberOrNull(row["Precio Unitario ($)"]),
-          }))
-          .filter((row) => (row._cantProveedor ?? 0) > 0);
-
+        // 5) Crear OC solo si hay items con cantidad > 0
         let numeroPedidoCreado: string | null = null;
 
-        if (itemsConCantidad.length > 0) {
+        if (itemsParaOC.length > 0) {
           const { data: auth } = await supabase.auth.getUser();
           const user = auth.user;
 
           const numeroPedido = `OC-${Date.now().toString(36).toUpperCase()}`;
+          console.log("Creando OC:", numeroPedido, "con", itemsParaOC.length, "items");
 
           const { data: orden, error: ordenError } = await supabase
             .from("pedidos_compra")
             .insert({
               numero_pedido: numeroPedido,
               creado_por: user?.id,
-              total_items: itemsConCantidad.length,
+              total_items: itemsParaOC.length,
               estado: "pendiente",
               proveedor: "Por definir",
               documento_origen_id: selectedDocId,
@@ -381,24 +417,33 @@ const GerenteAlmacenDashboard = () => {
             .select()
             .single();
 
-          if (ordenError) throw ordenError;
+          if (ordenError) {
+            console.error("Error creando orden:", ordenError);
+            throw ordenError;
+          }
 
-          const items = itemsConCantidad.map((row) => ({
+          console.log("Orden creada:", orden.id);
+
+          const items = itemsParaOC.map((item) => ({
             pedido_id: orden.id,
-            insumo_catalogo_id: row["ID Sistema"],
-            cantidad_solicitada: row._cantProveedor ?? 0,
+            insumo_catalogo_id: item.insumoId,
+            cantidad_solicitada: item.cantProveedor,
             cantidad_recibida: 0,
-            precio_unitario: row._precio ?? null,
+            precio_unitario: item.precio,
             estado: "pendiente",
           }));
 
           const { error: itemsError } = await supabase.from("pedido_items").insert(items);
-          if (itemsError) throw itemsError;
+          if (itemsError) {
+            console.error("Error insertando items:", itemsError);
+            throw itemsError;
+          }
 
           numeroPedidoCreado = numeroPedido;
+          console.log("Items insertados correctamente");
         }
 
-        // 5) Revisión final: si todo pendiente quedó en 0, marcar documento procesado
+        // 6) Revisión final: si todo pendiente quedó en 0, marcar documento procesado
         const { data: allDetails, error: allDetailsErr } = await supabase
           .from("documento_agrupado_detalle")
           .select("cantidad_pendiente, total_faltante_requerido, cantidad_cubierta")
@@ -426,23 +471,24 @@ const GerenteAlmacenDashboard = () => {
         }
 
         if (numeroPedidoCreado) {
-          toast.success(`OC ${numeroPedidoCreado} creada (${itemsConCantidad.length} items)`);
+          toast.success(`OC ${numeroPedidoCreado} creada con ${itemsParaOC.length} items`);
         } else {
-          toast.success("Pendientes actualizados (no se creó OC porque el proveedor no surtió nada)");
+          toast.info("No se creó OC porque el proveedor no indicó cantidades");
         }
 
         setSelectedDocId(null);
-        fetchData();
-      };
+        await fetchData();
+        
+      } catch (error) {
+        console.error("Error processing file:", error);
+        toast.error("Error al procesar archivo");
+      } finally {
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    };
 
-      reader.readAsArrayBuffer(file);
-    } catch (error) {
-      console.error("Error processing file:", error);
-      toast.error("Error al procesar archivo");
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+    reader.readAsArrayBuffer(file);
   };
 
   const abrirPreciosDialog = (orden: OrdenCompra) => {

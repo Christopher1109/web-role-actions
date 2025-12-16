@@ -15,14 +15,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { useHospital } from "@/contexts/HospitalContext";
 import { generateFolioPDF } from "@/utils/pdfExport";
 import { assertSupabaseOk, collectSupabaseErrors } from "@/utils/supabaseAssert";
+import { useRegistroActividad } from "@/hooks/useRegistroActividad";
 
 interface FoliosProps {
   userRole: UserRole;
 }
 
 const Folios = ({ userRole }: FoliosProps) => {
-  const { user } = useAuth();
+  const { user, username } = useAuth();
   const { selectedHospital } = useHospital();
+  const { registrarActividad } = useRegistroActividad();
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [folios, setFolios] = useState<any[]>([]);
@@ -126,8 +128,21 @@ const Folios = ({ userRole }: FoliosProps) => {
           if (updateResult.error) throw updateResult.error;
           toast.success("Borrador actualizado");
         } else {
-          const insertResult = await supabase.from("folios").insert(folioPayload);
+          const insertResult = await supabase.from("folios").insert(folioPayload).select().single();
           if (insertResult.error) throw insertResult.error;
+          
+          // Registrar actividad de borrador creado
+          await registrarActividad({
+            tipo_actividad: 'folio_borrador_creado',
+            descripcion: `Borrador de folio creado para ${data.pacienteNombre || 'paciente'} ${data.pacienteApellidoPaterno || ''}`,
+            numero_folio: numeroFolio,
+            folio_id: insertResult.data?.id,
+            detalles_adicionales: {
+              tipo_anestesia: data.tipo_anestesia,
+              especialidad: data.especialidadQuirurgica,
+            }
+          });
+          
           toast.success("Borrador guardado");
         }
 
@@ -415,6 +430,40 @@ const Folios = ({ userRole }: FoliosProps) => {
         await supabase.from("folios").delete().eq("id", data.editingDraftId);
       }
 
+      // Registrar actividad de folio creado
+      const insumosAfectados = [
+        ...(data.insumos || []).map((item: any) => ({
+          insumo_id: item.insumo?.id || item.insumo_catalogo_id,
+          nombre: item.insumo?.nombre || 'Insumo',
+          clave: item.insumo?.clave,
+          cantidad: item.cantidad,
+        })),
+        ...(data.insumosAdicionales || []).map((item: any) => ({
+          insumo_id: item.insumo?.id,
+          nombre: item.insumo?.nombre || 'Insumo adicional',
+          clave: item.insumo?.clave,
+          cantidad: item.cantidad,
+        })),
+      ];
+
+      await registrarActividad({
+        tipo_actividad: 'folio_creado',
+        descripcion: `Folio ${numeroFolio} creado para paciente ${data.pacienteNombre || ''} ${data.pacienteApellidoPaterno || ''} - Procedimiento: ${data.tipo_anestesia || 'No especificado'}`,
+        folio_id: folioData.id,
+        numero_folio: numeroFolio,
+        almacen_origen_id: data.almacen_provisional_id,
+        almacen_origen_nombre: data.almacen_provisional_nombre,
+        insumos_afectados: insumosAfectados,
+        cantidad_total: insumosAfectados.reduce((sum: number, i: any) => sum + (i.cantidad || 0), 0),
+        detalles_adicionales: {
+          paciente: `${data.pacienteNombre || ''} ${data.pacienteApellidoPaterno || ''}`,
+          tipo_anestesia: data.tipo_anestesia,
+          especialidad: data.especialidadQuirurgica,
+          cirujano: data.cirujanoNombre,
+          anestesiologo: data.anestesiologoNombre,
+        }
+      });
+
       toast.success("Folio creado exitosamente", {
         description: `Número de folio: ${numeroFolio} (consumido de ${data.almacen_provisional_nombre})`,
       });
@@ -550,10 +599,33 @@ const Folios = ({ userRole }: FoliosProps) => {
           assertSupabaseOk(movRes as any, "Folios.handleCancelFolio: insertar movimientos devolución");
         }
 
+        // Registrar actividad de cancelación
+        await registrarActividad({
+          tipo_actividad: 'folio_cancelado',
+          descripcion: `Folio ${folio.numero_folio} cancelado - Insumos devueltos al almacén provisional`,
+          folio_id: folioId,
+          numero_folio: folio.numero_folio,
+          almacen_destino_id: almacenProvisionalId,
+          insumos_afectados: todosLosInsumos.map((i: any) => ({
+            insumo_id: i.insumo_id,
+            nombre: 'Insumo',
+            cantidad: i.cantidad,
+          })),
+          cantidad_total: todosLosInsumos.reduce((sum: number, i: any) => sum + (i.cantidad || 0), 0),
+        });
+
         toast.success("Folio cancelado exitosamente", {
           description: "El inventario ha sido devuelto al almacén provisional",
         });
       } else {
+        // Registrar cancelación sin devolución
+        await registrarActividad({
+          tipo_actividad: 'folio_cancelado',
+          descripcion: `Folio ${folio.numero_folio} cancelado - Sin almacén provisional para devolución`,
+          folio_id: folioId,
+          numero_folio: folio.numero_folio,
+        });
+
         toast.success("Folio cancelado", {
           description: "No se encontró almacén provisional para devolución de inventario",
         });

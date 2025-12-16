@@ -126,12 +126,20 @@ const AppContent = () => {
                   <Route path="/almacenes-provisionales" element={<AlmacenesProvisionales />} />
                   <Route path="/alertas-transferencia" element={<AlmacenistaAlertasTransferencia />} />
                   <Route path="/registro-actividad" element={<RegistroActividad userRole={userRole} />} />
+                  <Route path="/distribucion" element={<CadenaSuministrosDashboard />} />
+                  <Route path="/rutas-distribucion" element={<RutasDistribucion />} />
                 </>
               )}
               {userRole === 'cadena_suministros' && (
                 <>
                   <Route path="/distribucion" element={<CadenaSuministrosDashboard />} />
                   <Route path="/rutas-distribucion" element={<RutasDistribucion />} />
+                  <Route path="/alertas-operaciones" element={<GerenteOperacionesDashboard />} />
+                  <Route path="/almacen-central" element={<GerenteAlmacenDashboard />} />
+                  <Route path="/insumos" element={<Insumos />} />
+                  <Route path="/almacenes-provisionales" element={<AlmacenesProvisionales />} />
+                  <Route path="/alertas-transferencia" element={<AlmacenistaAlertasTransferencia />} />
+                  <Route path="/registro-actividad" element={<RegistroActividad userRole={userRole} />} />
                 </>
               )}
               {userRole === 'finanzas' && (

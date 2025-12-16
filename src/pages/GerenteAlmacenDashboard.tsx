@@ -23,6 +23,8 @@ import {
   DollarSign,
   CreditCard,
   Truck,
+  AlertTriangle,
+  Route,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { StatusTimeline } from "@/components/StatusTimeline";
@@ -571,6 +573,53 @@ const GerenteAlmacenDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Acciones Rápidas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2" asChild>
+              <a href="/alertas-operaciones">
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                <span className="text-xs text-center">Alertas y Necesidades</span>
+              </a>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2" asChild>
+              <a href="/distribucion">
+                <Truck className="h-5 w-5 text-blue-500" />
+                <span className="text-xs text-center">Distribución</span>
+              </a>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2" asChild>
+              <a href="/rutas-distribucion">
+                <Route className="h-5 w-5 text-green-500" />
+                <span className="text-xs text-center">Rutas de Distribución</span>
+              </a>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2" asChild>
+              <a href="/insumos">
+                <Package className="h-5 w-5 text-purple-500" />
+                <span className="text-xs text-center">Insumos</span>
+              </a>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2" asChild>
+              <a href="/almacenes-provisionales">
+                <Warehouse className="h-5 w-5 text-cyan-500" />
+                <span className="text-xs text-center">Almacenes Provisionales</span>
+              </a>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex flex-col items-center gap-2" asChild>
+              <a href="/registro-actividad">
+                <Clock className="h-5 w-5 text-gray-500" />
+                <span className="text-xs text-center">Registro Actividad</span>
+              </a>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="documentos" className="space-y-4">
         <TabsList>

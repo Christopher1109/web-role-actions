@@ -97,23 +97,24 @@ const RegistroActividadPage = ({ userRole }: RegistroActividadProps) => {
   }, [user, selectedHospital, canAccess]);
 
   const fetchRegistros = async () => {
+    if (!selectedHospital) {
+      setRegistros([]);
+      setUsuarios([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('registro_actividad')
         .select(`
           *,
           hospitales:hospital_id (nombre, display_name)
         `)
+        .eq('hospital_id', selectedHospital.id)
         .order('created_at', { ascending: false })
         .limit(500);
-
-      // Si es supervisor y tiene hospital seleccionado, filtrar por ese hospital
-      if (userRole === 'supervisor' && selectedHospital) {
-        query = query.eq('hospital_id', selectedHospital.id);
-      }
-
-      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching registros:', error);
@@ -206,8 +207,18 @@ const RegistroActividadPage = ({ userRole }: RegistroActividadProps) => {
             Historial completo de todas las operaciones realizadas en el sistema
           </p>
         </div>
-        {userRole === 'supervisor' && <HospitalSelector />}
+        {(userRole === 'supervisor' || userRole === 'gerente_operaciones') && <HospitalSelector />}
       </div>
+
+      {!selectedHospital ? (
+        <Alert>
+          <Building2 className="h-4 w-4" />
+          <AlertDescription>
+            Selecciona un hospital para ver el registro de actividad.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <>
 
       {/* Filtros */}
       <Card>
@@ -527,6 +538,8 @@ const RegistroActividadPage = ({ userRole }: RegistroActividadProps) => {
           )}
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   );
 };

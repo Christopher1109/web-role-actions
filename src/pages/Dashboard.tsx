@@ -161,6 +161,11 @@ const Dashboard = ({ userRole }: DashboardProps) => {
                   <h4 className="font-semibold">Alertas y Necesidades</h4>
                   <p className="text-sm text-muted-foreground">Ver consolidado de alertas</p>
                 </Link>
+                <Link to="/almacen-central" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
+                  <Warehouse className="h-6 w-6 mb-2 text-primary" />
+                  <h4 className="font-semibold">LOAD</h4>
+                  <p className="text-sm text-muted-foreground">Gestión de almacén central</p>
+                </Link>
                 <Link to="/distribucion" className="rounded-lg border bg-primary/10 p-4 transition-colors hover:bg-primary/20 flex flex-col items-center text-center">
                   <Truck className="h-6 w-6 mb-2 text-primary" />
                   <h4 className="font-semibold">Distribución</h4>

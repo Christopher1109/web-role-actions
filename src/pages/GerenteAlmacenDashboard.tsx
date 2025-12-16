@@ -524,8 +524,8 @@ const GerenteAlmacenDashboard = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Panel de Gerente de Almacén</h1>
-          <p className="text-muted-foreground">Gestión de compras y almacén central</p>
+          <h1 className="text-3xl font-bold text-foreground">LOAD</h1>
+          <p className="text-muted-foreground">Logística y Operaciones de Almacén y Distribución</p>
         </div>
         <Button onClick={fetchData} variant="outline" size="sm">
           <RefreshCw className="mr-2 h-4 w-4" />

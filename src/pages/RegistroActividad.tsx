@@ -246,17 +246,21 @@ const RegistroActividadPage = ({ userRole }: RegistroActividadProps) => {
             </Select>
 
             {/* Usuario */}
-            <Select value={usuarioFiltro} onValueChange={setUsuarioFiltro}>
+            <Select value={usuarioFiltro} onValueChange={(value) => setUsuarioFiltro(value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Usuario" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos los usuarios</SelectItem>
-                {usuarios.map((usuario) => (
-                  <SelectItem key={usuario.id} value={usuario.id}>
-                    {usuario.nombre}
-                  </SelectItem>
-                ))}
+                {usuarios.length > 0 ? (
+                  usuarios.map((usuario) => (
+                    <SelectItem key={usuario.id} value={usuario.id}>
+                      {usuario.nombre}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-users" disabled>No hay usuarios</SelectItem>
+                )}
               </SelectContent>
             </Select>
 

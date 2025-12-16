@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable, { RowInput } from "jspdf-autotable";
 import cbMedicaLogo from "@/assets/cb-medica-logo.jpg";
+import { PROCEDIMIENTOS_BY_TIPO } from "@/constants/procedimientosCatalog";
 
 export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabels: Record<string, string>) => {
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
@@ -298,9 +299,10 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
   yPos = (doc as any).lastAutoTable.finalY;
 
   // 5) TABLA PRODUCTIVIDAD
-  const tipoAnestesiaDisplay = folio.tipo_anestesia
-    ? tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia
-    : "N/A";
+  // Obtener clave y nombre del procedimiento desde el catálogo
+  const procedimiento = folio.tipo_anestesia ? PROCEDIMIENTOS_BY_TIPO.get(folio.tipo_anestesia) : null;
+  const claveProcedimiento = procedimiento?.clave || "N/A";
+  const tipoProcedimiento = procedimiento?.nombre || tiposAnestesiaLabels[folio.tipo_anestesia] || folio.tipo_anestesia || "N/A";
 
   autoTable(doc, {
     startY: yPos,
@@ -316,7 +318,7 @@ export const generateFolioPDF = (folio: any, insumos: any[], tiposAnestesiaLabel
         "Importe (Con IVA)",
       ],
     ],
-    body: [["1", "N/A", tipoAnestesiaDisplay, folio.cirugia || "N/A", "", ""]],
+    body: [["1", claveProcedimiento, tipoProcedimiento, folio.cirugia || "N/A", "", ""]],
     theme: "grid",
     styles: {
       lineColor: [0, 0, 0],

@@ -1469,8 +1469,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues, editingDra
                     <TableCell className="py-2">
                       <Input
                         type="number"
-                        min={fi.cantidadMinima ?? 0}
-                        max={fi.cantidadMaxima ?? undefined}
+                        min={0}
                         value={fi.cantidad}
                         onChange={(e) => handleUpdateCantidad(fi.insumo.id, Number(e.target.value))}
                         className="w-20 h-8"

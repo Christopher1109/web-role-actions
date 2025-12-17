@@ -11,7 +11,23 @@
 
 ---
 
-## Paso 1: Ejecutar Schema
+## Paso 1: Exportar Datos desde Lovable Cloud
+
+### Método Automático (Recomendado)
+
+Llamar al Edge Function de exportación:
+
+```bash
+curl -X POST "https://nkwoiqlddngzvtrpmetu.supabase.co/functions/v1/export-database" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5rd29pcWxkZG5nenZ0cnBtZXR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NTYxODEsImV4cCI6MjA3ODAzMjE4MX0.OH4j3Bw7NacxIiIEmhDHeLcVLA36_4qlFhY__o-xuAk" \
+  -o database_export.json
+```
+
+Esto descargará un archivo JSON con TODOS los datos (~30MB).
+
+---
+
+## Paso 2: Ejecutar Schema en tu Supabase
 
 1. Ve al **SQL Editor** de tu proyecto Supabase
 2. Copia y pega el contenido de `scripts/migracion_completa.sql`
@@ -19,64 +35,45 @@
 
 ---
 
-## Paso 2: Exportar Datos desde Lovable Cloud
+## Paso 3: Importar Datos
 
-Ejecuta estas consultas en Lovable para obtener los datos y luego insértalos en tu Supabase:
+### Opción A: Usando Edge Function (tu Supabase)
 
-### Opción A: Exportar via API (recomendado)
+1. Copia `supabase/functions/import-database/index.ts` a tu proyecto
+2. Despliega la función
+3. Ejecuta:
 
-Crea un Edge Function temporal en tu nuevo Supabase para importar datos.
-
-### Opción B: Exportar manualmente
-
-1. **Estados**: 
-```sql
-SELECT * FROM states;
+```bash
+curl -X POST "https://TU-PROYECTO.supabase.co/functions/v1/import-database" \
+  -H "Authorization: Bearer TU_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d @database_export.json
 ```
 
-2. **Hospitales**:
-```sql
-SELECT * FROM hospitales;
-```
+### Opción B: Manualmente via SQL Editor
 
-3. **Insumos Catálogo**:
-```sql
-SELECT * FROM insumos_catalogo;
-```
-
-4. **Configuración de Insumos**:
-```sql
-SELECT * FROM insumo_configuracion;
-```
-
-5. **Anestesia Insumos**:
-```sql
-SELECT * FROM anestesia_insumos;
-```
-
-6. **Inventario**:
-```sql
-SELECT * FROM inventario_hospital;
-SELECT * FROM inventario_consolidado;
-SELECT * FROM inventario_lotes;
-```
+El archivo `database_export.json` contiene arrays por tabla. Puedes convertirlos a INSERTs con cualquier herramienta JSON-to-SQL.
 
 ---
 
-## Paso 3: Crear Usuarios
+## Paso 4: Crear Usuarios de Auth
 
 Los usuarios en `auth.users` NO se pueden exportar (contraseñas hasheadas).
 
 **Opciones:**
 
-1. **Recrear usuarios**: Usa el Edge Function `create-all-users` de este proyecto
-2. **Reset passwords**: Los usuarios existentes deberán hacer "Olvidé mi contraseña"
+1. **Usar el Edge Function `setup-all-users`**: Recrea todos los usuarios con contraseñas estándar
+2. **Reset de passwords**: Los usuarios harán "Olvidé mi contraseña"
+
+Credenciales estándar generadas por setup-all-users:
+- Email: `{username}@cbmedica.com`
+- Password: `{role}.{hospital_code}2024`
 
 ---
 
-## Paso 4: Configurar tu App
+## Paso 5: Configurar tu App
 
-Actualiza las variables de entorno en tu proyecto:
+Actualiza las variables de entorno:
 
 ```env
 VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
@@ -85,7 +82,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=tu-anon-key
 
 ---
 
-## Paso 5: Verificar
+## Paso 6: Verificar
 
 1. Abre tu app con las nuevas credenciales
 2. Intenta iniciar sesión
@@ -93,12 +90,11 @@ VITE_SUPABASE_PUBLISHABLE_KEY=tu-anon-key
 
 ---
 
-## Estructura de Datos Actual
+## Estructura de Datos Exportados
 
-| Tabla | Registros |
-|-------|-----------|
+| Tabla | Registros Aprox |
+|-------|-----------------|
 | inventario_lotes | 9,262 |
-| inventario_hospital | 9,039 |
 | inventario_consolidado | 4,452 |
 | documento_segmentado_detalle | 3,261 |
 | documento_agrupado_detalle | 1,398 |
@@ -106,26 +102,25 @@ VITE_SUPABASE_PUBLISHABLE_KEY=tu-anon-key
 | insumos_alertas | 934 |
 | anestesia_insumos | 765 |
 | profiles | 243 |
-| users | 242 |
+| user_roles | 243 |
 | insumos_catalogo | 213 |
 | hospitales | 21 |
+| states | 30 |
 
 ---
 
-## Soporte
+## Solución de Problemas
 
-Si tienes problemas con la migración, los errores comunes son:
-
-1. **"duplicate key"**: La tabla ya tiene datos, trunca primero
-2. **"violates foreign key"**: Importa tablas padre antes que hijas
-3. **"RLS violation"**: Desactiva RLS temporalmente durante import
+| Error | Solución |
+|-------|----------|
+| "duplicate key" | Trunca la tabla primero |
+| "violates foreign key" | Importa tablas padre antes |
+| "RLS violation" | Desactiva RLS temporalmente |
 
 ```sql
 -- Desactivar RLS temporalmente
 ALTER TABLE nombre_tabla DISABLE ROW LEVEL SECURITY;
-
 -- Importar datos...
-
 -- Reactivar RLS
 ALTER TABLE nombre_tabla ENABLE ROW LEVEL SECURITY;
 ```

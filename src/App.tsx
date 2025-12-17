@@ -37,7 +37,26 @@ import RegistroActividad from './pages/RegistroActividad';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Mantener datos en caché por 5 minutos (reduce llamadas repetidas)
+      staleTime: 5 * 60 * 1000,
+      // Mantener datos en caché por 30 minutos
+      gcTime: 30 * 60 * 1000,
+      // No re-fetch automáticamente al enfocar ventana
+      refetchOnWindowFocus: false,
+      // Reintentar solo 2 veces en caso de error
+      retry: 2,
+      // Reducir intervalo de reintento
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    },
+    mutations: {
+      // Reintentar mutaciones solo 1 vez
+      retry: 1,
+    },
+  },
+});
 
 const AppContent = () => {
   const { user, userRole, username, loading, signOut } = useAuth();

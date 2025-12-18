@@ -65,3 +65,9 @@ verify_jwt = false
 
 [functions.setup-all-users]
 verify_jwt = false
+
+[functions.export-database]
+verify_jwt = false
+
+[functions.import-database]
+verify_jwt = false

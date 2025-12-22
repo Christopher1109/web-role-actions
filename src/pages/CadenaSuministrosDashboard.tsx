@@ -344,12 +344,31 @@ const CadenaSuministrosDashboard = () => {
       const tiradaId = crypto.randomUUID();
       let enviados = 0;
       let omitidos = 0;
+      let erroresDescuento = 0;
 
       for (const insumo of insumosAEnviar) {
-        const stockItem = almacenCentral.find(a => a.insumo_catalogo_id === insumo.insumo_catalogo_id);
+        // IMPORTANTE: Hacer refetch del stock actual para tener datos frescos
+        const { data: stockItemFresh, error: stockError } = await supabase
+          .from('almacen_central')
+          .select('*')
+          .eq('insumo_catalogo_id', insumo.insumo_catalogo_id)
+          .gt('cantidad_disponible', 0)
+          .maybeSingle();
         
-        // Calculate actual quantity to send (limited by available stock)
-        const cantidadReal = Math.min(insumo.cantidadEnviar, stockItem?.cantidad_disponible || 0);
+        if (stockError) {
+          console.error('Error fetching stock:', stockError);
+          omitidos++;
+          continue;
+        }
+        
+        if (!stockItemFresh || stockItemFresh.cantidad_disponible <= 0) {
+          console.log(`Sin stock para insumo ${insumo.insumo_catalogo_id}`);
+          omitidos++;
+          continue;
+        }
+        
+        // Calculate actual quantity to send (limited by FRESH available stock)
+        const cantidadReal = Math.min(insumo.cantidadEnviar, stockItemFresh.cantidad_disponible);
         
         if (cantidadReal <= 0) {
           omitidos++;
@@ -375,7 +394,7 @@ const CadenaSuministrosDashboard = () => {
         if (transError) throw transError;
 
         // 2. Create alert for almacenista with tirada_id
-        await supabase
+        const { error: alertError } = await supabase
           .from('alertas_transferencia')
           .insert({
             transferencia_id: transferencia.id,
@@ -386,23 +405,33 @@ const CadenaSuministrosDashboard = () => {
             tirada_id: tiradaId
           });
 
-        // 3. Decrease almacen central immediately
-        if (stockItem) {
-          await supabase
-            .from('almacen_central')
-            .update({
-              cantidad_disponible: stockItem.cantidad_disponible - cantidadReal,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', stockItem.id);
+        if (alertError) {
+          console.error('Error creating alert:', alertError);
+        }
+
+        // 3. Decrease almacen central immediately - VERIFICAR QUE FUNCIONE
+        const nuevaCantidad = Math.max(0, stockItemFresh.cantidad_disponible - cantidadReal);
+        const { error: updateError } = await supabase
+          .from('almacen_central')
+          .update({
+            cantidad_disponible: nuevaCantidad,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', stockItemFresh.id);
+
+        if (updateError) {
+          console.error('Error actualizando almacén central:', updateError);
+          erroresDescuento++;
+        } else {
+          console.log(`Almacén central actualizado: ${stockItemFresh.cantidad_disponible} -> ${nuevaCantidad} para insumo ${insumo.nombre}`);
         }
 
         enviados++;
       }
 
-      const mensaje = omitidos > 0 
-        ? `${enviados} insumos enviados a ${selectedHospital.hospital_nombre} (${omitidos} omitidos por falta de stock)`
-        : `${enviados} insumos enviados a ${selectedHospital.hospital_nombre}`;
+      let mensaje = `${enviados} insumos enviados a ${selectedHospital.hospital_nombre}`;
+      if (omitidos > 0) mensaje += ` (${omitidos} omitidos por falta de stock)`;
+      if (erroresDescuento > 0) mensaje += ` (${erroresDescuento} con error al descontar)`;
       
       toast.success(mensaje);
       setDialogOpen(false);
@@ -447,6 +476,9 @@ const CadenaSuministrosDashboard = () => {
     if (!ordenRecibiendo) return;
 
     setEnviando(true);
+    let actualizadosExitosamente = 0;
+    let erroresActualizacion = 0;
+    
     try {
       // 1. Update almacen_central with received quantities and track mermas
       for (const item of ordenRecibiendo.items || []) {
@@ -454,33 +486,66 @@ const CadenaSuministrosDashboard = () => {
         const mermaData = mermas[item.id] || { cantidad: 0, motivo: '' };
         
         if (cantidadRecibida > 0) {
-          const { data: existingItem } = await supabase
+          // Consultar el estado actual del almacén central para este insumo
+          const { data: existingItem, error: fetchError } = await supabase
             .from('almacen_central')
-            .select()
+            .select('*')
             .eq('insumo_catalogo_id', item.insumo_catalogo_id)
             .maybeSingle();
 
+          if (fetchError) {
+            console.error('Error fetching almacen_central:', fetchError);
+            erroresActualizacion++;
+            continue;
+          }
+
           if (existingItem) {
-            await supabase
+            // Sumar al stock existente
+            const nuevaCantidad = existingItem.cantidad_disponible + cantidadRecibida;
+            const { error: updateError } = await supabase
               .from('almacen_central')
               .update({
-                cantidad_disponible: existingItem.cantidad_disponible + cantidadRecibida,
+                cantidad_disponible: nuevaCantidad,
                 updated_at: new Date().toISOString()
               })
               .eq('id', existingItem.id);
+
+            if (updateError) {
+              console.error('Error updating almacen_central:', updateError);
+              erroresActualizacion++;
+            } else {
+              console.log(`Almacén central actualizado: ${existingItem.cantidad_disponible} + ${cantidadRecibida} = ${nuevaCantidad} para ${item.insumo?.nombre}`);
+              actualizadosExitosamente++;
+            }
           } else {
-            await supabase
+            // Crear nuevo registro con lote y fecha de caducidad
+            const loteNuevo = `LOTE-${ordenRecibiendo.numero_pedido}-${Date.now().toString(36).toUpperCase()}`;
+            // Fecha de caducidad por defecto: 1 año desde hoy
+            const fechaCaducidad = new Date();
+            fechaCaducidad.setFullYear(fechaCaducidad.getFullYear() + 1);
+            
+            const { error: insertError } = await supabase
               .from('almacen_central')
               .insert({
                 insumo_catalogo_id: item.insumo_catalogo_id,
                 cantidad_disponible: cantidadRecibida,
-                lote: `LOTE-${Date.now().toString(36).toUpperCase()}`
+                lote: loteNuevo,
+                fecha_caducidad: fechaCaducidad.toISOString().split('T')[0],
+                ubicacion: 'Almacén Central México'
               });
+
+            if (insertError) {
+              console.error('Error inserting almacen_central:', insertError);
+              erroresActualizacion++;
+            } else {
+              console.log(`Nuevo registro en almacén central: ${cantidadRecibida} unidades de ${item.insumo?.nombre}, lote ${loteNuevo}`);
+              actualizadosExitosamente++;
+            }
           }
         }
 
         // Update pedido_items with merma info
-        await supabase
+        const { error: itemUpdateError } = await supabase
           .from('pedido_items')
           .update({
             cantidad_recibida: cantidadRecibida,
@@ -489,10 +554,14 @@ const CadenaSuministrosDashboard = () => {
             estado: 'recibido'
           })
           .eq('id', item.id);
+
+        if (itemUpdateError) {
+          console.error('Error updating pedido_items:', itemUpdateError);
+        }
       }
 
       // 2. Update order status to 'recibido'
-      await supabase
+      const { error: ordenUpdateError } = await supabase
         .from('pedidos_compra')
         .update({
           estado: 'recibido',
@@ -500,10 +569,19 @@ const CadenaSuministrosDashboard = () => {
         })
         .eq('id', ordenRecibiendo.id);
 
-      toast.success(`Orden ${ordenRecibiendo.numero_pedido} recibida. Stock actualizado en Almacén Central.`);
+      if (ordenUpdateError) {
+        console.error('Error updating pedidos_compra:', ordenUpdateError);
+      }
+
+      if (erroresActualizacion > 0) {
+        toast.warning(`Orden ${ordenRecibiendo.numero_pedido} recibida. ${actualizadosExitosamente} items actualizados, ${erroresActualizacion} con errores.`);
+      } else {
+        toast.success(`Orden ${ordenRecibiendo.numero_pedido} recibida. ${actualizadosExitosamente} items agregados al Almacén Central.`);
+      }
+      
       setRecibirDialogOpen(false);
       setOrdenRecibiendo(null);
-      fetchData();
+      await fetchData();
 
     } catch (error) {
       console.error('Error confirming reception:', error);

@@ -343,8 +343,13 @@ const GerenteAlmacenDashboard = () => {
           precio: number | null;
         }> = [];
 
-        // 3) Preparar updates de cantidad_cubierta
-        const updates: Array<{ id: string; cantidad_cubierta: number }> = [];
+        // 3) Preparar updates de cantidad_cubierta Y cantidad_pendiente
+        const updates: Array<{ 
+          id: string; 
+          cantidad_cubierta: number;
+          cantidad_pendiente: number;
+          total_faltante: number;
+        }> = [];
 
         for (const row of jsonData) {
           const insumoId = row["ID Sistema"];
@@ -358,20 +363,40 @@ const GerenteAlmacenDashboard = () => {
 
           const cantProveedor = toNumberOrNull(row["Cantidad Proveedor"]) ?? 0;
           const precio = toNumberOrNull(row["Precio Unitario ($)"]);
+          const cantidadFaltanteExcel = toNumberOrNull(row["Cantidad Faltante"]);
+          const pendienteRequeridoExcel = toNumberOrNull(row["Cantidad Pendiente Requerida"]) ?? 0;
+          
+          // Actualizar cantidad_cubierta sumando lo que el proveedor puede dar
+          const cubiertaActual = toNumberOrNull(det.cantidad_cubierta) ?? 0;
+          const total = toNumberOrNull(det.total_faltante_requerido) ?? 0;
+          const nuevaCubierta = cubiertaActual + cantProveedor;
+          
+          // Calcular nueva cantidad pendiente:
+          // Si "Cantidad Faltante" tiene valor en el Excel, usar ese
+          // Si no, calcular como total - nuevaCubierta
+          let nuevoPendiente: number;
+          if (isValidNonNegNumber(cantidadFaltanteExcel)) {
+            nuevoPendiente = cantidadFaltanteExcel as number;
+          } else {
+            nuevoPendiente = clampMin0(total - nuevaCubierta);
+          }
+          
+          // Siempre guardar el update para mantener cantidad_pendiente actualizada
+          updates.push({ 
+            id: det.id, 
+            cantidad_cubierta: nuevaCubierta,
+            cantidad_pendiente: nuevoPendiente,
+            total_faltante: total
+          });
           
           if (cantProveedor > 0) {
             itemsParaOC.push({ insumoId, cantProveedor, precio });
-            
-            // Actualizar cantidad_cubierta sumando lo que el proveedor puede dar
-            const cubiertaActual = toNumberOrNull(det.cantidad_cubierta) ?? 0;
-            const nuevaCubierta = cubiertaActual + cantProveedor;
-            updates.push({ id: det.id, cantidad_cubierta: nuevaCubierta });
           }
         }
 
         console.log("Items para OC:", itemsParaOC.length, "Updates:", updates.length);
 
-        // 4) Ejecutar updates de cantidad_cubierta en paralelo
+        // 4) Ejecutar updates de cantidad_cubierta Y cantidad_pendiente en paralelo
         if (updates.length > 0) {
           const BATCH_SIZE = 50;
           for (let i = 0; i < updates.length; i += BATCH_SIZE) {
@@ -380,7 +405,10 @@ const GerenteAlmacenDashboard = () => {
               batch.map((u) =>
                 supabase
                   .from("documento_agrupado_detalle")
-                  .update({ cantidad_cubierta: u.cantidad_cubierta })
+                  .update({ 
+                    cantidad_cubierta: u.cantidad_cubierta,
+                    cantidad_pendiente: u.cantidad_pendiente
+                  })
                   .eq("id", u.id)
               )
             );
@@ -391,7 +419,7 @@ const GerenteAlmacenDashboard = () => {
               console.error("Errores en updates:", errors);
             }
           }
-          console.log("Cantidad cubierta actualizada");
+          console.log("Cantidad cubierta y pendiente actualizadas");
         }
 
         // 5) Crear OC solo si hay items con cantidad > 0

@@ -81,7 +81,7 @@ const FinanzasRentabilidad = () => {
       const startDate = `${year}-${month}-01`;
       const endDate = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0];
 
-      // Fetch folios for the period
+      // Fetch folios for the period - use or filter for estado
       let foliosQuery = supabase
         .from('folios')
         .select(`
@@ -95,13 +95,16 @@ const FinanzasRentabilidad = () => {
         `)
         .gte('fecha', startDate)
         .lte('fecha', endDate)
-        .in('estado', ['completado', 'cerrado'] as any[]);
+        .eq('estado', 'completado');
 
       if (selectedHospital !== 'todos') {
         foliosQuery = foliosQuery.eq('hospital_id', selectedHospital);
       }
 
-      const { data: foliosData } = await foliosQuery as { data: any[] | null };
+      const { data: foliosData, error: foliosError } = await foliosQuery;
+      
+      console.log('Query params:', { startDate, endDate, selectedHospital });
+      console.log('Folios found:', foliosData?.length, 'Error:', foliosError);
 
       if (!foliosData || foliosData.length === 0) {
         setFolios([]);

@@ -29,6 +29,13 @@ import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
 import CadenaSuministrosDashboard from './pages/CadenaSuministrosDashboard';
 import FinanzasDashboard from './pages/FinanzasDashboard';
 import FinanzasRentabilidad from './pages/FinanzasRentabilidad';
+import FinanzasReportes from './pages/FinanzasReportes';
+import FinanzasConsumo from './pages/FinanzasConsumo';
+import FinanzasComparativo from './pages/FinanzasComparativo';
+import FinanzasMermas from './pages/FinanzasMermas';
+import FinanzasPresupuestos from './pages/FinanzasPresupuestos';
+import FinanzasProyecciones from './pages/FinanzasProyecciones';
+import FinanzasPreciosInsumos from './pages/FinanzasPreciosInsumos';
 import ConfiguracionTarifas from './pages/ConfiguracionTarifas';
 import AlmacenistaAlertasTransferencia from './pages/AlmacenistaAlertasTransferencia';
 import AlmacenesProvisionales from './pages/AlmacenesProvisionales';
@@ -166,6 +173,13 @@ const AppContent = () => {
               {userRole === 'finanzas' && (
                 <>
                   <Route path="/finanzas" element={<FinanzasDashboard />} />
+                  <Route path="/finanzas-reportes" element={<FinanzasReportes />} />
+                  <Route path="/finanzas-consumo" element={<FinanzasConsumo />} />
+                  <Route path="/finanzas-comparativo" element={<FinanzasComparativo />} />
+                  <Route path="/finanzas-mermas" element={<FinanzasMermas />} />
+                  <Route path="/finanzas-presupuestos" element={<FinanzasPresupuestos />} />
+                  <Route path="/finanzas-proyecciones" element={<FinanzasProyecciones />} />
+                  <Route path="/finanzas-precios" element={<FinanzasPreciosInsumos />} />
                   <Route path="/rentabilidad" element={<FinanzasRentabilidad />} />
                   <Route path="/configuracion-tarifas" element={<ConfiguracionTarifas />} />
                 </>

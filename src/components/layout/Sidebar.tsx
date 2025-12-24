@@ -17,7 +17,14 @@ import {
   DollarSign,
   ClipboardList,
   Route,
-  History
+  History,
+  TrendingUp,
+  BarChart3,
+  PieChart,
+  Trash2,
+  Calculator,
+  LineChart,
+  Tag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HospitalSelector } from '@/components/HospitalSelector';
@@ -70,8 +77,15 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/alertas-transferencia', icon: AlertTriangle, label: 'Recepción Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'], category: 'Inventario' },
     
     // Finanzas
-    { path: '/finanzas', icon: DollarSign, label: 'Pagos', roles: ['finanzas'], category: 'Finanzas' },
-    { path: '/rentabilidad', icon: DollarSign, label: 'Rentabilidad', roles: ['finanzas', 'gerente_operaciones'], category: 'Finanzas' },
+    { path: '/finanzas', icon: DollarSign, label: 'Dashboard Financiero', roles: ['finanzas'], category: 'Finanzas' },
+    { path: '/finanzas-reportes', icon: FileSpreadsheet, label: 'Reportes de Costos', roles: ['finanzas'], category: 'Finanzas' },
+    { path: '/finanzas-consumo', icon: BarChart3, label: 'Análisis de Consumo', roles: ['finanzas'], category: 'Finanzas' },
+    { path: '/finanzas-comparativo', icon: PieChart, label: 'Comparativo Hospitales', roles: ['finanzas'], category: 'Finanzas' },
+    { path: '/finanzas-mermas', icon: Trash2, label: 'Análisis de Mermas', roles: ['finanzas'], category: 'Finanzas' },
+    { path: '/finanzas-presupuestos', icon: Calculator, label: 'Presupuestos', roles: ['finanzas'], category: 'Finanzas' },
+    { path: '/finanzas-proyecciones', icon: LineChart, label: 'Proyecciones', roles: ['finanzas'], category: 'Finanzas' },
+    { path: '/finanzas-precios', icon: Tag, label: 'Precios Insumos', roles: ['finanzas'], category: 'Finanzas' },
+    { path: '/rentabilidad', icon: TrendingUp, label: 'Rentabilidad', roles: ['finanzas', 'gerente_operaciones'], category: 'Finanzas' },
     { path: '/configuracion-tarifas', icon: DollarSign, label: 'Tarifas', roles: ['finanzas', 'gerente_operaciones'], category: 'Finanzas' },
     
     // Catálogos

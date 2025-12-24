@@ -786,6 +786,61 @@ export type Database = {
           },
         ]
       }
+      folios_insumos_costos: {
+        Row: {
+          cantidad: number
+          costo_total: number | null
+          created_at: string
+          folio_id: string
+          id: string
+          insumo_catalogo_id: string
+          lote_id: string | null
+          precio_unitario: number
+        }
+        Insert: {
+          cantidad?: number
+          costo_total?: number | null
+          created_at?: string
+          folio_id: string
+          id?: string
+          insumo_catalogo_id: string
+          lote_id?: string | null
+          precio_unitario: number
+        }
+        Update: {
+          cantidad?: number
+          costo_total?: number | null
+          created_at?: string
+          folio_id?: string
+          id?: string
+          insumo_catalogo_id?: string
+          lote_id?: string | null
+          precio_unitario?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folios_insumos_costos_folio_id_fkey"
+            columns: ["folio_id"]
+            isOneToOne: false
+            referencedRelation: "folios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folios_insumos_costos_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folios_insumos_costos_lote_id_fkey"
+            columns: ["lote_id"]
+            isOneToOne: false
+            referencedRelation: "inventario_lotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       formatos_generados: {
         Row: {
           created_at: string
@@ -1383,6 +1438,8 @@ export type Database = {
           fecha_entrada: string | null
           id: string
           lote: string | null
+          orden_compra_id: string | null
+          precio_unitario: number | null
           ubicacion: string | null
           updated_at: string | null
         }
@@ -1394,6 +1451,8 @@ export type Database = {
           fecha_entrada?: string | null
           id?: string
           lote?: string | null
+          orden_compra_id?: string | null
+          precio_unitario?: number | null
           ubicacion?: string | null
           updated_at?: string | null
         }
@@ -1405,6 +1464,8 @@ export type Database = {
           fecha_entrada?: string | null
           id?: string
           lote?: string | null
+          orden_compra_id?: string | null
+          precio_unitario?: number | null
           ubicacion?: string | null
           updated_at?: string | null
         }
@@ -1755,6 +1816,7 @@ export type Database = {
           motivo_merma: string | null
           notas: string | null
           pedido_id: string
+          precio_recibido: number | null
           precio_unitario: number | null
         }
         Insert: {
@@ -1768,6 +1830,7 @@ export type Database = {
           motivo_merma?: string | null
           notas?: string | null
           pedido_id: string
+          precio_recibido?: number | null
           precio_unitario?: number | null
         }
         Update: {
@@ -1781,6 +1844,7 @@ export type Database = {
           motivo_merma?: string | null
           notas?: string | null
           pedido_id?: string
+          precio_recibido?: number | null
           precio_unitario?: number | null
         }
         Relationships: [

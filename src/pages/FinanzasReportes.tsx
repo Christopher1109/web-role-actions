@@ -90,7 +90,7 @@ const FinanzasReportes = () => {
         .select("id, hospital_id, hospital_display_name, cirugia, tipo_anestesia")
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin)
-        .in("estado", ["completado", "cerrado"] as any[]);
+        .eq("estado", "completado");
 
       if (selectedHospital !== "todos") {
         foliosQuery = foliosQuery.eq("hospital_id", selectedHospital);

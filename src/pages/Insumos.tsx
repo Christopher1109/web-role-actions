@@ -349,10 +349,25 @@ const Insumos = () => {
 
   // Filtrar inventario agrupado
   const filteredGroupedInsumos = useMemo(() => {
+    const search = searchTerm.toLowerCase().trim();
+    if (!search) return groupedInsumos.filter(item => {
+      const matchesStockBajo = !filterStockBajo || item.stockTotal < 10;
+      const matchesProximoCaducar = !filterProximosCaducar || 
+        item.lotes.some(l => isCaducidadProxima(l.fecha_caducidad));
+      const matchesTipo = filterTipo === 'todos' || item.tipo === filterTipo;
+      return matchesStockBajo && matchesProximoCaducar && matchesTipo;
+    });
+
     return groupedInsumos.filter(item => {
-      const matchesSearch = 
-        item.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.clave?.toLowerCase().includes(searchTerm.toLowerCase());
+      // Buscar por nombre o clave (código BCB)
+      const matchesNombre = item.nombre?.toLowerCase().includes(search);
+      const matchesClave = item.clave?.toLowerCase().includes(search);
+      // También buscar sin puntos para facilitar búsqueda de códigos
+      const searchSinPuntos = search.replace(/\./g, '');
+      const claveSinPuntos = item.clave?.replace(/\./g, '').toLowerCase();
+      const matchesClaveSinPuntos = claveSinPuntos?.includes(searchSinPuntos);
+      
+      const matchesSearch = matchesNombre || matchesClave || matchesClaveSinPuntos;
       
       const matchesStockBajo = !filterStockBajo || item.stockTotal < 10;
       const matchesProximoCaducar = !filterProximosCaducar || 
@@ -379,11 +394,25 @@ const Insumos = () => {
 
   // Filtrar lotes para vista de tabla
   const filteredLotes = useMemo(() => {
+    const search = searchTerm.toLowerCase().trim();
+    if (!search) return flatLotes.filter(item => {
+      const matchesStockBajo = !filterStockBajo || item.cantidad < 10;
+      const matchesProximoCaducar = !filterProximosCaducar || isCaducidadProxima(item.fecha_caducidad);
+      const matchesTipo = filterTipo === 'todos' || item.insumos_catalogo?.tipo === filterTipo;
+      return matchesStockBajo && matchesProximoCaducar && matchesTipo;
+    });
+
     return flatLotes.filter(item => {
-      const matchesSearch = 
-        item.insumos_catalogo?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.insumos_catalogo?.clave?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.lote?.toLowerCase().includes(searchTerm.toLowerCase());
+      // Buscar por nombre, clave (código BCB) o lote
+      const matchesNombre = item.insumos_catalogo?.nombre?.toLowerCase().includes(search);
+      const matchesClave = item.insumos_catalogo?.clave?.toLowerCase().includes(search);
+      const matchesLote = item.lote?.toLowerCase().includes(search);
+      // También buscar sin puntos para facilitar búsqueda de códigos
+      const searchSinPuntos = search.replace(/\./g, '');
+      const claveSinPuntos = item.insumos_catalogo?.clave?.replace(/\./g, '').toLowerCase();
+      const matchesClaveSinPuntos = claveSinPuntos?.includes(searchSinPuntos);
+      
+      const matchesSearch = matchesNombre || matchesClave || matchesLote || matchesClaveSinPuntos;
       
       const matchesStockBajo = !filterStockBajo || item.cantidad < 10;
       const matchesProximoCaducar = !filterProximosCaducar || isCaducidadProxima(item.fecha_caducidad);

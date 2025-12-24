@@ -21,6 +21,7 @@ interface Insumo {
   id: string;
   nombre: string;
   lote: string;
+  clave?: string; // Código BCB
   categoria?: string;
   cantidadMinima?: number;
   cantidadMaxima?: number;
@@ -56,20 +57,38 @@ export function InsumoSearchCombobox({
     });
   }, [insumosDisponibles]);
 
-  // Filtrar insumos basado en búsqueda inteligente
+  // Filtrar insumos basado en búsqueda inteligente (nombre o código BCB)
   const filteredInsumos = useMemo(() => {
     if (!searchQuery.trim()) return sortedInsumos;
     
     const query = searchQuery.toLowerCase().trim();
+    // Para códigos BCB, permitir buscar con o sin puntos
+    const queryNormalized = query.replace(/\./g, '');
     const words = query.split(/\s+/);
     
     return sortedInsumos.filter((insumo) => {
       const nombreLower = insumo.nombre.toLowerCase();
-      // Todos los términos de búsqueda deben estar presentes
+      const claveLower = (insumo.clave || '').toLowerCase();
+      const claveNormalized = claveLower.replace(/\./g, '');
+      
+      // Buscar por código BCB exacto o parcial
+      if (claveLower.includes(query) || claveNormalized.includes(queryNormalized)) {
+        return true;
+      }
+      
+      // Buscar por nombre - todos los términos deben estar presentes
       return words.every(word => nombreLower.includes(word));
     }).sort((a, b) => {
       const aLower = a.nombre.toLowerCase();
       const bLower = b.nombre.toLowerCase();
+      const aClave = (a.clave || '').toLowerCase();
+      const bClave = (b.clave || '').toLowerCase();
+      
+      // Priorizar coincidencias exactas de código BCB
+      const aClaveMatch = aClave.includes(query) || aClave.replace(/\./g, '').includes(queryNormalized);
+      const bClaveMatch = bClave.includes(query) || bClave.replace(/\./g, '').includes(queryNormalized);
+      if (aClaveMatch && !bClaveMatch) return -1;
+      if (!aClaveMatch && bClaveMatch) return 1;
       
       // Priorizar coincidencias que empiezan con el término
       const aStartsWith = aLower.startsWith(query);
@@ -131,7 +150,7 @@ export function InsumoSearchCombobox({
       >
         <Command shouldFilter={false}>
           <CommandInput 
-            placeholder="Escribe para buscar..." 
+            placeholder="Buscar por nombre o código BCB..." 
             value={searchQuery}
             onValueChange={setSearchQuery}
             className="h-10"
@@ -164,6 +183,8 @@ export function InsumoSearchCombobox({
                           {highlightMatch(insumo.nombre, searchQuery)}
                         </span>
                         <span className="text-xs text-muted-foreground mt-0.5">
+                          {insumo.clave && <span className="font-mono text-primary/80">{insumo.clave}</span>}
+                          {insumo.clave && ' • '}
                           Lote: {insumo.lote || 'N/A'}
                           {insumo.cantidadMinima != null && ` • Mín: ${insumo.cantidadMinima}`}
                           {insumo.cantidadMaxima != null && ` • Máx: ${insumo.cantidadMaxima}`}

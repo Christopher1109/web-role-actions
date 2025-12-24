@@ -74,7 +74,7 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
   const [loading, setLoading] = useState(true);
 
   // Roles globales pueden elegir hospital; los demás NO
-  const canSelectHospital = userRole === "gerente_operaciones" || userRole === "gerente_almacen" || userRole === "cadena_suministros" || userRole === "supervisor";
+  const canSelectHospital = userRole === "gerente_operaciones" || userRole === "gerente_almacen" || userRole === "cadena_suministros" || userRole === "supervisor" || userRole === "finanzas";
 
   // Helper para mapear el registro crudo de la tabla hospitales a la interfaz Hospital
   const mapHospital = (h: any): Hospital => ({
@@ -104,7 +104,7 @@ export const HospitalProvider = ({ children, userId, userRole }: HospitalProvide
         setLoading(true);
 
         // 1) ROLES GLOBALES → ven todos los hospitales ordenados por estado
-        if (userRole === "gerente_operaciones" || userRole === "gerente" || userRole === "gerente_almacen" || userRole === "cadena_suministros") {
+        if (userRole === "gerente_operaciones" || userRole === "gerente" || userRole === "gerente_almacen" || userRole === "cadena_suministros" || userRole === "finanzas") {
           const { data: allHospitals, error } = await supabase
             .from("hospitales")
             .select("*, states(name)")

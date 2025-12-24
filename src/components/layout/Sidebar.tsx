@@ -84,7 +84,6 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/finanzas-mermas', icon: Trash2, label: 'Análisis de Mermas', roles: ['finanzas'], category: 'Finanzas' },
     { path: '/finanzas-presupuestos', icon: Calculator, label: 'Presupuestos', roles: ['finanzas'], category: 'Finanzas' },
     { path: '/finanzas-proyecciones', icon: LineChart, label: 'Proyecciones', roles: ['finanzas'], category: 'Finanzas' },
-    { path: '/finanzas-precios', icon: Tag, label: 'Precios Insumos', roles: ['finanzas'], category: 'Finanzas' },
     { path: '/rentabilidad', icon: TrendingUp, label: 'Rentabilidad', roles: ['finanzas'], category: 'Finanzas' },
     { path: '/configuracion-tarifas', icon: DollarSign, label: 'Tarifas', roles: ['finanzas'], category: 'Finanzas' },
     

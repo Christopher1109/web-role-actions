@@ -130,6 +130,7 @@ const Auth = () => {
                 <li><code className="bg-background px-1 rounded">operaciones01</code> - Gerente Operaciones</li>
                 <li><code className="bg-background px-1 rounded">almacen_gral01</code> - Gerente Almacén</li>
                 <li><code className="bg-background px-1 rounded">suministros01</code> - Cadena Suministros</li>
+                <li><code className="bg-background px-1 rounded">finanzas</code> - Finanzas</li>
               </ul>
               <p className="text-xs text-muted-foreground mt-2">Contraseña: <code className="bg-background px-1 rounded">Imss2024!</code></p>
             </div>

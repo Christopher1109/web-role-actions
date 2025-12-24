@@ -71,3 +71,9 @@ verify_jwt = false
 
 [functions.import-database]
 verify_jwt = false
+
+[functions.setup-finanzas-user]
+verify_jwt = false
+
+[functions.create-finanzas-user]
+verify_jwt = false

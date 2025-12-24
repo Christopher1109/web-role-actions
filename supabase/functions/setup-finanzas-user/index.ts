@@ -24,11 +24,10 @@ serve(async (req) => {
     );
 
     const username = "finanzas";
-    const email = `${username}@cbmedica.com`;
+    const emailForAuth = `${username}@sistema.local`;
     const password = "Imss2024!";
 
-    // Check if user already exists (using sistema.local format)
-    const emailForAuth = `${username}@sistema.local`;
+    // Check if user already exists
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
     const existingUser = existingUsers?.users?.find(u => u.email === emailForAuth);
 
@@ -39,8 +38,7 @@ serve(async (req) => {
           message: "Usuario de finanzas ya existe",
           credentials: {
             username,
-            email,
-            password: username
+            password: "Imss2024!"
           }
         }),
         {
@@ -50,9 +48,9 @@ serve(async (req) => {
       );
     }
 
-    // Create user with sistema.local email format (matching other users)
+    // Create user
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email: `${username}@sistema.local`,
+      email: emailForAuth,
       password,
       email_confirm: true,
       user_metadata: {
@@ -84,8 +82,7 @@ serve(async (req) => {
         message: "Usuario de finanzas creado exitosamente",
         credentials: {
           username,
-          email,
-          password: username
+          password: "Imss2024!"
         }
       }),
       {

@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
+import { usePrefetchCatalogs } from './hooks/useCachedCatalogs';
 import { HospitalProvider } from './contexts/HospitalContext';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
@@ -69,6 +70,9 @@ const queryClient = new QueryClient({
 
 const AppContent = () => {
   const { user, userRole, username, loading, signOut } = useAuth();
+  
+  // Precargar catálogos al inicio para mejor rendimiento
+  usePrefetchCatalogs();
 
   if (loading) {
     return (

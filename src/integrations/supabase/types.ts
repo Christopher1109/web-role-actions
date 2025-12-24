@@ -1875,6 +1875,100 @@ export type Database = {
           },
         ]
       }
+      precios_insumos: {
+        Row: {
+          activo: boolean | null
+          created_at: string
+          created_by: string | null
+          id: string
+          insumo_catalogo_id: string
+          moneda: string | null
+          precio_unitario: number
+          updated_at: string
+          vigente_desde: string
+          vigente_hasta: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          insumo_catalogo_id: string
+          moneda?: string | null
+          precio_unitario?: number
+          updated_at?: string
+          vigente_desde?: string
+          vigente_hasta?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          insumo_catalogo_id?: string
+          moneda?: string | null
+          precio_unitario?: number
+          updated_at?: string
+          vigente_desde?: string
+          vigente_hasta?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "precios_insumos_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      presupuestos_hospital: {
+        Row: {
+          anio: number
+          created_at: string
+          created_by: string | null
+          hospital_id: string
+          id: string
+          mes: number
+          notas: string | null
+          presupuesto_asignado: number
+          presupuesto_ejecutado: number
+          updated_at: string
+        }
+        Insert: {
+          anio: number
+          created_at?: string
+          created_by?: string | null
+          hospital_id: string
+          id?: string
+          mes: number
+          notas?: string | null
+          presupuesto_asignado?: number
+          presupuesto_ejecutado?: number
+          updated_at?: string
+        }
+        Update: {
+          anio?: number
+          created_at?: string
+          created_by?: string | null
+          hospital_id?: string
+          id?: string
+          mes?: number
+          notas?: string | null
+          presupuesto_asignado?: number
+          presupuesto_ejecutado?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presupuestos_hospital_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       procedimientos: {
         Row: {
           clave_procedimiento: string | null

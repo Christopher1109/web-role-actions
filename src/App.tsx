@@ -39,6 +39,7 @@ import FinanzasProyecciones from './pages/FinanzasProyecciones';
 import FinanzasPreciosInsumos from './pages/FinanzasPreciosInsumos';
 import ConfiguracionTarifas from './pages/ConfiguracionTarifas';
 import ConfiguracionProcedimientoInsumos from './pages/ConfiguracionProcedimientoInsumos';
+import CatalogoInsumosMaestro from './pages/CatalogoInsumosMaestro';
 import AlmacenistaAlertasTransferencia from './pages/AlmacenistaAlertasTransferencia';
 import AlmacenesProvisionales from './pages/AlmacenesProvisionales';
 import SupervisorProcedimientos from './pages/SupervisorProcedimientos';
@@ -137,6 +138,7 @@ const AppContent = () => {
                   <Route path="/alertas-operaciones" element={<GerenteOperacionesDashboard />} />
                   <Route path="/gerente-operaciones" element={<GerenteOperacionesDashboard />} />
                   <Route path="/configuracion-procedimiento-insumos" element={<ConfiguracionProcedimientoInsumos />} />
+                  <Route path="/catalogo-insumos-maestro" element={<CatalogoInsumosMaestro />} />
                   <Route path="/supervisor-asignaciones" element={<SupervisorAsignaciones />} />
                   <Route path="/finanzas" element={<FinanzasDashboard />} />
                   <Route path="/traspasos" element={<Traspasos />} />

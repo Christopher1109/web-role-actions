@@ -92,6 +92,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/medicos', icon: Users, label: 'Médicos', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'], category: 'Catálogos' },
     { path: '/paquetes', icon: Database, label: 'Paquetes Anestesia', roles: ['supervisor', 'gerente', 'gerente_operaciones'], category: 'Catálogos' },
     { path: '/procedimientos-hospital', icon: ClipboardList, label: 'Procedimientos', roles: ['supervisor', 'gerente', 'gerente_operaciones'], category: 'Catálogos' },
+    { path: '/catalogo-insumos-maestro', icon: Package, label: 'Catálogo Maestro Insumos', roles: ['gerente_operaciones'], category: 'Catálogos' },
     { path: '/configuracion-procedimiento-insumos', icon: Settings2, label: 'Insumos por Procedimiento', roles: ['gerente_operaciones'], category: 'Catálogos' },
     
     // Administración

@@ -28,6 +28,8 @@ import GerenteOperacionesDashboard from './pages/GerenteOperacionesDashboard';
 import GerenteAlmacenDashboard from './pages/GerenteAlmacenDashboard';
 import CadenaSuministrosDashboard from './pages/CadenaSuministrosDashboard';
 import FinanzasDashboard from './pages/FinanzasDashboard';
+import FinanzasRentabilidad from './pages/FinanzasRentabilidad';
+import ConfiguracionTarifas from './pages/ConfiguracionTarifas';
 import AlmacenistaAlertasTransferencia from './pages/AlmacenistaAlertasTransferencia';
 import AlmacenesProvisionales from './pages/AlmacenesProvisionales';
 import SupervisorProcedimientos from './pages/SupervisorProcedimientos';
@@ -162,7 +164,17 @@ const AppContent = () => {
                 </>
               )}
               {userRole === 'finanzas' && (
-                <Route path="/finanzas" element={<FinanzasDashboard />} />
+                <>
+                  <Route path="/finanzas" element={<FinanzasDashboard />} />
+                  <Route path="/rentabilidad" element={<FinanzasRentabilidad />} />
+                  <Route path="/configuracion-tarifas" element={<ConfiguracionTarifas />} />
+                </>
+              )}
+              {(userRole === 'gerente_operaciones' || userRole === 'finanzas') && (
+                <Route path="/configuracion-tarifas" element={<ConfiguracionTarifas />} />
+              )}
+              {userRole === 'gerente_operaciones' && (
+                <Route path="/rentabilidad" element={<FinanzasRentabilidad />} />
               )}
               <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

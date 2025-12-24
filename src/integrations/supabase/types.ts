@@ -2134,6 +2134,59 @@ export type Database = {
           },
         ]
       }
+      tarifas_procedimientos: {
+        Row: {
+          activo: boolean | null
+          created_at: string | null
+          created_by: string | null
+          hospital_id: string
+          id: string
+          moneda: string | null
+          notas: string | null
+          procedimiento_clave: string
+          procedimiento_nombre: string
+          tarifa_facturacion: number
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          hospital_id: string
+          id?: string
+          moneda?: string | null
+          notas?: string | null
+          procedimiento_clave: string
+          procedimiento_nombre: string
+          tarifa_facturacion?: number
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          hospital_id?: string
+          id?: string
+          moneda?: string | null
+          notas?: string | null
+          procedimiento_clave?: string
+          procedimiento_nombre?: string
+          tarifa_facturacion?: number
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tarifas_procedimientos_hospital_id_fkey"
+            columns: ["hospital_id"]
+            isOneToOne: false
+            referencedRelation: "hospitales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transferencias_central_hospital: {
         Row: {
           alerta_creada: boolean | null

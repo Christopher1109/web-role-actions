@@ -430,14 +430,51 @@ export default function FolioForm({ onClose, onSubmit, defaultValues, editingDra
     if (!clave) return [];
 
     try {
-      // SIEMPRE usar el mapeo para obtener el tipoAnestesiaKey correcto
-      // Por ejemplo: "19.01.002" → "alta_especialidad"
-      const tipoDb = getTipoAnestesiaKey(clave);
+      console.log(`🔍 Buscando insumos para clave: "${clave}"`);
+
+      // PRIMERO: Buscar en procedimiento_insumos_catalogo (configuración del Gerente de Operaciones)
+      const { data: procInsumos, error: procError } = await supabase
+        .from("procedimiento_insumos_catalogo")
+        .select(`
+          insumo_catalogo_id,
+          cantidad_minima,
+          cantidad_maxima,
+          cantidad_sugerida,
+          notas,
+          insumo:insumos_catalogo(id, nombre, clave)
+        `)
+        .eq("procedimiento_clave", clave)
+        .eq("activo", true);
+
+      if (procError) {
+        console.error("Error buscando en procedimiento_insumos_catalogo:", procError);
+      }
+
+      // Si hay configuración del Gerente de Operaciones, usarla
+      if (procInsumos && procInsumos.length > 0) {
+        console.log(`✅ Usando configuración de Gerente Operaciones: ${procInsumos.length} insumos autorizados`);
+        
+        const insumos: Insumo[] = procInsumos
+          .filter((pi: any) => pi.insumo)
+          .map((pi: any) => ({
+            id: pi.insumo.id,
+            nombre: pi.insumo.nombre,
+            lote: "",
+            cantidadDefault: pi.cantidad_sugerida ?? 1,
+            cantidadMinima: pi.cantidad_minima ?? null,
+            cantidadMaxima: pi.cantidad_maxima ?? null,
+            condicionante: null,
+            grupoExclusivo: null,
+          }));
+
+        return insumos;
+      }
+
+      // FALLBACK: Usar anestesia_insumos (configuración legacy)
+      console.log(`⚠️ No hay config de Gte Operaciones para ${clave}, usando fallback anestesia_insumos`);
       
+      const tipoDb = getTipoAnestesiaKey(clave);
 
-      console.log(`🔍 Buscando insumos para clave: "${clave}" → tipo: "${tipoDb}"`);
-
-      // Buscar configuración de insumos en anestesia_insumos
       const { data: anestesiaInsumos, error } = await supabase
         .from("anestesia_insumos")
         .select(`
@@ -460,11 +497,6 @@ export default function FolioForm({ onClose, onSubmit, defaultValues, editingDra
         console.log(`⚠️ No se encontraron insumos para ${tipoDb}`);
         return [];
       }
-
-      // Extraer nombres de insumos desde el campo 'nota'
-      const nombresInsumos = anestesiaInsumos
-        .filter((ai: any) => ai.nota)
-        .map((ai: any) => normalizarTexto(ai.nota));
 
       // Buscar todos los insumos del catálogo
       const { data: catalogoItems, error: catalogoError } = await supabase
@@ -508,7 +540,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues, editingDra
         }
       }
 
-      console.log(`✅ Insumos cargados: ${insumos.length} de ${anestesiaInsumos.length} configurados`);
+      console.log(`✅ Insumos cargados (fallback): ${insumos.length} de ${anestesiaInsumos.length} configurados`);
       return insumos;
     } catch (error) {
       console.error("Error loading insumos:", error);

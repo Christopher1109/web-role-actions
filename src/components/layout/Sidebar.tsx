@@ -24,7 +24,8 @@ import {
   Trash2,
   Calculator,
   LineChart,
-  Tag
+  Tag,
+  Settings2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HospitalSelector } from '@/components/HospitalSelector';
@@ -91,6 +92,7 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/medicos', icon: Users, label: 'Médicos', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'], category: 'Catálogos' },
     { path: '/paquetes', icon: Database, label: 'Paquetes Anestesia', roles: ['supervisor', 'gerente', 'gerente_operaciones'], category: 'Catálogos' },
     { path: '/procedimientos-hospital', icon: ClipboardList, label: 'Procedimientos', roles: ['supervisor', 'gerente', 'gerente_operaciones'], category: 'Catálogos' },
+    { path: '/configuracion-procedimiento-insumos', icon: Settings2, label: 'Insumos por Procedimiento', roles: ['gerente_operaciones'], category: 'Catálogos' },
     
     // Administración
     { path: '/supervisor-asignaciones', icon: Users, label: 'Asignar Supervisores', roles: ['gerente', 'gerente_operaciones'], category: 'Administración' },

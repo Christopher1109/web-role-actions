@@ -2033,6 +2033,59 @@ export type Database = {
           },
         ]
       }
+      procedimiento_insumos_catalogo: {
+        Row: {
+          activo: boolean | null
+          cantidad_maxima: number | null
+          cantidad_minima: number | null
+          cantidad_sugerida: number | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          insumo_catalogo_id: string
+          notas: string | null
+          procedimiento_clave: string
+          procedimiento_nombre: string
+          updated_at: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          cantidad_maxima?: number | null
+          cantidad_minima?: number | null
+          cantidad_sugerida?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          insumo_catalogo_id: string
+          notas?: string | null
+          procedimiento_clave: string
+          procedimiento_nombre: string
+          updated_at?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          cantidad_maxima?: number | null
+          cantidad_minima?: number | null
+          cantidad_sugerida?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          insumo_catalogo_id?: string
+          notas?: string | null
+          procedimiento_clave?: string
+          procedimiento_nombre?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procedimiento_insumos_catalogo_insumo_catalogo_id_fkey"
+            columns: ["insumo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       procedimientos: {
         Row: {
           clave_procedimiento: string | null

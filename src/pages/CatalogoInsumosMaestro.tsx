@@ -470,7 +470,7 @@ const CatalogoInsumosMaestro = () => {
                 <Label htmlFor="clave">Clave BCB</Label>
                 <Input
                   id="clave"
-                  placeholder="Ej: 010.000.3612"
+                  placeholder="Ej: bcb2.6.0.7, bcb25.1.0"
                   value={formData.clave}
                   onChange={(e) => setFormData({ ...formData, clave: e.target.value })}
                 />

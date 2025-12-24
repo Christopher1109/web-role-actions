@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { UserRole } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ import { useHospital } from "@/contexts/HospitalContext";
 import { generateFolioPDF } from "@/utils/pdfExport";
 import { assertSupabaseOk, collectSupabaseErrors } from "@/utils/supabaseAssert";
 import { useRegistroActividad } from "@/hooks/useRegistroActividad";
+import { usePaginatedFolios } from "@/hooks/usePaginatedQuery";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 interface FoliosProps {
   userRole: UserRole;
@@ -27,47 +29,64 @@ const Folios = ({ userRole }: FoliosProps) => {
   const { registrarActividad } = useRegistroActividad();
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [folios, setFolios] = useState<any[]>([]);
   const [borradores, setBorradores] = useState<any[]>([]);
   const [selectedFolio, setSelectedFolio] = useState<any>(null);
   const [selectedFolioInsumos, setSelectedFolioInsumos] = useState<any[]>([]);
   const [showDetail, setShowDetail] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [editingDraft, setEditingDraft] = useState<any>(null);
+
+  // Usar paginación optimizada para folios
+  const {
+    data: allFoliosData,
+    isLoading: loading,
+    page,
+    totalPages,
+    totalCount,
+    pageSize,
+    hasNextPage,
+    hasPreviousPage,
+    goToPage,
+    refetch: refetchFolios,
+  } = usePaginatedFolios(selectedHospital?.budget_code, { pageSize: 50 });
+
+  // Separar borradores de folios finalizados (del lote paginado)
+  const folios = useMemo(() => {
+    return allFoliosData.filter((f: any) => f.estado !== "borrador");
+  }, [allFoliosData]);
+
+  // Los borradores se cargan por separado (pocos registros)
+  useEffect(() => {
+    if (selectedHospital) {
+      fetchBorradores();
+    }
+  }, [selectedHospital]);
+
+  const fetchBorradores = async () => {
+    if (!selectedHospital) return;
+    const { data } = await supabase
+      .from("folios")
+      .select("*")
+      .eq("hospital_budget_code", selectedHospital.budget_code)
+      .eq("estado", "borrador")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setBorradores(data || []);
+  };
+
+  // Filtrado local optimizado con useMemo
+  const filteredFolios = useMemo(() => {
+    if (!searchTerm) return folios;
+    const term = searchTerm.toLowerCase();
+    return folios.filter(
+      (f: any) =>
+        f.numero_folio?.toLowerCase().includes(term) ||
+        f.paciente_nombre?.toLowerCase().includes(term) ||
+        f.cirugia?.toLowerCase().includes(term)
+    );
+  }, [folios, searchTerm]);
 
   const canCancel = userRole === "supervisor" || userRole === "gerente" || userRole === "gerente_operaciones";
 
-  useEffect(() => {
-    if (user && selectedHospital) {
-      fetchFolios();
-    }
-  }, [user, selectedHospital]);
-
-  const fetchFolios = async () => {
-    try {
-      if (!selectedHospital) return;
-
-      setLoading(true);
-      const { data, error } = await (supabase as any)
-        .from("folios")
-        .select("*")
-        .eq("hospital_budget_code", selectedHospital.budget_code)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      
-      // Separar borradores de folios finalizados
-      const allFolios = data || [];
-      setBorradores(allFolios.filter((f: any) => f.estado === "borrador"));
-      setFolios(allFolios.filter((f: any) => f.estado !== "borrador"));
-    } catch (error: any) {
-      toast.error("Error al cargar folios", {
-        description: error.message,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleCreateFolio = async (data: any, isBorrador: boolean = false) => {
     try {
@@ -148,7 +167,8 @@ const Folios = ({ userRole }: FoliosProps) => {
 
         setShowForm(false);
         setEditingDraft(null);
-        fetchFolios();
+        refetchFolios();
+        fetchBorradores();
         return;
       }
 
@@ -469,7 +489,8 @@ const Folios = ({ userRole }: FoliosProps) => {
       });
       setShowForm(false);
       setEditingDraft(null);
-      fetchFolios();
+      refetchFolios();
+      fetchBorradores();
     } catch (error: any) {
       console.error("Error al crear folio:", error);
       toast.error("Error al crear folio", {
@@ -631,7 +652,7 @@ const Folios = ({ userRole }: FoliosProps) => {
         });
       }
 
-      fetchFolios();
+      refetchFolios();
     } catch (error: any) {
       console.error("Error al cancelar folio:", error);
       toast.error("Error al cancelar folio", {
@@ -727,7 +748,8 @@ const Folios = ({ userRole }: FoliosProps) => {
                           onClick={async () => {
                             await supabase.from("folios").delete().eq("id", borrador.id);
                             toast.success("Borrador eliminado");
-                            fetchFolios();
+                            refetchFolios();
+                            fetchBorradores();
                           }}
                         >
                           Eliminar
@@ -760,16 +782,9 @@ const Folios = ({ userRole }: FoliosProps) => {
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Cargando folios...</p>
           ) : (
-            <div className="space-y-4">
-              {folios
-                .filter(
-                  (f) =>
-                    searchTerm === "" ||
-                    f.numero_folio?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    f.paciente_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    f.cirugia?.toLowerCase().includes(searchTerm.toLowerCase()),
-                )
-                .map((folio) => (
+            <>
+              <div className="space-y-4">
+                {filteredFolios.map((folio: any) => (
                   <Card key={folio.id} className="border-l-4 border-l-primary">
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between">
@@ -806,25 +821,16 @@ const Folios = ({ userRole }: FoliosProps) => {
                             size="sm"
                             onClick={async () => {
                               setSelectedFolio(folio);
-                              // Fetch insumos for this folio with JOIN to insumos_catalogo
                               const { data: insumosData } = await supabase
                                 .from("folios_insumos")
-                                .select(
-                                  `
+                                .select(`
                                   cantidad,
                                   insumos_catalogo:insumo_id (
-                                    id,
-                                    nombre,
-                                    descripcion,
-                                    clave,
-                                    presentacion,
-                                    tipo
+                                    id, nombre, descripcion, clave, presentacion, tipo
                                   )
-                                `,
-                                )
+                                `)
                                 .eq("folio_id", folio.id);
 
-                              // Transformar datos para el dialog
                               const insumosFormatted = (insumosData || []).map((item: any) => ({
                                 cantidad: item.cantidad,
                                 insumos: {
@@ -846,23 +852,16 @@ const Folios = ({ userRole }: FoliosProps) => {
                             size="sm"
                             className="gap-2"
                             onClick={async () => {
-                              // Fetch insumos for this folio with JOIN to insumos_catalogo
                               const { data: insumosData } = await supabase
                                 .from("folios_insumos")
-                                .select(
-                                  `
+                                .select(`
                                   cantidad,
                                   insumos_catalogo:insumo_id (
-                                    nombre,
-                                    descripcion,
-                                    clave,
-                                    presentacion
+                                    nombre, descripcion, clave, presentacion
                                   )
-                                `,
-                                )
+                                `)
                                 .eq("folio_id", folio.id);
 
-                              // Aplanar la estructura de datos para el PDF
                               const insumosFlat = (insumosData || []).map((item: any) => ({
                                 nombre: item.insumos_catalogo?.nombre || "",
                                 descripcion: item.insumos_catalogo?.descripcion || "",
@@ -893,7 +892,20 @@ const Folios = ({ userRole }: FoliosProps) => {
                     </CardContent>
                   </Card>
                 ))}
-            </div>
+              </div>
+              
+              {/* Controles de paginación */}
+              <PaginationControls
+                page={page}
+                totalPages={totalPages}
+                totalCount={totalCount}
+                pageSize={pageSize}
+                hasNextPage={hasNextPage}
+                hasPreviousPage={hasPreviousPage}
+                onPageChange={goToPage}
+                isLoading={loading}
+              />
+            </>
           )}
         </CardContent>
       </Card>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,12 +11,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useHospital } from "@/contexts/HospitalContext";
 import { useRegistroActividad } from "@/hooks/useRegistroActividad";
+import { useAlmacenesProvisionales, usePaginatedInventarioProvisional, usePaginatedInventarioGeneral } from "@/hooks/usePaginatedAlmacenesProvisionales";
 import { Plus, Warehouse, ArrowRight, ArrowLeft, Package, RefreshCw, Search, Trash2, CheckSquare } from "lucide-react";
 import { assertSupabaseOk, collectSupabaseErrors } from "@/utils/supabaseAssert";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface AlmacenProvisional {
   id: string;
@@ -34,22 +37,47 @@ interface InventarioProvisional {
   insumo?: { id: string; nombre: string; clave: string };
 }
 
-interface InventarioGeneral {
-  id: string;
-  insumo_catalogo_id: string;
-  cantidad_actual: number;
-  insumo?: { id: string; nombre: string; clave: string };
-}
-
 const AlmacenesProvisionales = () => {
   const { selectedHospital } = useHospital();
   const { registrarActividad } = useRegistroActividad();
-  const [almacenes, setAlmacenes] = useState<AlmacenProvisional[]>([]);
+  const queryClient = useQueryClient();
+  
   const [selectedAlmacen, setSelectedAlmacen] = useState<AlmacenProvisional | null>(null);
-  const [inventarioProvisional, setInventarioProvisional] = useState<InventarioProvisional[]>([]);
-  const [inventarioGeneral, setInventarioGeneral] = useState<InventarioGeneral[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchTermTraspaso, setSearchTermTraspaso] = useState("");
+
+  // Cached almacenes query
+  const { data: almacenes = [], isLoading: loadingAlmacenes, refetch: refetchAlmacenes } = 
+    useAlmacenesProvisionales(selectedHospital?.id);
+
+  // Paginated provisional inventory
+  const {
+    data: inventarioProvisional,
+    isLoading: loadingProvisional,
+    page: pageProvisional,
+    pageSize: pageSizeProvisional,
+    totalCount: totalProvisional,
+    totalPages: totalPagesProvisional,
+    hasNextPage: hasNextProvisional,
+    hasPreviousPage: hasPrevProvisional,
+    goToPage: goToPageProvisional,
+    changePageSize: changePageSizeProvisional,
+    refetch: refetchProvisional,
+  } = usePaginatedInventarioProvisional(selectedAlmacen?.id, searchTerm);
+
+  // Paginated general inventory for transfers
+  const {
+    data: inventarioGeneral,
+    isLoading: loadingGeneral,
+    page: pageGeneral,
+    pageSize: pageSizeGeneral,
+    totalCount: totalGeneral,
+    totalPages: totalPagesGeneral,
+    hasNextPage: hasNextGeneral,
+    hasPreviousPage: hasPrevGeneral,
+    goToPage: goToPageGeneral,
+    changePageSize: changePageSizeGeneral,
+  } = usePaginatedInventarioGeneral(selectedHospital?.id, searchTermTraspaso);
 
   // Dialogs
   const [dialogCrearOpen, setDialogCrearOpen] = useState(false);
@@ -70,105 +98,17 @@ const AlmacenesProvisionales = () => {
   const [progresoTraspaso, setProgresoTraspaso] = useState(0);
   const [mensajeProgreso, setMensajeProgreso] = useState("");
 
+  // Auto-select first almacen when loaded
   useEffect(() => {
-    if (selectedHospital) {
-      fetchAlmacenes();
+    if (almacenes.length > 0 && !selectedAlmacen) {
+      setSelectedAlmacen(almacenes[0]);
     }
-  }, [selectedHospital]);
-
-  useEffect(() => {
-    if (selectedAlmacen) {
-      fetchInventarioProvisional(selectedAlmacen.id);
-    }
-  }, [selectedAlmacen]);
-
-  const fetchAlmacenes = async () => {
-    if (!selectedHospital) return;
-
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("almacenes_provisionales")
-        .select("*")
-        .eq("hospital_id", selectedHospital.id)
-        .eq("activo", true)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setAlmacenes(data || []);
-
-      // Auto-select first if available
-      if (data && data.length > 0 && !selectedAlmacen) {
-        setSelectedAlmacen(data[0]);
-      }
-    } catch (error) {
-      console.error("Error fetching warehouses:", error);
-      toast.error("Error al cargar almacenes");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchInventarioProvisional = async (almacenId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("almacen_provisional_inventario")
-        .select(
-          `
-          *,
-          insumo:insumos_catalogo(id, nombre, clave)
-        `,
-        )
-        .eq("almacen_provisional_id", almacenId)
-        .gt("cantidad_disponible", 0);
-
-      if (error) throw error;
-      setInventarioProvisional(data || []);
-    } catch (error) {
-      console.error("Error fetching provisional inventory:", error);
-    }
-  };
-
-  const fetchInventarioGeneral = async () => {
-    if (!selectedHospital) return;
-
-    try {
-      // Usar nueva tabla inventario_consolidado (mucho más rápido)
-      const { data, error } = await supabase
-        .from("inventario_consolidado")
-        .select(
-          `
-          id,
-          insumo_catalogo_id,
-          cantidad_total,
-          insumo:insumos_catalogo(id, nombre, clave)
-        `,
-        )
-        .eq("hospital_id", selectedHospital.id)
-        .gt("cantidad_total", 0)
-        .order("insumo_catalogo_id");
-
-      if (error) throw error;
-
-      // Mapear al formato esperado
-      const inventarioMapeado = (data || []).map(item => ({
-        id: item.id,
-        insumo_catalogo_id: item.insumo_catalogo_id,
-        cantidad_actual: item.cantidad_total,
-        insumo: item.insumo
-      }));
-
-      setInventarioGeneral(inventarioMapeado);
-    } catch (error) {
-      console.error("Error fetching general inventory:", error);
-    }
-  };
+  }, [almacenes, selectedAlmacen]);
 
   const toggleSeleccion = (insumoCatalogoId: string) => {
     const nuevos = new Set(seleccionados);
     if (nuevos.has(insumoCatalogoId)) {
       nuevos.delete(insumoCatalogoId);
-      // También limpiar la cantidad
       const nuevasCantidades = { ...cantidadesTraspaso };
       delete nuevasCantidades[insumoCatalogoId];
       setCantidadesTraspaso(nuevasCantidades);
@@ -179,7 +119,7 @@ const AlmacenesProvisionales = () => {
   };
 
   const seleccionarTodos = () => {
-    const nuevos = new Set(filteredInventarioGeneral.map((item) => item.insumo_catalogo_id));
+    const nuevos = new Set(inventarioGeneral.map((item) => item.insumo_catalogo_id));
     setSeleccionados(nuevos);
   };
 
@@ -193,9 +133,7 @@ const AlmacenesProvisionales = () => {
 
     setProcesando(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
 
       const { data, error } = await supabase
         .from("almacenes_provisionales")
@@ -210,24 +148,20 @@ const AlmacenesProvisionales = () => {
 
       if (error) throw error;
 
-      // Registrar actividad
       await registrarActividad({
         tipo_actividad: 'almacen_provisional_creado',
         descripcion: `Almacén provisional "${nuevoNombre.trim()}" creado`,
         almacen_destino_id: data.id,
         almacen_destino_nombre: nuevoNombre.trim(),
-        detalles_adicionales: {
-          descripcion: nuevaDescripcion.trim() || null
-        }
+        detalles_adicionales: { descripcion: nuevaDescripcion.trim() || null }
       });
 
       toast.success("Almacén provisional creado");
       setDialogCrearOpen(false);
       setNuevoNombre("");
       setNuevaDescripcion("");
-      fetchAlmacenes();
+      refetchAlmacenes();
 
-      // Auto-select the new warehouse
       if (data) {
         setSelectedAlmacen(data);
       }
@@ -241,10 +175,9 @@ const AlmacenesProvisionales = () => {
 
   const abrirDialogTraspaso = () => {
     if (!selectedAlmacen) return;
-    fetchInventarioGeneral();
     setCantidadesTraspaso({});
     setSeleccionados(new Set());
-    setSearchTerm("");
+    setSearchTermTraspaso("");
     setProgresoTraspaso(0);
     setMensajeProgreso("");
     setDialogTraspasoOpen(true);
@@ -270,14 +203,11 @@ const AlmacenesProvisionales = () => {
     setMensajeProgreso("Preparando traspaso...");
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       const almacenId = selectedAlmacen.id;
       const hospitalId = selectedHospital.id;
       const totalItems = itemsTraspaso.length;
 
-      // Obtener todos los lotes del inventario general usando sistema híbrido
       setMensajeProgreso("Cargando inventario...");
       const lotesRes = await supabase
         .from("inventario_lotes")
@@ -289,14 +219,13 @@ const AlmacenesProvisionales = () => {
         `)
         .eq("inventario_consolidado.hospital_id", hospitalId)
         .gt("cantidad", 0)
-        .order("fecha_entrada", { ascending: true }); // FIFO
+        .order("fecha_entrada", { ascending: true });
 
       const todosLotes = assertSupabaseOk(
         lotesRes,
         "AlmacenesProvisionales.ejecutarTraspaso: cargar inventario general",
       ) as Array<{ id: string; cantidad: number; consolidado_id: string; inventario_consolidado: { insumo_catalogo_id: string; hospital_id: string } }> | null;
 
-      // Obtener inventario provisional actual en una sola query
       const provRes = await supabase
         .from("almacen_provisional_inventario")
         .select("id, insumo_catalogo_id, cantidad_disponible")
@@ -307,7 +236,6 @@ const AlmacenesProvisionales = () => {
         "AlmacenesProvisionales.ejecutarTraspaso: cargar inventario provisional",
       ) as Array<{ id: string; insumo_catalogo_id: string; cantidad_disponible: number }> | null;
 
-      // Crear mapas para acceso rápido O(1)
       const lotesPorInsumo = new Map<string, Array<{ id: string; cantidad: number; consolidado_id: string }>>();
       for (const lote of (todosLotes || [])) {
         const insumoCatId = lote.inventario_consolidado.insumo_catalogo_id;
@@ -321,10 +249,9 @@ const AlmacenesProvisionales = () => {
         provPorInsumo.set(item.insumo_catalogo_id, { id: item.id, cantidad_disponible: item.cantidad_disponible });
       }
 
-      // Preparar todas las operaciones
       setMensajeProgreso("Procesando traspasos...");
       const updateLotes: Array<{ id: string; cantidad: number; consolidado_id: string }> = [];
-      const updateConsolidados: Map<string, number> = new Map(); // consolidado_id -> cantidad a restar
+      const updateConsolidados: Map<string, number> = new Map();
       const updateProv: Array<{ id: string; cantidad_disponible: number }> = [];
       const insertProv: Array<{
         almacen_provisional_id: string;
@@ -347,13 +274,11 @@ const AlmacenesProvisionales = () => {
         const stockTotal = lotes.reduce((sum, l) => sum + (l.cantidad || 0), 0);
         if (stockTotal < cantidadSolicitada) {
           throw new Error(
-            `Stock insuficiente en almacén general para insumo ${insumoCatalogoId}. ` +
-              `Disponible: ${stockTotal}, Requerido: ${cantidadSolicitada}.`,
+            `Stock insuficiente para insumo ${insumoCatalogoId}. Disponible: ${stockTotal}, Requerido: ${cantidadSolicitada}.`,
           );
         }
         let cantidadRestante = cantidadSolicitada;
 
-        // Calcular descuentos de lotes (FIFO)
         for (const lote of lotes) {
           if (cantidadRestante <= 0) break;
           const aDescontar = Math.min(cantidadRestante, lote.cantidad);
@@ -361,14 +286,12 @@ const AlmacenesProvisionales = () => {
           lote.cantidad = nuevaCantidad;
           updateLotes.push({ id: lote.id, cantidad: nuevaCantidad, consolidado_id: lote.consolidado_id });
           
-          // Track consolidado update
           const currentDeduct = updateConsolidados.get(lote.consolidado_id) || 0;
           updateConsolidados.set(lote.consolidado_id, currentDeduct + aDescontar);
           
           cantidadRestante -= aDescontar;
         }
 
-        // Preparar actualización/inserción en provisional
         const existente = provPorInsumo.get(insumoCatalogoId);
         if (existente) {
           updateProv.push({
@@ -383,7 +306,6 @@ const AlmacenesProvisionales = () => {
           });
         }
 
-        // Preparar movimiento
         movimientos.push({
           almacen_provisional_id: almacenId,
           hospital_id: hospitalId,
@@ -398,10 +320,8 @@ const AlmacenesProvisionales = () => {
         setProgresoTraspaso(Math.round((procesados / totalItems) * 50));
       }
 
-      // Ejecutar todas las operaciones en paralelo por tipo
       setMensajeProgreso(`Guardando ${procesados} traspasos...`);
 
-      // Updates de lotes en batches de 50
       const BATCH_SIZE = 50;
       for (let i = 0; i < updateLotes.length; i += BATCH_SIZE) {
         const batch = updateLotes.slice(i, i + BATCH_SIZE);
@@ -417,10 +337,8 @@ const AlmacenesProvisionales = () => {
         setProgresoTraspaso(50 + Math.round((i / updateLotes.length) * 20));
       }
 
-      // Update consolidados totals
       for (const [consolidadoId, cantidadRestar] of updateConsolidados) {
         await supabase.rpc("recalcular_alerta_consolidado", { p_consolidado_id: consolidadoId });
-        // Also update cantidad_total directly
         const { data: currentConsolidado } = await supabase
           .from("inventario_consolidado")
           .select("cantidad_total")
@@ -437,7 +355,6 @@ const AlmacenesProvisionales = () => {
         }
       }
 
-      // Updates/inserts de provisional
       if (updateProv.length > 0) {
         const upRes = await Promise.all(
           updateProv.map((item) =>
@@ -456,14 +373,12 @@ const AlmacenesProvisionales = () => {
       }
       setProgresoTraspaso(80);
 
-      // Insertar movimientos en batch
       if (movimientos.length > 0) {
         const movRes = await supabase.from("movimientos_almacen_provisional").insert(movimientos);
         assertSupabaseOk(movRes as any, "AlmacenesProvisionales.ejecutarTraspaso: insert movimientos");
       }
       setProgresoTraspaso(100);
 
-      // Registrar actividad
       const insumosAfectados = itemsTraspaso.map(([insumoCatalogoId, cantidad]) => {
         const inv = inventarioGeneral.find(i => i.insumo_catalogo_id === insumoCatalogoId);
         return {
@@ -488,7 +403,8 @@ const AlmacenesProvisionales = () => {
       setDialogTraspasoOpen(false);
       setCantidadesTraspaso({});
       setSeleccionados(new Set());
-      fetchInventarioProvisional(almacenId);
+      refetchProvisional();
+      queryClient.invalidateQueries({ queryKey: ['inventario-general-paginated'] });
     } catch (error) {
       console.error("Error executing transfer:", error);
       toast.error("Error al realizar traspaso");
@@ -516,11 +432,8 @@ const AlmacenesProvisionales = () => {
 
     setProcesando(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
 
-      // Get almacen_id for general inventory
       const { data: almacenGeneral } = await supabase
         .from("almacenes")
         .select("id")
@@ -536,7 +449,6 @@ const AlmacenesProvisionales = () => {
         const item = inventarioProvisional.find((i) => i.id === inventarioProvId);
         if (!item || cantidad > item.cantidad_disponible) continue;
 
-        // Descontar del provisional
         await supabase
           .from("almacen_provisional_inventario")
           .update({
@@ -545,7 +457,6 @@ const AlmacenesProvisionales = () => {
           })
           .eq("id", inventarioProvId);
 
-        // Agregar al inventario general usando sistema híbrido
         const { data: existenteConsolidado } = await supabase
           .from("inventario_consolidado")
           .select("id, cantidad_total")
@@ -580,7 +491,6 @@ const AlmacenesProvisionales = () => {
           consolidadoId = newConsolidado?.id;
         }
 
-        // Create lote record
         if (consolidadoId) {
           await supabase.from("inventario_lotes").insert({
             consolidado_id: consolidadoId,
@@ -590,7 +500,6 @@ const AlmacenesProvisionales = () => {
           });
         }
 
-        // Registrar movimiento
         await supabase.from("movimientos_almacen_provisional").insert({
           almacen_provisional_id: selectedAlmacen.id,
           hospital_id: selectedHospital.id,
@@ -602,7 +511,6 @@ const AlmacenesProvisionales = () => {
         });
       }
 
-      // Registrar actividad
       const insumosAfectados = itemsDevolucion.map(([inventarioProvId, cantidad]) => {
         const item = inventarioProvisional.find((i) => i.id === inventarioProvId);
         return {
@@ -625,7 +533,7 @@ const AlmacenesProvisionales = () => {
 
       toast.success(`${itemsDevolucion.length} insumos devueltos al almacén general`);
       setDialogDevolucionOpen(false);
-      fetchInventarioProvisional(selectedAlmacen.id);
+      refetchProvisional();
     } catch (error) {
       console.error("Error executing return:", error);
       toast.error("Error al realizar devolución");
@@ -635,16 +543,10 @@ const AlmacenesProvisionales = () => {
   };
 
   const abrirDialogEliminar = async (almacen: AlmacenProvisional) => {
-    // Verificar si tiene inventario
     try {
       const { data: inventario, error } = await supabase
         .from("almacen_provisional_inventario")
-        .select(
-          `
-          *,
-          insumo:insumos_catalogo(id, nombre, clave)
-        `,
-        )
+        .select(`*, insumo:insumos_catalogo(id, nombre, clave)`)
         .eq("almacen_provisional_id", almacen.id)
         .gt("cantidad_disponible", 0);
 
@@ -670,11 +572,8 @@ const AlmacenesProvisionales = () => {
     setProcesando(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
 
-      // Si hay inventario y se quiere devolver
       if (devolverTodo && inventarioAlmacenEliminar.length > 0) {
         const { data: almacenGeneral } = await supabase
           .from("almacenes")
@@ -692,7 +591,6 @@ const AlmacenesProvisionales = () => {
           const cantidad = item.cantidad_disponible;
           if (cantidad <= 0) continue;
 
-          // Usar sistema híbrido (inventario_consolidado + inventario_lotes)
           const { data: existenteConsolidado } = await supabase
             .from("inventario_consolidado")
             .select("id, cantidad_total")
@@ -727,7 +625,6 @@ const AlmacenesProvisionales = () => {
             consolidadoId = newConsolidado?.id;
           }
 
-          // Create lote record
           if (consolidadoId) {
             await supabase.from("inventario_lotes").insert({
               consolidado_id: consolidadoId,
@@ -749,7 +646,6 @@ const AlmacenesProvisionales = () => {
         }
       }
 
-      // Marcar almacén como inactivo
       const { error: updateError } = await supabase
         .from("almacenes_provisionales")
         .update({ activo: false, updated_at: new Date().toISOString() })
@@ -757,20 +653,16 @@ const AlmacenesProvisionales = () => {
 
       if (updateError) throw updateError;
 
-      // Limpiar estado
       if (selectedAlmacen?.id === almacenIdEliminar) {
         setSelectedAlmacen(null);
-        setInventarioProvisional([]);
       }
 
-      // Actualizar lista desde la base de datos
-      await fetchAlmacenes();
+      await refetchAlmacenes();
 
       setDialogEliminarOpen(false);
       setAlmacenAEliminar(null);
       setInventarioAlmacenEliminar([]);
 
-      // Registrar actividad
       const insumosDevueltos = devolverTodo && inventarioAlmacenEliminar.length > 0 
         ? inventarioAlmacenEliminar.map(item => ({
             insumo_id: item.insumo_catalogo_id,
@@ -787,9 +679,7 @@ const AlmacenesProvisionales = () => {
         almacen_origen_nombre: almacenAEliminar.nombre,
         insumos_afectados: insumosDevueltos,
         cantidad_total: insumosDevueltos.reduce((sum, i) => sum + i.cantidad, 0),
-        detalles_adicionales: {
-          devueltos_a_general: devolverTodo
-        }
+        detalles_adicionales: { devueltos_a_general: devolverTodo }
       });
 
       toast.success("Almacén eliminado correctamente");
@@ -800,12 +690,6 @@ const AlmacenesProvisionales = () => {
       setProcesando(false);
     }
   };
-
-  const filteredInventarioGeneral = inventarioGeneral.filter(
-    (item) =>
-      item.insumo?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.insumo?.clave?.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
 
   if (!selectedHospital) {
     return (
@@ -823,7 +707,7 @@ const AlmacenesProvisionales = () => {
           <p className="text-muted-foreground">Gestiona almacenes temporales para procedimientos</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchAlmacenes}>
+          <Button variant="outline" onClick={() => refetchAlmacenes()}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Actualizar
           </Button>
@@ -845,7 +729,7 @@ const AlmacenesProvisionales = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {loadingAlmacenes ? (
                 <p className="text-center text-muted-foreground py-4">Cargando...</p>
               ) : almacenes.length === 0 ? (
                 <div className="text-center py-6 text-muted-foreground">
@@ -915,7 +799,9 @@ const AlmacenesProvisionales = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                {inventarioProvisional.length === 0 ? (
+                {loadingProvisional ? (
+                  <p className="text-center text-muted-foreground py-4">Cargando...</p>
+                ) : inventarioProvisional.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Package className="h-12 w-12 mx-auto mb-2 opacity-30" />
                     <p>Este almacén está vacío</p>
@@ -924,24 +810,47 @@ const AlmacenesProvisionales = () => {
                     </Button>
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Clave</TableHead>
-                        <TableHead>Insumo</TableHead>
-                        <TableHead className="text-right">Cantidad</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {inventarioProvisional.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
-                          <TableCell>{item.insumo?.nombre}</TableCell>
-                          <TableCell className="text-right font-mono font-bold">{item.cantidad_disponible}</TableCell>
+                  <>
+                    <div className="relative mb-4">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar insumo..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Clave</TableHead>
+                          <TableHead>Insumo</TableHead>
+                          <TableHead className="text-right">Cantidad</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {inventarioProvisional.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
+                            <TableCell>{item.insumo?.nombre}</TableCell>
+                            <TableCell className="text-right font-mono font-bold">{item.cantidad_disponible}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <PaginationControls
+                      page={pageProvisional}
+                      totalPages={totalPagesProvisional}
+                      totalCount={totalProvisional}
+                      pageSize={pageSizeProvisional}
+                      hasPreviousPage={hasPrevProvisional}
+                      hasNextPage={hasNextProvisional}
+                      isLoading={loadingProvisional}
+                      onPageChange={goToPageProvisional}
+                      onPageSizeChange={changePageSizeProvisional}
+                      pageSizeOptions={[25, 50, 100]}
+                    />
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -998,7 +907,6 @@ const AlmacenesProvisionales = () => {
             <DialogTitle>Agregar Insumos a {selectedAlmacen?.nombre}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Barra de progreso cuando se está procesando */}
             {procesando && (
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
@@ -1009,14 +917,13 @@ const AlmacenesProvisionales = () => {
               </div>
             )}
 
-            {/* Barra de búsqueda y acciones de selección */}
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar insumo por nombre o clave..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchTermTraspaso}
+                  onChange={(e) => setSearchTermTraspaso(e.target.value)}
                   className="pl-9"
                 />
               </div>
@@ -1031,7 +938,6 @@ const AlmacenesProvisionales = () => {
               </div>
             </div>
 
-            {/* Badge con conteo de seleccionados */}
             {seleccionados.size > 0 && (
               <div className="flex items-center gap-2">
                 <Badge variant="secondary" className="text-sm">
@@ -1043,7 +949,6 @@ const AlmacenesProvisionales = () => {
               </div>
             )}
 
-            {/* Tabla con checkboxes */}
             <ScrollArea className="h-[350px] border rounded-md">
               <Table>
                 <TableHeader className="sticky top-0 bg-background z-10">
@@ -1056,7 +961,7 @@ const AlmacenesProvisionales = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInventarioGeneral.map((item) => {
+                  {inventarioGeneral.map((item) => {
                     const isSelected = seleccionados.has(item.insumo_catalogo_id);
                     return (
                       <TableRow key={item.insumo_catalogo_id} className={isSelected ? "bg-primary/5" : ""}>
@@ -1095,6 +1000,19 @@ const AlmacenesProvisionales = () => {
                 </TableBody>
               </Table>
             </ScrollArea>
+            
+            <PaginationControls
+              page={pageGeneral}
+              totalPages={totalPagesGeneral}
+              totalCount={totalGeneral}
+              pageSize={pageSizeGeneral}
+              hasPreviousPage={hasPrevGeneral}
+              hasNextPage={hasNextGeneral}
+              isLoading={loadingGeneral}
+              onPageChange={goToPageGeneral}
+              onPageSizeChange={changePageSizeGeneral}
+              pageSizeOptions={[25, 50, 100]}
+            />
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setDialogTraspasoOpen(false)}>

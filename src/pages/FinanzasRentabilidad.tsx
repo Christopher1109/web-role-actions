@@ -127,48 +127,98 @@ const FinanzasRentabilidad = () => {
         tarifasMap.set(key, Number(t.tarifa_facturacion));
       });
 
-      // Fetch insumos used in each folio
       const folioIds = foliosData.map(f => f.id);
-      const { data: insumosData } = await supabase
-        .from('folios_insumos')
-        .select(`
-          folio_id,
-          cantidad,
-          insumo_id
-        `)
+
+      // PRIORIDAD 1: Obtener costos reales FIFO de folios_insumos_costos
+      const { data: costosRealesData } = await supabase
+        .from('folios_insumos_costos')
+        .select('folio_id, costo_total')
         .in('folio_id', folioIds);
 
-      // Fetch additional insumos
-      const { data: insumosAdicionalesData } = await supabase
-        .from('folios_insumos_adicionales')
-        .select(`
-          folio_id,
-          cantidad,
-          insumo_id
-        `)
-        .in('folio_id', folioIds);
-
-      // Fetch insumo prices from pedido_items (we'll use average price)
-      const { data: preciosData } = await supabase
-        .from('pedido_items')
-        .select('insumo_catalogo_id, precio_unitario')
-        .not('precio_unitario', 'is', null);
-
-      const preciosMap = new Map<string, number>();
-      preciosData?.forEach(p => {
-        if (p.precio_unitario) {
-          preciosMap.set(p.insumo_catalogo_id, Number(p.precio_unitario));
-        }
+      // Calcular costos reales por folio (desde FIFO)
+      const costosFIFO = new Map<string, number>();
+      costosRealesData?.forEach(item => {
+        const currentCosto = costosFIFO.get(item.folio_id) || 0;
+        costosFIFO.set(item.folio_id, currentCosto + Number(item.costo_total || 0));
       });
 
-      // Calculate costs per folio
+      // FALLBACK: Para folios sin costos FIFO, usar método anterior
+      const foliosSinCostoFIFO = folioIds.filter(id => !costosFIFO.has(id));
+      const costosFallback = new Map<string, number>();
+
+      if (foliosSinCostoFIFO.length > 0) {
+        // Fetch insumos used in each folio
+        const { data: insumosData } = await supabase
+          .from('folios_insumos')
+          .select('folio_id, cantidad, insumo_id')
+          .in('folio_id', foliosSinCostoFIFO);
+
+        // Fetch additional insumos
+        const { data: insumosAdicionalesData } = await supabase
+          .from('folios_insumos_adicionales')
+          .select('folio_id, cantidad, insumo_id')
+          .in('folio_id', foliosSinCostoFIFO);
+
+        // Fetch prices from lotes (precio real) or pedido_items (fallback)
+        const { data: lotesData } = await supabase
+          .from('inventario_lotes')
+          .select('consolidado_id, precio_unitario')
+          .not('precio_unitario', 'is', null);
+
+        const { data: consolidadoData } = await supabase
+          .from('inventario_consolidado')
+          .select('id, insumo_catalogo_id');
+
+        // Map consolidado to insumo
+        const consolidadoToInsumo = new Map<string, string>();
+        consolidadoData?.forEach(c => consolidadoToInsumo.set(c.id, c.insumo_catalogo_id));
+
+        // Get average price per insumo from lotes
+        const preciosLotes = new Map<string, { total: number; count: number }>();
+        lotesData?.forEach(l => {
+          const insumoId = consolidadoToInsumo.get(l.consolidado_id);
+          if (insumoId && l.precio_unitario) {
+            const current = preciosLotes.get(insumoId) || { total: 0, count: 0 };
+            current.total += Number(l.precio_unitario);
+            current.count += 1;
+            preciosLotes.set(insumoId, current);
+          }
+        });
+
+        const preciosMap = new Map<string, number>();
+        preciosLotes.forEach((value, key) => {
+          preciosMap.set(key, value.total / value.count);
+        });
+
+        // Fallback to pedido_items if no lote price
+        const { data: preciosPedidoData } = await supabase
+          .from('pedido_items')
+          .select('insumo_catalogo_id, precio_unitario')
+          .not('precio_unitario', 'is', null);
+
+        preciosPedidoData?.forEach(p => {
+          if (p.precio_unitario && !preciosMap.has(p.insumo_catalogo_id)) {
+            preciosMap.set(p.insumo_catalogo_id, Number(p.precio_unitario));
+          }
+        });
+
+        // Calculate costs per folio
+        [...(insumosData || []), ...(insumosAdicionalesData || [])].forEach(item => {
+          const precio = preciosMap.get(item.insumo_id) || 0;
+          const costo = precio * item.cantidad;
+          const currentCosto = costosFallback.get(item.folio_id) || 0;
+          costosFallback.set(item.folio_id, currentCosto + costo);
+        });
+      }
+
+      // Combinar costos: FIFO tiene prioridad
       const costosPorFolio = new Map<string, number>();
-      
-      [...(insumosData || []), ...(insumosAdicionalesData || [])].forEach(item => {
-        const precio = preciosMap.get(item.insumo_id) || 0;
-        const costo = precio * item.cantidad;
-        const currentCosto = costosPorFolio.get(item.folio_id) || 0;
-        costosPorFolio.set(item.folio_id, currentCosto + costo);
+      folioIds.forEach(id => {
+        if (costosFIFO.has(id)) {
+          costosPorFolio.set(id, costosFIFO.get(id)!);
+        } else {
+          costosPorFolio.set(id, costosFallback.get(id) || 0);
+        }
       });
 
       // Build final data

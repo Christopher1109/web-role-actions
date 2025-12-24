@@ -70,7 +70,9 @@ const Sidebar = ({ userRole, onLogout }: SidebarProps) => {
     { path: '/alertas-transferencia', icon: AlertTriangle, label: 'Recepción Insumos', roles: ['almacenista', 'lider', 'supervisor', 'gerente_operaciones', 'gerente_almacen', 'cadena_suministros'], category: 'Inventario' },
     
     // Finanzas
-    { path: '/finanzas', icon: DollarSign, label: 'Finanzas', roles: ['finanzas'], category: 'Finanzas' },
+    { path: '/finanzas', icon: DollarSign, label: 'Pagos', roles: ['finanzas'], category: 'Finanzas' },
+    { path: '/rentabilidad', icon: DollarSign, label: 'Rentabilidad', roles: ['finanzas', 'gerente_operaciones'], category: 'Finanzas' },
+    { path: '/configuracion-tarifas', icon: DollarSign, label: 'Tarifas', roles: ['finanzas', 'gerente_operaciones'], category: 'Finanzas' },
     
     // Catálogos
     { path: '/medicos', icon: Users, label: 'Médicos', roles: ['lider', 'supervisor', 'gerente', 'gerente_operaciones'], category: 'Catálogos' },

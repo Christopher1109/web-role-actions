@@ -1124,6 +1124,29 @@ const AlmacenesProvisionales = () => {
           <DialogHeader>
             <DialogTitle>Devolver Insumos al Almacén General</DialogTitle>
           </DialogHeader>
+          <div className="flex items-center justify-end gap-2 mb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const todasCantidades: Record<string, number> = {};
+                inventarioProvisional.forEach((item) => {
+                  todasCantidades[item.id] = item.cantidad_disponible;
+                });
+                setCantidadesDevolucion(todasCantidades);
+              }}
+            >
+              <CheckSquare className="mr-1 h-4 w-4" />
+              Seleccionar Todo
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCantidadesDevolucion({})}
+            >
+              Limpiar
+            </Button>
+          </div>
           <ScrollArea className="h-[400px]">
             <Table>
               <TableHeader>

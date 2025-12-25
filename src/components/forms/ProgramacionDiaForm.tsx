@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Calendar, Plus, Minus, Package, ArrowRight, Loader2, AlertTriangle, Check } from 'lucide-react';
+import { useRegistroActividad } from '@/hooks/useRegistroActividad';
 
 // Ya no necesitamos mapeo, usamos procedimiento_insumos_catalogo directamente
 
@@ -45,6 +46,7 @@ const ProgramacionDiaForm = ({
   onClose,
   onSuccess,
 }: ProgramacionDiaFormProps) => {
+  const { registrarActividad } = useRegistroActividad();
   const [procedimientosHospital, setProcedimientosHospital] = useState<Procedimiento[]>([]);
   const [cantidadesProcedimiento, setCantidadesProcedimiento] = useState<Record<string, number>>({});
   const [insumosCalculados, setInsumosCalculados] = useState<InsumoCalculado[]>([]);
@@ -413,6 +415,35 @@ const ProgramacionDiaForm = ({
       await Promise.all(finalPromises);
 
       setProgreso(100);
+
+      // Registrar actividad de traspaso por programación
+      const insumosAfectados = itemsATransferir.map(item => ({
+        insumo_id: item.insumo_catalogo_id,
+        nombre: item.nombre,
+        clave: item.clave || '',
+        cantidad: item.cantidad_editable,
+      }));
+
+      const procedimientosUsados = Object.entries(cantidadesProcedimiento)
+        .filter(([_, cant]) => cant > 0)
+        .map(([clave, cantidad]) => {
+          const proc = procedimientosHospital.find(p => p.clave === clave);
+          return { clave, nombre: proc?.nombre || clave, cantidad };
+        });
+
+      await registrarActividad({
+        tipo_actividad: 'traspaso_almacen_provisional',
+        descripcion: `Traspaso por programación: ${itemsATransferir.length} insumos al almacén "${almacenProvNombre}"`,
+        almacen_origen_nombre: 'Almacén General',
+        almacen_destino_id: almacenProvId,
+        almacen_destino_nombre: almacenProvNombre,
+        insumos_afectados: insumosAfectados,
+        cantidad_total: insumosAfectados.reduce((sum, i) => sum + i.cantidad, 0),
+        detalles_adicionales: {
+          procedimientos: procedimientosUsados,
+          tipo_traspaso: 'programacion_dia',
+        }
+      });
 
       toast.success(`${itemsATransferir.length} insumos transferidos a ${almacenProvNombre}`);
       onSuccess();

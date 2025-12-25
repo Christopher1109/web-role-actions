@@ -52,7 +52,7 @@ export function usePaginatedInventarioProvisional(almacenId: string | undefined,
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const queryClient = useQueryClient();
 
-  // Cargar TODOS los datos del inventario provisional
+  // Cargar TODOS los datos del inventario provisional (incluyendo cantidad 0 para mostrar "Agotado")
   const dataQuery = useQuery({
     queryKey: ['inventario-provisional-all', almacenId],
     queryFn: async () => {
@@ -65,7 +65,7 @@ export function usePaginatedInventarioProvisional(almacenId: string | undefined,
           insumo:insumos_catalogo(id, nombre, clave)
         `)
         .eq('almacen_provisional_id', almacenId)
-        .gt('cantidad_disponible', 0);
+        .gte('cantidad_disponible', 0); // Incluir cantidad 0 para mostrar "Agotado"
 
       if (error) throw error;
       return (data || []) as InventarioProvisional[];
@@ -128,9 +128,14 @@ export function usePaginatedInventarioProvisional(almacenId: string | undefined,
   // Reset page cuando cambia búsqueda
   const resetPage = useCallback(() => setPage(1), []);
 
+  // Saber si el almacén tiene datos (sin filtrar) para distinguir "vacío" vs "sin resultados"
+  const hasAnyData = (dataQuery.data || []).length > 0;
+
   return {
     data: paginatedData,
     allData: filteredData,
+    rawData: dataQuery.data || [], // Datos sin filtrar para saber si realmente hay inventario
+    hasAnyData, // TRUE si el almacén tiene insumos (aunque filtrados sean 0)
     isLoading: dataQuery.isLoading,
     error: dataQuery.error,
     page,

@@ -54,6 +54,7 @@ const AlmacenesProvisionales = () => {
   // Paginated provisional inventory
   const {
     data: inventarioProvisional,
+    hasAnyData: hasAnyInventarioProvisional, // Saber si hay datos sin filtrar
     isLoading: loadingProvisional,
     page: pageProvisional,
     pageSize: pageSizeProvisional,
@@ -894,7 +895,8 @@ const AlmacenesProvisionales = () => {
               <CardContent>
                 {loadingProvisional ? (
                   <p className="text-center text-muted-foreground py-4">Cargando...</p>
-                ) : inventarioProvisional.length === 0 ? (
+                ) : !hasAnyInventarioProvisional && !searchTerm ? (
+                  // Almacén realmente vacío (sin ningún insumo, ni siquiera agotados)
                   <div className="text-center py-8 text-muted-foreground">
                     <Package className="h-12 w-12 mx-auto mb-2 opacity-30" />
                     <p>Este almacén está vacío</p>
@@ -904,6 +906,7 @@ const AlmacenesProvisionales = () => {
                   </div>
                 ) : (
                   <>
+                    {/* Barra de búsqueda SIEMPRE visible cuando hay datos o hay búsqueda */}
                     <div className="relative mb-4">
                       <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -922,7 +925,8 @@ const AlmacenesProvisionales = () => {
                       )}
                     </div>
                     
-                    {inventarioProvisional.length === 0 && searchTerm ? (
+                    {inventarioProvisional.length === 0 ? (
+                      // Búsqueda sin resultados
                       <div className="text-center py-12 text-muted-foreground">
                         <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
                         <p className="text-lg mb-2">No se encontró "{searchTerm}"</p>
@@ -942,10 +946,16 @@ const AlmacenesProvisionales = () => {
                           </TableHeader>
                           <TableBody>
                             {inventarioProvisional.map((item) => (
-                              <TableRow key={item.id}>
+                              <TableRow key={item.id} className={item.cantidad_disponible === 0 ? "opacity-50" : ""}>
                                 <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
                                 <TableCell>{item.insumo?.nombre}</TableCell>
-                                <TableCell className="text-right font-mono font-bold">{item.cantidad_disponible}</TableCell>
+                                <TableCell className="text-right font-mono font-bold">
+                                  {item.cantidad_disponible === 0 ? (
+                                    <span className="text-destructive">Agotado</span>
+                                  ) : (
+                                    item.cantidad_disponible
+                                  )}
+                                </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>

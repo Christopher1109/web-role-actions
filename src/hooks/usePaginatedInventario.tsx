@@ -4,8 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const DEFAULT_PAGE_SIZE = 50;
-const STALE_TIME = 30000; // 30 segundos
-const CACHE_TIME = 5 * 60 * 1000; // 5 minutos
+const STALE_TIME = 5 * 60 * 1000; // 5 minutos - datos más estables
+const CACHE_TIME = 30 * 60 * 1000; // 30 minutos
 
 interface InventarioConsolidado {
   id: string;
@@ -57,42 +57,14 @@ export function usePaginatedInventario({
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const queryClient = useQueryClient();
 
-  // Query para contar el total (para paginación)
-  const countQuery = useQuery({
-    queryKey: ['inventario-count', hospitalId, almacenId, searchTerm, filterTipo],
-    queryFn: async () => {
-      if (!hospitalId || !almacenId) return 0;
-      
-      let query = supabase
-        .from('inventario_consolidado')
-        .select('id', { count: 'exact', head: true })
-        .eq('almacen_id', almacenId)
-        .gt('cantidad_total', 0);
-
-      if (searchTerm) {
-        // Server-side search by insumo name or clave
-        query = query.or(`insumo_catalogo_id.in.(${await getMatchingInsumoIds(searchTerm)})`);
-      }
-
-      const { count, error } = await query;
-      if (error) throw error;
-      return count || 0;
-    },
-    enabled: !!hospitalId && !!almacenId,
-    staleTime: STALE_TIME,
-    gcTime: CACHE_TIME,
-  });
-
-  // Query para datos paginados
+  // Query para TODOS los datos del inventario - se carga una sola vez y se filtra en cliente
+  // Similar a EdicionMasivaMínimos que carga todo el catálogo y filtra instantáneamente
   const dataQuery = useQuery({
-    queryKey: ['inventario-paginated', hospitalId, almacenId, page, pageSize, searchTerm, filterTipo],
+    queryKey: ['inventario-all', hospitalId, almacenId],
     queryFn: async () => {
       if (!hospitalId || !almacenId) return [];
       
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-
-      let query = supabase
+      const { data, error } = await supabase
         .from('inventario_consolidado')
         .select(`
           *,
@@ -109,10 +81,8 @@ export function usePaginatedInventario({
         `)
         .eq('almacen_id', almacenId)
         .gt('cantidad_total', 0)
-        .order('created_at', { ascending: false })
-        .range(from, to);
+        .order('created_at', { ascending: false });
 
-      const { data, error } = await query;
       if (error) throw error;
       return (data || []) as InventarioConsolidado[];
     },
@@ -121,26 +91,31 @@ export function usePaginatedInventario({
     gcTime: CACHE_TIME,
   });
 
-  // Filtrado client-side para filtros complejos
+  // Filtrado 100% client-side - instantáneo como EdicionMasivaMínimos
   const filteredData = useMemo(() => {
     let result = dataQuery.data || [];
     
+    // Búsqueda por nombre o clave (con y sin puntos)
     const search = searchTerm.toLowerCase().trim();
     if (search) {
+      const searchSinPuntos = search.replace(/\./g, '');
       result = result.filter(item => {
-        const matchesNombre = item.insumos_catalogo?.nombre?.toLowerCase().includes(search);
-        const matchesClave = item.insumos_catalogo?.clave?.toLowerCase().includes(search);
-        const searchSinPuntos = search.replace(/\./g, '');
-        const claveSinPuntos = item.insumos_catalogo?.clave?.replace(/\./g, '').toLowerCase();
-        const matchesClaveSinPuntos = claveSinPuntos?.includes(searchSinPuntos);
-        return matchesNombre || matchesClave || matchesClaveSinPuntos;
+        const nombre = item.insumos_catalogo?.nombre?.toLowerCase() || '';
+        const clave = item.insumos_catalogo?.clave?.toLowerCase() || '';
+        const claveSinPuntos = clave.replace(/\./g, '');
+        
+        return nombre.includes(search) || 
+               clave.includes(search) || 
+               claveSinPuntos.includes(searchSinPuntos);
       });
     }
 
+    // Filtro de stock bajo
     if (filterStockBajo) {
       result = result.filter(item => item.cantidad_total < (item.cantidad_minima || 10));
     }
 
+    // Filtro de tipo
     if (filterTipo !== 'todos') {
       result = result.filter(item => item.insumos_catalogo?.tipo === filterTipo);
     }
@@ -148,8 +123,15 @@ export function usePaginatedInventario({
     return result;
   }, [dataQuery.data, searchTerm, filterStockBajo, filterTipo]);
 
-  const totalCount = countQuery.data || 0;
+  // Paginación sobre datos filtrados
+  const totalCount = filteredData.length;
   const totalPages = Math.ceil(totalCount / pageSize);
+  
+  const paginatedData = useMemo(() => {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    return filteredData.slice(from, to);
+  }, [filteredData, page, pageSize]);
 
   const goToPage = useCallback((newPage: number) => {
     if (newPage >= 1 && newPage <= Math.max(totalPages, 1)) {
@@ -162,23 +144,22 @@ export function usePaginatedInventario({
 
   const changePageSize = useCallback((newSize: number) => {
     setPageSize(newSize);
-    setPage(1); // Reset to first page
+    setPage(1);
   }, []);
 
   const refetch = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['inventario-count', hospitalId] });
-    queryClient.invalidateQueries({ queryKey: ['inventario-paginated', hospitalId] });
+    queryClient.invalidateQueries({ queryKey: ['inventario-all', hospitalId] });
   }, [queryClient, hospitalId]);
 
-  // Reset page when search or filters change
+  // Reset page cuando cambian filtros
   const resetPage = useCallback(() => {
     setPage(1);
   }, []);
 
   return {
-    data: filteredData,
-    isLoading: dataQuery.isLoading || countQuery.isLoading,
-    error: dataQuery.error || countQuery.error,
+    data: paginatedData,
+    isLoading: dataQuery.isLoading,
+    error: dataQuery.error,
     page,
     pageSize,
     pageSizeOptions: PAGE_SIZE_OPTIONS,
@@ -216,18 +197,6 @@ export function useInventarioLotes(consolidadoIds: string[], enabled: boolean = 
     staleTime: STALE_TIME,
     gcTime: CACHE_TIME,
   });
-}
-
-// Helper para obtener IDs de insumos que coinciden con búsqueda
-async function getMatchingInsumoIds(search: string): Promise<string> {
-  const { data } = await supabase
-    .from('insumos_catalogo')
-    .select('id')
-    .or(`nombre.ilike.%${search}%,clave.ilike.%${search}%`)
-    .limit(100);
-  
-  const ids = data?.map(i => `'${i.id}'`).join(',') || "''";
-  return ids;
 }
 
 // Hook para estadísticas rápidas del inventario

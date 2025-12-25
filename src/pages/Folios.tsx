@@ -747,6 +747,19 @@ const Folios = ({ userRole }: FoliosProps) => {
                           size="sm"
                           onClick={async () => {
                             await supabase.from("folios").delete().eq("id", borrador.id);
+                            
+                            // Registrar actividad de borrador eliminado
+                            await registrarActividad({
+                              tipo_actividad: 'folio_borrador_eliminado',
+                              descripcion: `Borrador eliminado - Paciente: ${borrador.paciente_nombre || 'Sin definir'}`,
+                              folio_id: borrador.id,
+                              detalles_adicionales: {
+                                paciente_nombre: borrador.paciente_nombre,
+                                cirugia: borrador.cirugia,
+                                tipo_anestesia: borrador.tipo_anestesia,
+                              }
+                            });
+                            
                             toast.success("Borrador eliminado");
                             refetchFolios();
                             fetchBorradores();

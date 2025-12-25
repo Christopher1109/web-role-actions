@@ -13,19 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Calendar, Plus, Minus, Package, ArrowRight, Loader2, AlertTriangle, Check } from 'lucide-react';
 
-// Mapeo entre tipo_anestesia en anestesia_insumos y procedimiento_clave
-const TIPO_ANESTESIA_MAP: Record<string, string> = {
-  '19.01.001': 'general_balanceada_adulto',
-  '19.01.002': 'alta_especialidad',
-  '19.01.003': 'general_endovenosa',
-  '19.01.004': 'general_balanceada_pediatrica',
-  '19.01.005': 'loco_regional',
-  '19.01.006': 'sedacion',
-  '19.01.007': 'alta_especialidad_neurocirugia',
-  '19.01.008': '19.01.008',
-  '19.01.009': '19.01.009',
-  '19.01.010': '19.01.010',
-};
+// Ya no necesitamos mapeo, usamos procedimiento_insumos_catalogo directamente
 
 interface Procedimiento {
   clave: string;
@@ -125,33 +113,22 @@ const ProgramacionDiaForm = ({
 
     setCalculando(true);
     try {
-      // Obtener todos los insumos de anestesia para los procedimientos seleccionados
-      const tiposAnestesia = procedimientosSeleccionados
-        .map(([clave]) => TIPO_ANESTESIA_MAP[clave])
-        .filter(Boolean);
+      // Obtener las claves de procedimientos seleccionados
+      const clavesSeleccionadas = procedimientosSeleccionados.map(([clave]) => clave);
 
-      const { data: anestesiaInsumos, error: aiError } = await supabase
-        .from('anestesia_insumos')
-        .select('tipo_anestesia, nota, cantidad_default, grupo_exclusivo')
-        .in('tipo_anestesia', tiposAnestesia)
+      // Obtener insumos desde procedimiento_insumos_catalogo con los datos del catálogo
+      const { data: procedimientoInsumos, error: piError } = await supabase
+        .from('procedimiento_insumos_catalogo')
+        .select(`
+          procedimiento_clave,
+          insumo_catalogo_id,
+          cantidad_sugerida,
+          insumos_catalogo!inner(id, nombre, clave)
+        `)
+        .in('procedimiento_clave', clavesSeleccionadas)
         .eq('activo', true);
 
-      if (aiError) throw aiError;
-
-      // Obtener el catálogo de insumos para hacer match por nombre
-      const { data: catalogo, error: catError } = await supabase
-        .from('insumos_catalogo')
-        .select('id, nombre, clave')
-        .eq('activo', true);
-
-      if (catError) throw catError;
-
-      // Crear mapa de catálogo por nombre normalizado
-      const catalogoMap = new Map<string, { id: string; nombre: string; clave: string | null }>();
-      for (const item of catalogo || []) {
-        const nombreNormalizado = item.nombre.toLowerCase().trim();
-        catalogoMap.set(nombreNormalizado, item);
-      }
+      if (piError) throw piError;
 
       // Calcular cantidades por insumo sumando según cantidad de procedimientos
       const insumosTotales = new Map<string, { 
@@ -162,40 +139,23 @@ const ProgramacionDiaForm = ({
       }>();
 
       for (const [procClave, cantidadProcedimientos] of procedimientosSeleccionados) {
-        const tipoAnestesia = TIPO_ANESTESIA_MAP[procClave];
-        if (!tipoAnestesia) continue;
-
-        // Agrupar por grupo_exclusivo para evitar duplicados dentro del mismo procedimiento
-        const gruposUsados = new Set<string>();
-
-        const insumosDelProcedimiento = (anestesiaInsumos || []).filter(
-          (ai) => ai.tipo_anestesia === tipoAnestesia
+        const insumosDelProcedimiento = (procedimientoInsumos || []).filter(
+          (pi) => pi.procedimiento_clave === procClave
         );
 
-        for (const ai of insumosDelProcedimiento) {
-          const notaNormalizada = (ai.nota || '').toLowerCase().trim();
-          const matchCatalogo = catalogoMap.get(notaNormalizada);
-
-          if (!matchCatalogo) continue;
-
-          // Si es grupo exclusivo, solo contar una vez por procedimiento
-          if (ai.grupo_exclusivo) {
-            const grupoKey = `${tipoAnestesia}-${ai.grupo_exclusivo}`;
-            if (gruposUsados.has(grupoKey)) continue;
-            gruposUsados.add(grupoKey);
-          }
-
-          const cantidadBase = ai.cantidad_default || 1;
+        for (const pi of insumosDelProcedimiento) {
+          const catalogo = pi.insumos_catalogo as any;
+          const cantidadBase = pi.cantidad_sugerida || 1;
           const cantidadTotal = cantidadBase * cantidadProcedimientos;
 
-          const existente = insumosTotales.get(matchCatalogo.id);
+          const existente = insumosTotales.get(pi.insumo_catalogo_id);
           if (existente) {
             existente.cantidad += cantidadTotal;
           } else {
-            insumosTotales.set(matchCatalogo.id, {
-              insumo_catalogo_id: matchCatalogo.id,
-              nombre: matchCatalogo.nombre,
-              clave: matchCatalogo.clave,
+            insumosTotales.set(pi.insumo_catalogo_id, {
+              insumo_catalogo_id: pi.insumo_catalogo_id,
+              nombre: catalogo.nombre,
+              clave: catalogo.clave,
               cantidad: cantidadTotal,
             });
           }

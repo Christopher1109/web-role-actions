@@ -21,6 +21,7 @@ import { PROCEDIMIENTOS_CATALOG, PROCEDIMIENTOS_BY_CLAVE, getTipoAnestesiaKey } 
 type Insumo = {
   id: string;
   nombre: string;
+  clave?: string;
   lote: string;
   cantidadDefault: number;
   cantidadMinima: number | null;
@@ -459,6 +460,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues, editingDra
           .map((pi: any) => ({
             id: pi.insumo.id,
             nombre: pi.insumo.nombre,
+            clave: pi.insumo.clave || undefined,
             lote: "",
             cantidadDefault: pi.cantidad_sugerida ?? 1,
             cantidadMinima: pi.cantidad_minima ?? null,
@@ -501,17 +503,17 @@ export default function FolioForm({ onClose, onSubmit, defaultValues, editingDra
       // Buscar todos los insumos del catálogo
       const { data: catalogoItems, error: catalogoError } = await supabase
         .from("insumos_catalogo")
-        .select("id, nombre")
+        .select("id, nombre, clave")
         .eq("activo", true);
 
       if (catalogoError) throw catalogoError;
 
       // Crear mapa de nombre normalizado a ID del catálogo
-      const catalogoMap = new Map<string, { id: string; nombre: string }>();
+      const catalogoMap = new Map<string, { id: string; nombre: string; clave: string | null }>();
       (catalogoItems || []).forEach((item: any) => {
         const nombreNorm = normalizarTexto(item.nombre);
         if (!catalogoMap.has(nombreNorm)) {
-          catalogoMap.set(nombreNorm, { id: item.id, nombre: item.nombre });
+          catalogoMap.set(nombreNorm, { id: item.id, nombre: item.nombre, clave: item.clave });
         }
       });
 
@@ -528,6 +530,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues, editingDra
           insumos.push({
             id: catalogoItem.id,
             nombre: catalogoItem.nombre,
+            clave: catalogoItem.clave || undefined,
             lote: "",
             cantidadDefault: ai.cantidad_default ?? 1,
             cantidadMinima: ai.cantidad_minima ?? null,
@@ -1591,7 +1594,7 @@ export default function FolioForm({ onClose, onSubmit, defaultValues, editingDra
                 value={selectedInsumoId}
                 onSelect={(insumo) => setSelectedInsumoId(insumo?.id || "")}
                 insumosDisponibles={insumosParaAgregar}
-                placeholder="Escribe el nombre del insumo..."
+                placeholder="Buscar por nombre o código BCB..."
               />
             </div>
             <div className="flex justify-end gap-2">

@@ -46,41 +46,18 @@ export function useAlmacenesProvisionales(hospitalId: string | undefined) {
   });
 }
 
-// Hook para inventario provisional paginado
+// Hook para inventario provisional paginado - carga todos y filtra client-side
 export function usePaginatedInventarioProvisional(almacenId: string | undefined, searchTerm: string = '') {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const queryClient = useQueryClient();
 
-  // Query para contar el total
-  const countQuery = useQuery({
-    queryKey: ['inventario-provisional-count', almacenId],
-    queryFn: async () => {
-      if (!almacenId) return 0;
-      
-      const { count, error } = await supabase
-        .from('almacen_provisional_inventario')
-        .select('id', { count: 'exact', head: true })
-        .eq('almacen_provisional_id', almacenId)
-        .gt('cantidad_disponible', 0);
-
-      if (error) throw error;
-      return count || 0;
-    },
-    enabled: !!almacenId,
-    staleTime: STALE_TIME,
-    gcTime: CACHE_TIME,
-  });
-
-  // Query para datos paginados
+  // Cargar TODOS los datos del inventario provisional
   const dataQuery = useQuery({
-    queryKey: ['inventario-provisional-paginated', almacenId, page, pageSize],
+    queryKey: ['inventario-provisional-all', almacenId],
     queryFn: async () => {
       if (!almacenId) return [];
       
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-
       const { data, error } = await supabase
         .from('almacen_provisional_inventario')
         .select(`
@@ -88,8 +65,7 @@ export function usePaginatedInventarioProvisional(almacenId: string | undefined,
           insumo:insumos_catalogo(id, nombre, clave)
         `)
         .eq('almacen_provisional_id', almacenId)
-        .gt('cantidad_disponible', 0)
-        .range(from, to);
+        .gt('cantidad_disponible', 0);
 
       if (error) throw error;
       return (data || []) as InventarioProvisional[];
@@ -99,19 +75,37 @@ export function usePaginatedInventarioProvisional(almacenId: string | undefined,
     gcTime: CACHE_TIME,
   });
 
-  // Filtrado client-side por búsqueda
-  const filteredData = searchTerm
-    ? (dataQuery.data || []).filter(item => {
-        const search = searchTerm.toLowerCase();
-        return (
-          item.insumo?.nombre?.toLowerCase().includes(search) ||
-          item.insumo?.clave?.toLowerCase().includes(search)
-        );
-      })
-    : dataQuery.data || [];
+  // Filtrado 100% client-side - busca en TODOS los datos
+  const filteredData = (() => {
+    let result = dataQuery.data || [];
+    
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase().trim();
+      const searchSinPuntos = search.replace(/\./g, '');
+      
+      result = result.filter(item => {
+        const nombre = item.insumo?.nombre?.toLowerCase() || '';
+        const clave = item.insumo?.clave?.toLowerCase() || '';
+        const claveSinPuntos = clave.replace(/\./g, '');
+        
+        return nombre.includes(search) || 
+               clave.includes(search) || 
+               claveSinPuntos.includes(searchSinPuntos);
+      });
+    }
+    
+    return result;
+  })();
 
-  const totalCount = countQuery.data || 0;
+  // Paginación sobre datos filtrados
+  const totalCount = filteredData.length;
   const totalPages = Math.ceil(totalCount / pageSize);
+  
+  const paginatedData = (() => {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    return filteredData.slice(from, to);
+  })();
 
   const goToPage = useCallback((newPage: number) => {
     if (newPage >= 1 && newPage <= Math.max(totalPages, 1)) {
@@ -128,14 +122,17 @@ export function usePaginatedInventarioProvisional(almacenId: string | undefined,
   }, []);
 
   const refetch = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['inventario-provisional-count', almacenId] });
-    queryClient.invalidateQueries({ queryKey: ['inventario-provisional-paginated', almacenId] });
+    queryClient.invalidateQueries({ queryKey: ['inventario-provisional-all', almacenId] });
   }, [queryClient, almacenId]);
 
+  // Reset page cuando cambia búsqueda
+  const resetPage = useCallback(() => setPage(1), []);
+
   return {
-    data: filteredData,
-    isLoading: dataQuery.isLoading || countQuery.isLoading,
-    error: dataQuery.error || countQuery.error,
+    data: paginatedData,
+    allData: filteredData,
+    isLoading: dataQuery.isLoading,
+    error: dataQuery.error,
     page,
     pageSize,
     pageSizeOptions: PAGE_SIZE_OPTIONS,
@@ -148,23 +145,23 @@ export function usePaginatedInventarioProvisional(almacenId: string | undefined,
     previousPage,
     changePageSize,
     refetch,
+    resetPage,
   };
 }
 
-// Hook para inventario general paginado (para traspasos)
+// Hook para inventario general paginado (para traspasos) - carga todos y filtra client-side
 export function usePaginatedInventarioGeneral(hospitalId: string | undefined, searchTerm: string = '') {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const queryClient = useQueryClient();
 
+  // Cargar TODOS los datos del inventario general
   const dataQuery = useQuery({
-    queryKey: ['inventario-general-paginated', hospitalId, page, pageSize, searchTerm],
+    queryKey: ['inventario-general-all', hospitalId],
     queryFn: async () => {
       if (!hospitalId) return [];
       
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-
-      let query = supabase
+      const { data, error } = await supabase
         .from('inventario_consolidado')
         .select(`
           id,
@@ -174,10 +171,8 @@ export function usePaginatedInventarioGeneral(hospitalId: string | undefined, se
         `)
         .eq('hospital_id', hospitalId)
         .gt('cantidad_total', 0)
-        .order('insumo_catalogo_id')
-        .range(from, to);
+        .order('insumo_catalogo_id');
 
-      const { data, error } = await query;
       if (error) throw error;
       
       return (data || []).map(item => ({
@@ -192,39 +187,37 @@ export function usePaginatedInventarioGeneral(hospitalId: string | undefined, se
     gcTime: CACHE_TIME,
   });
 
-  // Count query
-  const countQuery = useQuery({
-    queryKey: ['inventario-general-count', hospitalId],
-    queryFn: async () => {
-      if (!hospitalId) return 0;
+  // Filtrado 100% client-side - busca en TODOS los datos
+  const filteredData = (() => {
+    let result = dataQuery.data || [];
+    
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase().trim();
+      const searchSinPuntos = search.replace(/\./g, '');
       
-      const { count, error } = await supabase
-        .from('inventario_consolidado')
-        .select('id', { count: 'exact', head: true })
-        .eq('hospital_id', hospitalId)
-        .gt('cantidad_total', 0);
+      result = result.filter(item => {
+        const nombre = item.insumo?.nombre?.toLowerCase() || '';
+        const clave = item.insumo?.clave?.toLowerCase() || '';
+        const claveSinPuntos = clave.replace(/\./g, '');
+        
+        return nombre.includes(search) || 
+               clave.includes(search) || 
+               claveSinPuntos.includes(searchSinPuntos);
+      });
+    }
+    
+    return result;
+  })();
 
-      if (error) throw error;
-      return count || 0;
-    },
-    enabled: !!hospitalId,
-    staleTime: STALE_TIME,
-    gcTime: CACHE_TIME,
-  });
-
-  // Filtrado client-side por búsqueda
-  const filteredData = searchTerm
-    ? (dataQuery.data || []).filter(item => {
-        const search = searchTerm.toLowerCase();
-        return (
-          item.insumo?.nombre?.toLowerCase().includes(search) ||
-          item.insumo?.clave?.toLowerCase().includes(search)
-        );
-      })
-    : dataQuery.data || [];
-
-  const totalCount = countQuery.data || 0;
+  // Paginación sobre datos filtrados
+  const totalCount = filteredData.length;
   const totalPages = Math.ceil(totalCount / pageSize);
+  
+  const paginatedData = (() => {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    return filteredData.slice(from, to);
+  })();
 
   const goToPage = useCallback((newPage: number) => {
     if (newPage >= 1 && newPage <= Math.max(totalPages, 1)) {
@@ -240,11 +233,18 @@ export function usePaginatedInventarioGeneral(hospitalId: string | undefined, se
     setPage(1);
   }, []);
 
+  const refetch = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['inventario-general-all', hospitalId] });
+  }, [queryClient, hospitalId]);
+
+  // Reset page cuando cambia búsqueda
+  const resetPage = useCallback(() => setPage(1), []);
+
   return {
-    data: filteredData,
-    allData: dataQuery.data || [],
-    isLoading: dataQuery.isLoading || countQuery.isLoading,
-    error: dataQuery.error || countQuery.error,
+    data: paginatedData,
+    allData: filteredData,
+    isLoading: dataQuery.isLoading,
+    error: dataQuery.error,
     page,
     pageSize,
     pageSizeOptions: PAGE_SIZE_OPTIONS,
@@ -256,5 +256,7 @@ export function usePaginatedInventarioGeneral(hospitalId: string | undefined, se
     nextPage,
     previousPage,
     changePageSize,
+    refetch,
+    resetPage,
   };
 }

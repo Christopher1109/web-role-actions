@@ -907,42 +907,63 @@ const AlmacenesProvisionales = () => {
                     <div className="relative mb-4">
                       <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Buscar insumo..."
+                        placeholder="Buscar insumo por nombre o código..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9"
+                        className="pl-9 pr-9"
                       />
+                      {searchTerm && (
+                        <button
+                          onClick={() => setSearchTerm("")}
+                          className="absolute right-3 top-3 h-4 w-4 text-muted-foreground hover:text-foreground"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Clave</TableHead>
-                          <TableHead>Insumo</TableHead>
-                          <TableHead className="text-right">Cantidad</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {inventarioProvisional.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
-                            <TableCell>{item.insumo?.nombre}</TableCell>
-                            <TableCell className="text-right font-mono font-bold">{item.cantidad_disponible}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <PaginationControls
-                      page={pageProvisional}
-                      totalPages={totalPagesProvisional}
-                      totalCount={totalProvisional}
-                      pageSize={pageSizeProvisional}
-                      hasPreviousPage={hasPrevProvisional}
-                      hasNextPage={hasNextProvisional}
-                      isLoading={loadingProvisional}
-                      onPageChange={goToPageProvisional}
-                      onPageSizeChange={changePageSizeProvisional}
-                      pageSizeOptions={[25, 50, 100]}
-                    />
+                    
+                    {inventarioProvisional.length === 0 && searchTerm ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                        <p className="text-lg mb-2">No se encontró "{searchTerm}"</p>
+                        <Button variant="outline" onClick={() => setSearchTerm("")}>
+                          Limpiar búsqueda
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Clave</TableHead>
+                              <TableHead>Insumo</TableHead>
+                              <TableHead className="text-right">Cantidad</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {inventarioProvisional.map((item) => (
+                              <TableRow key={item.id}>
+                                <TableCell className="font-mono text-sm">{item.insumo?.clave}</TableCell>
+                                <TableCell>{item.insumo?.nombre}</TableCell>
+                                <TableCell className="text-right font-mono font-bold">{item.cantidad_disponible}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        <PaginationControls
+                          page={pageProvisional}
+                          totalPages={totalPagesProvisional}
+                          totalCount={totalProvisional}
+                          pageSize={pageSizeProvisional}
+                          hasPreviousPage={hasPrevProvisional}
+                          hasNextPage={hasNextProvisional}
+                          isLoading={loadingProvisional}
+                          onPageChange={goToPageProvisional}
+                          onPageSizeChange={changePageSizeProvisional}
+                          pageSizeOptions={[25, 50, 100]}
+                        />
+                      </>
+                    )}
                   </>
                 )}
               </CardContent>
@@ -1017,8 +1038,16 @@ const AlmacenesProvisionales = () => {
                   placeholder="Buscar insumo por nombre o clave..."
                   value={searchTermTraspaso}
                   onChange={(e) => setSearchTermTraspaso(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 pr-9"
                 />
+                {searchTermTraspaso && (
+                  <button
+                    onClick={() => setSearchTermTraspaso("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={seleccionarTodos}>
@@ -1042,57 +1071,67 @@ const AlmacenesProvisionales = () => {
               </div>
             )}
 
-            <ScrollArea className="h-[350px] border rounded-md">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
-                  <TableRow>
-                    <TableHead className="w-10"></TableHead>
-                    <TableHead className="w-24">Clave</TableHead>
-                    <TableHead>Insumo</TableHead>
-                    <TableHead className="text-right w-24">Disponible</TableHead>
-                    <TableHead className="text-right w-28">Traspasar</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {inventarioGeneral.map((item) => {
-                    const isSelected = seleccionados.has(item.insumo_catalogo_id);
-                    return (
-                      <TableRow key={item.insumo_catalogo_id} className={isSelected ? "bg-primary/5" : ""}>
-                        <TableCell>
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleSeleccion(item.insumo_catalogo_id)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">{item.insumo?.clave}</TableCell>
-                        <TableCell className="max-w-[250px] truncate text-sm">{item.insumo?.nombre}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">{item.cantidad_actual}</TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={item.cantidad_actual}
-                            value={cantidadesTraspaso[item.insumo_catalogo_id] || ""}
-                            onChange={(e) => {
-                              const valor = Math.min(Number(e.target.value), item.cantidad_actual);
-                              setCantidadesTraspaso((prev) => ({
-                                ...prev,
-                                [item.insumo_catalogo_id]: valor,
-                              }));
-                              if (valor > 0 && !seleccionados.has(item.insumo_catalogo_id)) {
-                                setSeleccionados((prev) => new Set([...prev, item.insumo_catalogo_id]));
-                              }
-                            }}
-                            className="h-8 w-20"
-                            disabled={!isSelected}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </ScrollArea>
+            {inventarioGeneral.length === 0 && searchTermTraspaso ? (
+              <div className="text-center py-12 text-muted-foreground border rounded-md">
+                <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                <p className="text-lg mb-2">No se encontró "{searchTermTraspaso}"</p>
+                <Button variant="outline" onClick={() => setSearchTermTraspaso("")}>
+                  Limpiar búsqueda
+                </Button>
+              </div>
+            ) : (
+              <ScrollArea className="h-[350px] border rounded-md">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableRow>
+                      <TableHead className="w-10"></TableHead>
+                      <TableHead className="w-24">Clave</TableHead>
+                      <TableHead>Insumo</TableHead>
+                      <TableHead className="text-right w-24">Disponible</TableHead>
+                      <TableHead className="text-right w-28">Traspasar</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {inventarioGeneral.map((item) => {
+                      const isSelected = seleccionados.has(item.insumo_catalogo_id);
+                      return (
+                        <TableRow key={item.insumo_catalogo_id} className={isSelected ? "bg-primary/5" : ""}>
+                          <TableCell>
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSeleccion(item.insumo_catalogo_id)}
+                            />
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">{item.insumo?.clave}</TableCell>
+                          <TableCell className="max-w-[250px] truncate text-sm">{item.insumo?.nombre}</TableCell>
+                          <TableCell className="text-right font-mono text-sm">{item.cantidad_actual}</TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={item.cantidad_actual}
+                              value={cantidadesTraspaso[item.insumo_catalogo_id] || ""}
+                              onChange={(e) => {
+                                const valor = Math.min(Number(e.target.value), item.cantidad_actual);
+                                setCantidadesTraspaso((prev) => ({
+                                  ...prev,
+                                  [item.insumo_catalogo_id]: valor,
+                                }));
+                                if (valor > 0 && !seleccionados.has(item.insumo_catalogo_id)) {
+                                  setSeleccionados((prev) => new Set([...prev, item.insumo_catalogo_id]));
+                                }
+                              }}
+                              className="h-8 w-20"
+                              disabled={!isSelected}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
             
             <PaginationControls
               page={pageGeneral}

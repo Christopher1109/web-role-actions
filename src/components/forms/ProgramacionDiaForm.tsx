@@ -331,63 +331,86 @@ const ProgramacionDiaForm = ({
 
       setProgreso(50);
 
-      // Ejecutar actualizaciones en batch
-      const BATCH_SIZE = 50;
+      // Ejecutar TODAS las actualizaciones en paralelo con batches más grandes
+      const BATCH_SIZE = 100;
+      const timestamp = new Date().toISOString();
+
+      // 1. Actualizar lotes en paralelo (batches de 100)
+      const loteBatches = [];
       for (let i = 0; i < updateLotes.length; i += BATCH_SIZE) {
-        const batch = updateLotes.slice(i, i + BATCH_SIZE);
-        await Promise.all(
-          batch.map((lote) =>
-            supabase
-              .from('inventario_lotes')
-              .update({ cantidad: lote.cantidad, updated_at: new Date().toISOString() })
-              .eq('id', lote.id)
-          )
-        );
+        loteBatches.push(updateLotes.slice(i, i + BATCH_SIZE));
       }
+      await Promise.all(
+        loteBatches.map((batch) =>
+          Promise.all(
+            batch.map((lote) =>
+              supabase
+                .from('inventario_lotes')
+                .update({ cantidad: lote.cantidad, updated_at: timestamp })
+                .eq('id', lote.id)
+            )
+          )
+        )
+      );
 
-      setProgreso(70);
+      setProgreso(65);
 
-      // Actualizar consolidados
-      for (const [consolidadoId, cantidadRestar] of updateConsolidados) {
-        const { data: current } = await supabase
+      // 2. Obtener TODOS los consolidados de una vez y actualizar en paralelo
+      const consolidadoIds = Array.from(updateConsolidados.keys());
+      if (consolidadoIds.length > 0) {
+        const { data: consolidadosActuales } = await supabase
           .from('inventario_consolidado')
-          .select('cantidad_total')
-          .eq('id', consolidadoId)
-          .single();
-        
-        if (current) {
-          await supabase
-            .from('inventario_consolidado')
-            .update({
-              cantidad_total: Math.max(0, current.cantidad_total - cantidadRestar),
-              updated_at: new Date().toISOString(),
+          .select('id, cantidad_total')
+          .in('id', consolidadoIds);
+
+        if (consolidadosActuales) {
+          const consolidadoMap = new Map(consolidadosActuales.map(c => [c.id, c.cantidad_total]));
+          
+          await Promise.all(
+            Array.from(updateConsolidados.entries()).map(([consolidadoId, cantidadRestar]) => {
+              const cantidadActual = consolidadoMap.get(consolidadoId) || 0;
+              return supabase
+                .from('inventario_consolidado')
+                .update({
+                  cantidad_total: Math.max(0, cantidadActual - cantidadRestar),
+                  updated_at: timestamp,
+                })
+                .eq('id', consolidadoId);
             })
-            .eq('id', consolidadoId);
+          );
         }
       }
 
-      setProgreso(85);
+      setProgreso(80);
 
-      // Actualizar/insertar inventario provisional
-      if (updateProv.length > 0) {
-        await Promise.all(
-          updateProv.map((item) =>
-            supabase
-              .from('almacen_provisional_inventario')
-              .update({ cantidad_disponible: item.cantidad_disponible, updated_at: new Date().toISOString() })
-              .eq('id', item.id)
-          )
+      // 3. Ejecutar todo el inventario provisional y movimientos en paralelo
+      const finalPromises = [];
+
+      // Updates de inventario provisional existente
+      for (const item of updateProv) {
+        finalPromises.push(
+          supabase
+            .from('almacen_provisional_inventario')
+            .update({ cantidad_disponible: item.cantidad_disponible, updated_at: timestamp })
+            .eq('id', item.id)
         );
       }
 
+      // Inserts de nuevo inventario provisional
       if (insertProv.length > 0) {
-        await supabase.from('almacen_provisional_inventario').insert(insertProv);
+        finalPromises.push(
+          supabase.from('almacen_provisional_inventario').insert(insertProv)
+        );
       }
 
       // Registrar movimientos
       if (movimientos.length > 0) {
-        await supabase.from('movimientos_almacen_provisional').insert(movimientos);
+        finalPromises.push(
+          supabase.from('movimientos_almacen_provisional').insert(movimientos)
+        );
       }
+
+      await Promise.all(finalPromises);
 
       setProgreso(100);
 

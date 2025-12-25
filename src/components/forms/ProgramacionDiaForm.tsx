@@ -1,0 +1,647 @@
+import { useState, useEffect, useMemo } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Calendar, Plus, Minus, Package, ArrowRight, Loader2, AlertTriangle, Check } from 'lucide-react';
+
+// Mapeo entre tipo_anestesia en anestesia_insumos y procedimiento_clave
+const TIPO_ANESTESIA_MAP: Record<string, string> = {
+  '19.01.001': 'general_balanceada_adulto',
+  '19.01.002': 'alta_especialidad',
+  '19.01.003': 'general_endovenosa',
+  '19.01.004': 'general_balanceada_pediatrica',
+  '19.01.005': 'loco_regional',
+  '19.01.006': 'sedacion',
+  '19.01.007': 'alta_especialidad_neurocirugia',
+  '19.01.008': '19.01.008',
+  '19.01.009': '19.01.009',
+  '19.01.010': '19.01.010',
+};
+
+interface Procedimiento {
+  clave: string;
+  nombre: string;
+}
+
+interface InsumoCalculado {
+  insumo_catalogo_id: string;
+  nombre: string;
+  clave: string | null;
+  cantidad_sugerida: number;
+  cantidad_editable: number;
+  stock_disponible: number;
+  stock_insuficiente: boolean;
+}
+
+interface ProgramacionDiaFormProps {
+  hospitalId: string;
+  almacenProvId: string;
+  almacenProvNombre: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const ProgramacionDiaForm = ({
+  hospitalId,
+  almacenProvId,
+  almacenProvNombre,
+  onClose,
+  onSuccess,
+}: ProgramacionDiaFormProps) => {
+  const [procedimientosHospital, setProcedimientosHospital] = useState<Procedimiento[]>([]);
+  const [cantidadesProcedimiento, setCantidadesProcedimiento] = useState<Record<string, number>>({});
+  const [insumosCalculados, setInsumosCalculados] = useState<InsumoCalculado[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [calculando, setCalculando] = useState(false);
+  const [ejecutando, setEjecutando] = useState(false);
+  const [progreso, setProgreso] = useState(0);
+  const [paso, setPaso] = useState<'seleccion' | 'revision'>('seleccion');
+
+  // Cargar procedimientos autorizados para el hospital
+  useEffect(() => {
+    const cargarProcedimientos = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('hospital_procedimientos')
+          .select('procedimiento_clave, procedimiento_nombre')
+          .eq('hospital_id', hospitalId)
+          .eq('activo', true)
+          .order('procedimiento_clave');
+
+        if (error) throw error;
+
+        setProcedimientosHospital(
+          (data || []).map((p) => ({
+            clave: p.procedimiento_clave,
+            nombre: p.procedimiento_nombre,
+          }))
+        );
+      } catch (error) {
+        console.error('Error loading procedures:', error);
+        toast.error('Error al cargar procedimientos');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarProcedimientos();
+  }, [hospitalId]);
+
+  const totalCirugias = useMemo(() => {
+    return Object.values(cantidadesProcedimiento).reduce((sum, qty) => sum + qty, 0);
+  }, [cantidadesProcedimiento]);
+
+  const ajustarCantidad = (clave: string, delta: number) => {
+    setCantidadesProcedimiento((prev) => {
+      const actual = prev[clave] || 0;
+      const nueva = Math.max(0, actual + delta);
+      if (nueva === 0) {
+        const { [clave]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [clave]: nueva };
+    });
+  };
+
+  const calcularInsumos = async () => {
+    const procedimientosSeleccionados = Object.entries(cantidadesProcedimiento).filter(
+      ([_, qty]) => qty > 0
+    );
+
+    if (procedimientosSeleccionados.length === 0) {
+      toast.error('Selecciona al menos un procedimiento');
+      return;
+    }
+
+    setCalculando(true);
+    try {
+      // Obtener todos los insumos de anestesia para los procedimientos seleccionados
+      const tiposAnestesia = procedimientosSeleccionados
+        .map(([clave]) => TIPO_ANESTESIA_MAP[clave])
+        .filter(Boolean);
+
+      const { data: anestesiaInsumos, error: aiError } = await supabase
+        .from('anestesia_insumos')
+        .select('tipo_anestesia, nota, cantidad_default, grupo_exclusivo')
+        .in('tipo_anestesia', tiposAnestesia)
+        .eq('activo', true);
+
+      if (aiError) throw aiError;
+
+      // Obtener el catálogo de insumos para hacer match por nombre
+      const { data: catalogo, error: catError } = await supabase
+        .from('insumos_catalogo')
+        .select('id, nombre, clave')
+        .eq('activo', true);
+
+      if (catError) throw catError;
+
+      // Crear mapa de catálogo por nombre normalizado
+      const catalogoMap = new Map<string, { id: string; nombre: string; clave: string | null }>();
+      for (const item of catalogo || []) {
+        const nombreNormalizado = item.nombre.toLowerCase().trim();
+        catalogoMap.set(nombreNormalizado, item);
+      }
+
+      // Calcular cantidades por insumo sumando según cantidad de procedimientos
+      const insumosTotales = new Map<string, { 
+        insumo_catalogo_id: string;
+        nombre: string;
+        clave: string | null;
+        cantidad: number;
+      }>();
+
+      for (const [procClave, cantidadProcedimientos] of procedimientosSeleccionados) {
+        const tipoAnestesia = TIPO_ANESTESIA_MAP[procClave];
+        if (!tipoAnestesia) continue;
+
+        // Agrupar por grupo_exclusivo para evitar duplicados dentro del mismo procedimiento
+        const gruposUsados = new Set<string>();
+
+        const insumosDelProcedimiento = (anestesiaInsumos || []).filter(
+          (ai) => ai.tipo_anestesia === tipoAnestesia
+        );
+
+        for (const ai of insumosDelProcedimiento) {
+          const notaNormalizada = (ai.nota || '').toLowerCase().trim();
+          const matchCatalogo = catalogoMap.get(notaNormalizada);
+
+          if (!matchCatalogo) continue;
+
+          // Si es grupo exclusivo, solo contar una vez por procedimiento
+          if (ai.grupo_exclusivo) {
+            const grupoKey = `${tipoAnestesia}-${ai.grupo_exclusivo}`;
+            if (gruposUsados.has(grupoKey)) continue;
+            gruposUsados.add(grupoKey);
+          }
+
+          const cantidadBase = ai.cantidad_default || 1;
+          const cantidadTotal = cantidadBase * cantidadProcedimientos;
+
+          const existente = insumosTotales.get(matchCatalogo.id);
+          if (existente) {
+            existente.cantidad += cantidadTotal;
+          } else {
+            insumosTotales.set(matchCatalogo.id, {
+              insumo_catalogo_id: matchCatalogo.id,
+              nombre: matchCatalogo.nombre,
+              clave: matchCatalogo.clave,
+              cantidad: cantidadTotal,
+            });
+          }
+        }
+      }
+
+      // Obtener stock disponible del almacén general del hospital
+      const insumoIds = Array.from(insumosTotales.keys());
+      
+      const { data: inventario, error: invError } = await supabase
+        .from('inventario_consolidado')
+        .select('insumo_catalogo_id, cantidad_total')
+        .eq('hospital_id', hospitalId)
+        .in('insumo_catalogo_id', insumoIds);
+
+      if (invError) throw invError;
+
+      const stockMap = new Map<string, number>();
+      for (const inv of inventario || []) {
+        stockMap.set(inv.insumo_catalogo_id, inv.cantidad_total);
+      }
+
+      // Construir lista final
+      const resultado: InsumoCalculado[] = Array.from(insumosTotales.values()).map((item) => {
+        const stockDisponible = stockMap.get(item.insumo_catalogo_id) || 0;
+        return {
+          insumo_catalogo_id: item.insumo_catalogo_id,
+          nombre: item.nombre,
+          clave: item.clave,
+          cantidad_sugerida: item.cantidad,
+          cantidad_editable: Math.min(item.cantidad, stockDisponible),
+          stock_disponible: stockDisponible,
+          stock_insuficiente: stockDisponible < item.cantidad,
+        };
+      });
+
+      // Ordenar: primero los que tienen stock suficiente, luego por nombre
+      resultado.sort((a, b) => {
+        if (a.stock_insuficiente !== b.stock_insuficiente) {
+          return a.stock_insuficiente ? 1 : -1;
+        }
+        return a.nombre.localeCompare(b.nombre);
+      });
+
+      setInsumosCalculados(resultado);
+      setPaso('revision');
+    } catch (error) {
+      console.error('Error calculating insumos:', error);
+      toast.error('Error al calcular insumos');
+    } finally {
+      setCalculando(false);
+    }
+  };
+
+  const actualizarCantidadInsumo = (insumoId: string, nuevaCantidad: number) => {
+    setInsumosCalculados((prev) =>
+      prev.map((item) =>
+        item.insumo_catalogo_id === insumoId
+          ? { ...item, cantidad_editable: Math.max(0, Math.min(nuevaCantidad, item.stock_disponible)) }
+          : item
+      )
+    );
+  };
+
+  const ejecutarTraspaso = async () => {
+    const itemsATransferir = insumosCalculados.filter((item) => item.cantidad_editable > 0);
+
+    if (itemsATransferir.length === 0) {
+      toast.error('No hay insumos para transferir');
+      return;
+    }
+
+    setEjecutando(true);
+    setProgreso(0);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Cargar lotes e inventario provisional en paralelo
+      setProgreso(10);
+      
+      const [lotesRes, provRes] = await Promise.all([
+        supabase
+          .from('inventario_lotes')
+          .select(`
+            id, cantidad, consolidado_id,
+            inventario_consolidado!inner(insumo_catalogo_id, hospital_id)
+          `)
+          .eq('inventario_consolidado.hospital_id', hospitalId)
+          .gt('cantidad', 0)
+          .order('fecha_entrada', { ascending: true }),
+        supabase
+          .from('almacen_provisional_inventario')
+          .select('id, insumo_catalogo_id, cantidad_disponible')
+          .eq('almacen_provisional_id', almacenProvId),
+      ]);
+
+      if (lotesRes.error) throw lotesRes.error;
+      if (provRes.error) throw provRes.error;
+
+      setProgreso(30);
+
+      // Mapear lotes por insumo
+      const lotesPorInsumo = new Map<string, Array<{ id: string; cantidad: number; consolidado_id: string }>>();
+      for (const lote of lotesRes.data || []) {
+        const insumoCatId = (lote.inventario_consolidado as any).insumo_catalogo_id;
+        const arr = lotesPorInsumo.get(insumoCatId) || [];
+        arr.push({ id: lote.id, cantidad: lote.cantidad, consolidado_id: lote.consolidado_id });
+        lotesPorInsumo.set(insumoCatId, arr);
+      }
+
+      // Mapear inventario provisional
+      const provPorInsumo = new Map<string, { id: string; cantidad_disponible: number }>();
+      for (const item of provRes.data || []) {
+        provPorInsumo.set(item.insumo_catalogo_id, item);
+      }
+
+      // Preparar actualizaciones batch
+      const updateLotes: Array<{ id: string; cantidad: number }> = [];
+      const updateConsolidados = new Map<string, number>();
+      const updateProv: Array<{ id: string; cantidad_disponible: number }> = [];
+      const insertProv: Array<{ almacen_provisional_id: string; insumo_catalogo_id: string; cantidad_disponible: number }> = [];
+      const movimientos: Array<{
+        almacen_provisional_id: string;
+        hospital_id: string;
+        insumo_catalogo_id: string;
+        cantidad: number;
+        tipo: string;
+        usuario_id: string | undefined;
+        observaciones: string;
+      }> = [];
+
+      for (const item of itemsATransferir) {
+        const lotes = lotesPorInsumo.get(item.insumo_catalogo_id) || [];
+        let cantidadRestante = item.cantidad_editable;
+
+        for (const lote of lotes) {
+          if (cantidadRestante <= 0) break;
+          const aDescontar = Math.min(cantidadRestante, lote.cantidad);
+          lote.cantidad -= aDescontar;
+          updateLotes.push({ id: lote.id, cantidad: lote.cantidad });
+          
+          const currentDeduct = updateConsolidados.get(lote.consolidado_id) || 0;
+          updateConsolidados.set(lote.consolidado_id, currentDeduct + aDescontar);
+          
+          cantidadRestante -= aDescontar;
+        }
+
+        const existente = provPorInsumo.get(item.insumo_catalogo_id);
+        if (existente) {
+          updateProv.push({
+            id: existente.id,
+            cantidad_disponible: existente.cantidad_disponible + item.cantidad_editable,
+          });
+        } else {
+          insertProv.push({
+            almacen_provisional_id: almacenProvId,
+            insumo_catalogo_id: item.insumo_catalogo_id,
+            cantidad_disponible: item.cantidad_editable,
+          });
+        }
+
+        movimientos.push({
+          almacen_provisional_id: almacenProvId,
+          hospital_id: hospitalId,
+          insumo_catalogo_id: item.insumo_catalogo_id,
+          cantidad: item.cantidad_editable,
+          tipo: 'entrada',
+          usuario_id: user?.id,
+          observaciones: 'Traspaso desde programación del día',
+        });
+      }
+
+      setProgreso(50);
+
+      // Ejecutar actualizaciones en batch
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < updateLotes.length; i += BATCH_SIZE) {
+        const batch = updateLotes.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map((lote) =>
+            supabase
+              .from('inventario_lotes')
+              .update({ cantidad: lote.cantidad, updated_at: new Date().toISOString() })
+              .eq('id', lote.id)
+          )
+        );
+      }
+
+      setProgreso(70);
+
+      // Actualizar consolidados
+      for (const [consolidadoId, cantidadRestar] of updateConsolidados) {
+        const { data: current } = await supabase
+          .from('inventario_consolidado')
+          .select('cantidad_total')
+          .eq('id', consolidadoId)
+          .single();
+        
+        if (current) {
+          await supabase
+            .from('inventario_consolidado')
+            .update({
+              cantidad_total: Math.max(0, current.cantidad_total - cantidadRestar),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', consolidadoId);
+        }
+      }
+
+      setProgreso(85);
+
+      // Actualizar/insertar inventario provisional
+      if (updateProv.length > 0) {
+        await Promise.all(
+          updateProv.map((item) =>
+            supabase
+              .from('almacen_provisional_inventario')
+              .update({ cantidad_disponible: item.cantidad_disponible, updated_at: new Date().toISOString() })
+              .eq('id', item.id)
+          )
+        );
+      }
+
+      if (insertProv.length > 0) {
+        await supabase.from('almacen_provisional_inventario').insert(insertProv);
+      }
+
+      // Registrar movimientos
+      if (movimientos.length > 0) {
+        await supabase.from('movimientos_almacen_provisional').insert(movimientos);
+      }
+
+      setProgreso(100);
+
+      toast.success(`${itemsATransferir.length} insumos transferidos a ${almacenProvNombre}`);
+      onSuccess();
+    } catch (error) {
+      console.error('Error executing transfer:', error);
+      toast.error('Error al realizar el traspaso');
+    } finally {
+      setEjecutando(false);
+      setProgreso(0);
+    }
+  };
+
+  const insumosConStock = insumosCalculados.filter((i) => i.cantidad_editable > 0);
+  const insumosSinStock = insumosCalculados.filter((i) => i.stock_disponible === 0);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (procedimientosHospital.length === 0) {
+    return (
+      <Alert>
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>
+          No hay procedimientos autorizados para este hospital. Contacta al supervisor.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {paso === 'seleccion' ? (
+        <>
+          <div className="flex items-center gap-3">
+            <Calendar className="h-5 w-5 text-primary" />
+            <div>
+              <h3 className="font-semibold">Programación del Día</h3>
+              <p className="text-sm text-muted-foreground">
+                Selecciona los procedimientos que habrá hoy y el sistema calculará los insumos necesarios
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {procedimientosHospital.map((proc) => {
+              const cantidad = cantidadesProcedimiento[proc.clave] || 0;
+              return (
+                <Card key={proc.clave} className={cantidad > 0 ? 'border-primary bg-primary/5' : ''}>
+                  <CardContent className="flex items-center justify-between p-4">
+                    <div className="flex-1">
+                      <div className="font-medium">{proc.nombre}</div>
+                      <div className="text-sm text-muted-foreground">Código: {proc.clave}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => ajustarCantidad(proc.clave, -1)}
+                        disabled={cantidad === 0}
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <div className="w-12 text-center font-mono text-lg font-bold">{cantidad}</div>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => ajustarCantidad(proc.clave, 1)}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {totalCirugias > 0 && (
+            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+              <div>
+                <span className="font-semibold">{totalCirugias}</span> cirugía{totalCirugias !== 1 ? 's' : ''} programada{totalCirugias !== 1 ? 's' : ''}
+              </div>
+              <Badge variant="default">{almacenProvNombre}</Badge>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={onClose} className="flex-1">
+              Cancelar
+            </Button>
+            <Button
+              onClick={calcularInsumos}
+              disabled={totalCirugias === 0 || calculando}
+              className="flex-1"
+            >
+              {calculando ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowRight className="mr-2 h-4 w-4" />
+              )}
+              Calcular Insumos
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Package className="h-5 w-5 text-primary" />
+              <div>
+                <h3 className="font-semibold">Insumos Calculados</h3>
+                <p className="text-sm text-muted-foreground">
+                  Revisa y ajusta las cantidades antes de transferir
+                </p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setPaso('seleccion')}>
+              Volver
+            </Button>
+          </div>
+
+          {insumosSinStock.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                {insumosSinStock.length} insumo{insumosSinStock.length !== 1 ? 's' : ''} sin stock disponible
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <ScrollArea className="h-[400px] border rounded-lg">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background">
+                <TableRow>
+                  <TableHead>Insumo</TableHead>
+                  <TableHead className="text-right w-24">Sugerido</TableHead>
+                  <TableHead className="text-right w-24">Stock</TableHead>
+                  <TableHead className="text-right w-32">Cantidad</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {insumosCalculados.map((item) => (
+                  <TableRow key={item.insumo_catalogo_id} className={item.stock_disponible === 0 ? 'opacity-50' : ''}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{item.nombre}</div>
+                        {item.clave && <div className="text-xs text-muted-foreground">{item.clave}</div>}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono">{item.cantidad_sugerida}</TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant={item.stock_insuficiente ? 'destructive' : 'secondary'}>
+                        {item.stock_disponible}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={item.stock_disponible}
+                        value={item.cantidad_editable}
+                        onChange={(e) => actualizarCantidadInsumo(item.insumo_catalogo_id, parseInt(e.target.value) || 0)}
+                        className="w-20 text-right font-mono ml-auto"
+                        disabled={item.stock_disponible === 0}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+
+          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div>
+              <span className="font-semibold">{insumosConStock.length}</span> insumos a transferir
+            </div>
+            <Badge variant="default">{almacenProvNombre}</Badge>
+          </div>
+
+          {ejecutando && (
+            <div className="space-y-2">
+              <Progress value={progreso} />
+              <p className="text-sm text-center text-muted-foreground">Transfiriendo insumos...</p>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={onClose} className="flex-1" disabled={ejecutando}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={ejecutarTraspaso}
+              disabled={insumosConStock.length === 0 || ejecutando}
+              className="flex-1"
+            >
+              {ejecutando ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
+              Transferir {insumosConStock.length} Insumos
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default ProgramacionDiaForm;

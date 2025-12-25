@@ -17,7 +17,8 @@ import { toast } from "sonner";
 import { useHospital } from "@/contexts/HospitalContext";
 import { useRegistroActividad } from "@/hooks/useRegistroActividad";
 import { useAlmacenesProvisionales, usePaginatedInventarioProvisional, usePaginatedInventarioGeneral } from "@/hooks/usePaginatedAlmacenesProvisionales";
-import { Plus, Warehouse, ArrowRight, ArrowLeft, Package, RefreshCw, Search, Trash2, CheckSquare } from "lucide-react";
+import { Plus, Warehouse, ArrowRight, ArrowLeft, Package, RefreshCw, Search, Trash2, CheckSquare, Calendar } from "lucide-react";
+import ProgramacionDiaForm from "@/components/forms/ProgramacionDiaForm";
 import { assertSupabaseOk, collectSupabaseErrors } from "@/utils/supabaseAssert";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -84,6 +85,7 @@ const AlmacenesProvisionales = () => {
   const [dialogTraspasoOpen, setDialogTraspasoOpen] = useState(false);
   const [dialogDevolucionOpen, setDialogDevolucionOpen] = useState(false);
   const [dialogEliminarOpen, setDialogEliminarOpen] = useState(false);
+  const [dialogProgramacionOpen, setDialogProgramacionOpen] = useState(false);
   const [almacenAEliminar, setAlmacenAEliminar] = useState<AlmacenProvisional | null>(null);
   const [inventarioAlmacenEliminar, setInventarioAlmacenEliminar] = useState<InventarioProvisional[]>([]);
   const [modoEliminar, setModoEliminar] = useState<"confirmar" | "inspeccionar">("confirmar");
@@ -787,6 +789,10 @@ const AlmacenesProvisionales = () => {
                 <div className="flex items-center justify-between">
                   <CardTitle>{selectedAlmacen.nombre}</CardTitle>
                   <div className="flex gap-2">
+                    <Button size="sm" onClick={() => setDialogProgramacionOpen(true)}>
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Programación del Día
+                    </Button>
                     <Button variant="outline" size="sm" onClick={abrirDialogTraspaso}>
                       <ArrowRight className="mr-2 h-4 w-4" />
                       Agregar Insumos
@@ -1164,6 +1170,28 @@ const AlmacenesProvisionales = () => {
                 </Button>
               </DialogFooter>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Programación del Día */}
+      <Dialog open={dialogProgramacionOpen} onOpenChange={setDialogProgramacionOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Programación del Día</DialogTitle>
+          </DialogHeader>
+          {selectedAlmacen && selectedHospital && (
+            <ProgramacionDiaForm
+              hospitalId={selectedHospital.id}
+              almacenProvId={selectedAlmacen.id}
+              almacenProvNombre={selectedAlmacen.nombre}
+              onClose={() => setDialogProgramacionOpen(false)}
+              onSuccess={() => {
+                setDialogProgramacionOpen(false);
+                refetchProvisional();
+                queryClient.invalidateQueries({ queryKey: ['inventario-all'] });
+              }}
+            />
           )}
         </DialogContent>
       </Dialog>

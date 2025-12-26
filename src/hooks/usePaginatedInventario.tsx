@@ -43,6 +43,7 @@ interface UsePaginatedInventarioOptions {
   filterStockBajo?: boolean;
   filterProximosCaducar?: boolean;
   filterTipo?: 'todos' | 'insumo' | 'medicamento';
+  filterProcedimientoInsumos?: string[]; // IDs de insumos del procedimiento seleccionado
 }
 
 export function usePaginatedInventario({
@@ -51,7 +52,8 @@ export function usePaginatedInventario({
   searchTerm = '',
   filterStockBajo = false,
   filterProximosCaducar = false,
-  filterTipo = 'todos'
+  filterTipo = 'todos',
+  filterProcedimientoInsumos
 }: UsePaginatedInventarioOptions) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -95,6 +97,13 @@ export function usePaginatedInventario({
   const filteredData = useMemo(() => {
     let result = dataQuery.data || [];
     
+    // Filtro por procedimiento (prioridad alta - filtra por IDs de insumos del procedimiento)
+    if (filterProcedimientoInsumos && filterProcedimientoInsumos.length > 0) {
+      result = result.filter(item => 
+        filterProcedimientoInsumos.includes(item.insumo_catalogo_id)
+      );
+    }
+    
     // Búsqueda por nombre o clave (con y sin puntos)
     const search = searchTerm.toLowerCase().trim();
     if (search) {
@@ -121,7 +130,7 @@ export function usePaginatedInventario({
     }
 
     return result;
-  }, [dataQuery.data, searchTerm, filterStockBajo, filterTipo]);
+  }, [dataQuery.data, searchTerm, filterStockBajo, filterTipo, filterProcedimientoInsumos]);
 
   // Paginación sobre datos filtrados
   const totalCount = filteredData.length;

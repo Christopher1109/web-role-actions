@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, AlertCircle, AlertTriangle, Calendar, LayoutGrid, Table2 } from 'lucide-react';
+import { Plus, Search, AlertCircle, AlertTriangle, Calendar, LayoutGrid, Table2, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PaginationControls } from '@/components/ui/pagination-controls';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import InsumoForm from '@/components/forms/InsumoForm';
 import InsumoDetailDialog from '@/components/dialogs/InsumoDetailDialog';
 import { InsumoGroupedCard } from '@/components/InsumoGroupedCard';
@@ -17,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useHospital } from '@/contexts/HospitalContext';
 import { useCachedAlmacenes } from '@/hooks/useCachedCatalogs';
 import { usePaginatedInventario, useInventarioLotes, useInventarioStats } from '@/hooks/usePaginatedInventario';
+import { useHospitalProcedimientos, useInsumosPorProcedimiento } from '@/hooks/useHospitalProcedimientos';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useQueryClient } from '@tanstack/react-query';
@@ -46,6 +48,7 @@ const Insumos = () => {
   const [filterStockBajo, setFilterStockBajo] = useState(false);
   const [filterProximosCaducar, setFilterProximosCaducar] = useState(false);
   const [filterTipo, setFilterTipo] = useState<'todos' | 'insumo' | 'medicamento'>('todos');
+  const [filterProcedimiento, setFilterProcedimiento] = useState<string>('');
 
   // Debounce search term
   useEffect(() => {
@@ -58,6 +61,10 @@ const Insumos = () => {
   // Get almacen for hospital (cached)
   const { data: almacenes } = useCachedAlmacenes(selectedHospital?.id);
   const almacenId = almacenes?.[0]?.id;
+
+  // Procedimientos del hospital
+  const { data: procedimientos = [] } = useHospitalProcedimientos(selectedHospital?.id);
+  const { data: insumosProcedimiento } = useInsumosPorProcedimiento(filterProcedimiento || undefined);
 
   // Paginated inventory data
   const {
@@ -82,7 +89,8 @@ const Insumos = () => {
     searchTerm: debouncedSearch,
     filterStockBajo,
     filterProximosCaducar,
-    filterTipo
+    filterTipo,
+    filterProcedimientoInsumos: insumosProcedimiento
   });
 
   // Stats (cached separately)
@@ -99,7 +107,7 @@ const Insumos = () => {
   // Reset page when filters change
   useEffect(() => {
     resetPage();
-  }, [debouncedSearch, filterStockBajo, filterProximosCaducar, filterTipo, resetPage]);
+  }, [debouncedSearch, filterStockBajo, filterProximosCaducar, filterTipo, filterProcedimiento, resetPage]);
 
   // Realtime subscription - lightweight update
   useEffect(() => {
@@ -409,7 +417,38 @@ const Insumos = () => {
             </div>
 
             {/* Filtros rápidos */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Filtro por procedimiento */}
+              <div className="flex items-center gap-1">
+                <Select
+                  value={filterProcedimiento}
+                  onValueChange={setFilterProcedimiento}
+                >
+                  <SelectTrigger className="w-[280px] h-9">
+                    <SelectValue placeholder="Filtrar por procedimiento..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {procedimientos.map((proc) => (
+                      <SelectItem key={proc.id} value={proc.procedimiento_clave}>
+                        {proc.procedimiento_clave} - {proc.procedimiento_nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {filterProcedimiento && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    onClick={() => setFilterProcedimiento('')}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+
+              <div className="h-6 w-px bg-border" />
+
               <Button
                 variant={filterStockBajo ? 'default' : 'outline'}
                 size="sm"
